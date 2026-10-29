@@ -1,0 +1,1 @@
+{ "perTradeCapUsd": 250, "dailyCapUsd": 1000, "minSwapUsd": 15.63, "maxSlippagePct": 1, "defaultExpiryHours": 24, "maxExpiryHours": 168, "maxDailyToPerTradeRatio": 64 }

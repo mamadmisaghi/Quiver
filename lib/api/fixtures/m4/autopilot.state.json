@@ -1,0 +1,38 @@
+{
+  "configured": true,
+  "enabled": true,
+  "killed": false,
+  "mode": "paper",
+  "strategyIds": [
+    "stg_01M5Z1TV50C38SX2YDQ9",
+    "stg_01M5Z1TV50Q31HGTZ2VS"
+  ],
+  "rotateEveryMin": 15,
+  "approvalMode": "auto",
+  "startingEquityUsd": "10000",
+  "guardrails": {
+    "maxDrawdownPct": 10,
+    "maxDailyLossUsd": 500,
+    "maxRotationsPerDay": 12
+  },
+  "state": {
+    "currentRunId": "run_01M5Z2PA20972H7N12SW",
+    "currentStrategyId": "stg_01M5Z1TV50Q31HGTZ2VS",
+    "currentStrategyName": "BTC oversold bounce",
+    "nextRotationAt": "2026-10-27T16:37:00.000Z",
+    "rotationsToday": 1,
+    "dayPnlUsd": "0",
+    "platformKillSwitch": false,
+    "lastDecision": {
+      "at": "2026-10-27T16:22:00.000Z",
+      "action": "rotated",
+      "fromRunId": "run_01M5Z1TV50FMFP1CABBJ",
+      "toRunId": "run_01M5Z2PA20972H7N12SW",
+      "strategyId": "stg_01M5Z1TV50Q31HGTZ2VS",
+      "reason": "every 15 min",
+      "strategyName": "BTC oversold bounce",
+      "fromStrategyName": "Fed cut + NVDA dip",
+      "toStrategyName": "BTC oversold bounce"
+    }
+  }
+}

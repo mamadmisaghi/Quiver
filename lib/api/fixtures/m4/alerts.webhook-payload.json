@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "deliveryId": "ald_01M5YZQ360CFZWYJWXSF",
+  "kind": "test",
+  "ruleId": null,
+  "runId": null,
+  "event": null,
+  "message": "Test alert from Quiver.",
+  "sentAt": "2026-10-27T15:30:00.000Z"
+}

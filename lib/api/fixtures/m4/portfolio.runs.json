@@ -1,0 +1,81 @@
+{
+  "mode": "paper",
+  "items": [
+    {
+      "runId": "run_01M5YY05C04AKEA0Z9PD",
+      "strategyId": "stg_01M5YY05C0Q1G1CJB3MZ",
+      "status": "stopped",
+      "startedAt": "2026-10-27T15:00:00.000Z",
+      "stoppedAt": "2026-10-27T15:30:00.000Z",
+      "startingEquityUsd": "10000",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "pnlPct": "0",
+      "realizedPnlUsd": "0",
+      "unrealizedPnlUsd": "0",
+      "feesUsd": "0",
+      "openPositions": 0,
+      "fills": 0
+    },
+    {
+      "runId": "run_01M5YZQ360ZVQ9S40D6C",
+      "strategyId": "stg_01M5YZQ360QQ63B5C1BF",
+      "status": "stopped",
+      "startedAt": "2026-10-27T15:30:00.000Z",
+      "stoppedAt": "2026-10-27T15:30:00.000Z",
+      "startingEquityUsd": "10000",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "pnlPct": "0",
+      "realizedPnlUsd": "0",
+      "unrealizedPnlUsd": "0",
+      "feesUsd": "0",
+      "openPositions": 0,
+      "fills": 0
+    },
+    {
+      "runId": "run_01M5YZQ3600JK49MXYGF",
+      "strategyId": "stg_01M5YZQ360WETXCEFZZA",
+      "status": "running",
+      "startedAt": "2026-10-27T15:30:00.000Z",
+      "stoppedAt": null,
+      "startingEquityUsd": "10000",
+      "equityUsd": "10001.42",
+      "pnlUsd": "1.42",
+      "pnlPct": "0.01",
+      "realizedPnlUsd": "0.32",
+      "unrealizedPnlUsd": "2",
+      "feesUsd": "0.9",
+      "openPositions": 2,
+      "fills": 3
+    },
+    {
+      "runId": "run_01M5Z0VQ20DV23P9NYMM",
+      "strategyId": "stg_01M5Z0VQ20576YHC474Z",
+      "status": "halted",
+      "startedAt": "2026-10-27T15:50:00.000Z",
+      "stoppedAt": null,
+      "startingEquityUsd": "10000",
+      "equityUsd": "9999.09",
+      "pnlUsd": "-0.91",
+      "pnlPct": "-0.01",
+      "realizedPnlUsd": "0",
+      "unrealizedPnlUsd": "-0.69",
+      "feesUsd": "0.23",
+      "openPositions": 1,
+      "fills": 1
+    }
+  ],
+  "totals": {
+    "startingEquityUsd": "40000",
+    "equityUsd": "40000.5",
+    "pnlUsd": "0.5",
+    "pnlPct": "0",
+    "realizedPnlUsd": "0.32",
+    "unrealizedPnlUsd": "1.31",
+    "feesUsd": "1.13",
+    "openPositions": 3,
+    "fills": 4
+  },
+  "asOf": "2026-10-27T16:07:00.000Z"
+}

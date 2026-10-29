@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "name": "Fed cut + NVDA dip",
+  "thesis": "If Fed-cut odds on Polymarket pass 70% and NVDA trades under its 20-day average, buy $200 of NVDA on Robinhood Chain and open a 2\u00d7 SOL long with $250 on Hyperliquid. Stop at \u22128%.",
+  "signals": [
+    {
+      "id": "fed_odds",
+      "kind": "odds",
+      "maxAgeSeconds": 300,
+      "params": {
+        "instrument": "pm:outcome:fed-cut-december:YES"
+      }
+    },
+    {
+      "id": "nvda_px",
+      "kind": "price",
+      "maxAgeSeconds": 120,
+      "params": {
+        "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+        "source": "chainlink_stream"
+      }
+    },
+    {
+      "id": "nvda_sma20",
+      "kind": "indicator",
+      "maxAgeSeconds": 900,
+      "params": {
+        "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+        "name": "sma",
+        "period": 20,
+        "timeframe": "1d"
+      }
+    },
+    {
+      "id": "sol_funding",
+      "kind": "funding",
+      "maxAgeSeconds": 300,
+      "params": {
+        "instrument": "hl:perp:SOL"
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "id": "t1",
+      "forMinutes": 15,
+      "cooldownMinutes": 60,
+      "maxFires": 1,
+      "when": {
+        "op": "and",
+        "args": [
+          {
+            "op": "gt",
+            "left": {
+              "ref": "fed_odds.value"
+            },
+            "right": {
+              "lit": 0.7
+            }
+          },
+          {
+            "op": "lt",
+            "left": {
+              "ref": "nvda_px.value"
+            },
+            "right": {
+              "ref": "nvda_sma20.value"
+            }
+          },
+          {
+            "op": "lt",
+            "left": {
+              "ref": "sol_funding.value"
+            },
+            "right": {
+              "lit": 0.0001
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "a1",
+      "type": "open",
+      "on": [
+        "t1"
+      ],
+      "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+      "side": "buy",
+      "size": {
+        "unit": "usd",
+        "value": "200"
+      },
+      "leverage": 1,
+      "order": {
+        "type": "market",
+        "maxSlippageBps": 50,
+        "maxPriceImpactBps": 100
+      },
+      "exits": {
+        "stopLoss": {
+          "unit": "pct",
+          "value": "8"
+        },
+        "takeProfit": {
+          "unit": "pct",
+          "value": "15"
+        }
+      }
+    },
+    {
+      "id": "a2",
+      "type": "open",
+      "on": [
+        "t1"
+      ],
+      "instrument": "hl:perp:SOL",
+      "side": "long",
+      "size": {
+        "unit": "usd",
+        "value": "250"
+      },
+      "leverage": 2,
+      "order": {
+        "type": "market",
+        "maxSlippageBps": 50,
+        "maxPriceImpactBps": 100
+      },
+      "exits": {
+        "stopLoss": {
+          "unit": "pct",
+          "value": "8"
+        },
+        "takeProfit": {
+          "unit": "pct",
+          "value": "15"
+        }
+      }
+    }
+  ],
+  "risk": {
+    "maxPositionPct": 25,
+    "maxTotalExposurePct": 100,
+    "maxDailyLossPct": 10,
+    "maxOrdersPerDay": 20,
+    "equityWhenFeedStale": "skip"
+  }
+}

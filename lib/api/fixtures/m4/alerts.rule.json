@@ -1,0 +1,11 @@
+{
+  "id": "alr_01M5YZQ36044T77V9T4Y",
+  "runId": null,
+  "events": [
+    "fill",
+    "risk_halt",
+    "status"
+  ],
+  "enabled": true,
+  "createdAt": "2026-10-27T15:30:00.000Z"
+}

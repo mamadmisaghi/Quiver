@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`M3.4 backtest polish > landing-prompt backtest is deterministic and matches the regression snapshot 1`] = `
+{
+  "coverage": [
+    "robinhood:token:0x00000000000000000000000000000000000000a1:mock_synthetic",
+    "pm:outcome:fed-cut-december:YES:mock_synthetic",
+    "hl:perp:SOL:mock_synthetic",
+  ],
+  "endingEquityUsd": "10097.51",
+  "feesUsd": "0.23",
+  "fills": [
+    {
+      "actionId": "a2",
+      "feeUsd": "0.23",
+      "instrument": "hl:perp:SOL",
+      "price": "136.726223",
+      "qty": "3.65694297",
+      "side": "long",
+      "ts": "2026-10-23T00:00:00.000Z",
+    },
+  ],
+  "fires": 1,
+  "maxDrawdownPct": "0.26",
+  "returnPct": "0.98",
+  "sharpe": "5.79",
+  "trades": 1,
+}
+`;

@@ -1,0 +1,14 @@
+/* Quiver type scale — Instrument Serif (display) · Geist (UI) · Geist Mono (data/labels) */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap");
+:root{--q-font-display:"Instrument Serif",Georgia,serif;--q-font-sans:Geist,ui-sans-serif,system-ui,sans-serif;--q-font-mono:"Geist Mono",ui-monospace,monospace}
+.q-display-xl{font:400 96px/.95 var(--q-font-display);letter-spacing:-.025em}
+.q-display{font:400 72px/1 var(--q-font-display);letter-spacing:-.02em}
+.q-h1{font:400 48px/1.05 var(--q-font-display);letter-spacing:-.015em}
+.q-h2{font:400 32px/1.15 var(--q-font-display);letter-spacing:-.01em}
+.q-h3{font:500 20px/1.3 var(--q-font-sans);letter-spacing:-.01em}
+.q-body-lg{font:400 18px/1.5 var(--q-font-sans)}
+.q-body{font:400 15px/1.55 var(--q-font-sans)}
+.q-small{font:400 13px/1.45 var(--q-font-sans)}
+.q-label{font:500 12px/1 var(--q-font-mono);letter-spacing:.08em;text-transform:uppercase}
+.q-data{font:400 20px/1 var(--q-font-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.q-display em,.q-display-xl em,.q-h1 em,.q-h2 em{font-style:italic} /* one italic word per heading, in cream */

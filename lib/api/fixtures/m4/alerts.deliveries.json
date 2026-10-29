@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "id": "ald_01M5YZQ360CFZWYJWXSF",
+      "ruleId": null,
+      "runId": null,
+      "kind": "test",
+      "eventType": "test",
+      "eventSeq": null,
+      "provider": "webhook",
+      "status": "delivered",
+      "attempts": 1,
+      "lastError": null,
+      "lastStatusCode": 200,
+      "nextAttemptAt": null,
+      "createdAt": "2026-10-27T15:30:00.000Z",
+      "deliveredAt": "2026-10-27T15:30:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}

@@ -1,0 +1,5 @@
+{"_note":"SAMPLE COPY: replace before posting. Strategy numbers come from demo.json (// MOCK) until a real backtest exists.",
+ "tweets":[
+  {"id":"01-announcement","layout":"announce","label":"Introducing Quiver","title":"Every strategy<br>is an <em>arrow.</em>","body":"Describe a trade in plain English. Quiver draws it as a live graph, then paper trades and backtests it before you go live."},
+  {"id":"02-strategy-card","layout":"feature","label":"Strategy · {slug}","title":"One sentence.<br>A live <em>graph.</em>","body":"“{prompt}”"},
+  {"id":"03-stat","layout":"stat","label":"Paper trade first","quote":"Test the idea before it touches <em>real money.</em>","statlabel":"Backtest · {window}"}]}

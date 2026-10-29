@@ -1,0 +1,246 @@
+QUIVER ($QUIVR) - HANDOFF / CONTINUATION NOTES
+Checkpoint: 2026-10-28 (Asia/Tehran). Work is STOPPED at this checkpoint.
+Written for the next AI agent or developer. Everything here is taken from the repo docs
+(quiver/STATUS.md, web/STATUS.md, web/PARITY.md, backend/SIGNOFF.md, backend/OPS.md,
+projects/quiver/qa/*.md, vps-deploy-log.md, brand/quiver/BRAND.md). If in doubt, those files win.
+No credentials are in this file or in the archive.
+
+======================================================================
+1. WHAT QUIVER IS
+======================================================================
+Quiver is an AI strategy builder for Robinhood Chain, inspired by Weft.fi's node-graph builder.
+You type a trading idea in plain English; it is compiled into a graph of signals -> triggers ->
+actions -> exits that you can paper trade (live SSE), backtest, share, fork and (later) run live
+via session keys. It also covers Solana, Hyperliquid and Polymarket venues; tokenized stocks
+(Robinhood Chain Stock Tokens: NVDA, AAPL, TSLA, SPY ...) are a venue.
+Tagline: "Every strategy is an arrow."  Ticker: $QUIVR (no token launched, see section 9).
+Chains: Robinhood Chain testnet 46630 (default), mainnet 4663 (read-only price feeds only; all
+mainnet execution is gated).
+Current state: mock / paper mode with mainnet-readonly Chainlink prices, public preview on a VPS.
+Nothing runs with real funds. No private keys are configured on the server - all signing is meant
+to happen in the user's browser wallet.
+
+Team roles seen in the docs: Sage = backend, Wren = web, Ellis = motion/animation, Robin = QA gate +
+VPS operator, Honey/Remy = product/copy approvals, Gofi = owner (keys, accounts, decisions).
+
+======================================================================
+2. STACK AND REPO LAYOUT (inside the zip)
+======================================================================
+quiver/
+  STATUS.md                 running team log (milestones M1..M5.28)
+  web/                      Next.js 16.4.3, React 19.3, Tailwind 4, zod 4.6.7 (pinned), Privy react-auth.
+                            Own git repo (.git included). Docs: STATUS.md, PARITY.md, README, PERF.md (motion).
+                            lib/contracts = copy synced from backend (scripts/sync-contracts.sh).
+                            shots/ = screenshot evidence per milestone.
+  web-ellis*/               Ellis git worktrees of web (branches ellis/quiver-motion, ellis/hooks-motion @7832a08,
+                            ellis/gate-cleanups @1f38ea8 in web-ellis-e, web-ellis-strat). Their .git is a worktree
+                            pointer file into web/.git.
+  backend/                  Node >=20, TypeScript, Hono 4 + @hono/node-server, viem 2, zod 4, run via tsx.
+                            Own git repo (.git included).
+     src/                   API, engine, paper fills, backtester, SSE, adapters, shutdown.ts
+     contracts/             shared zod API contracts + fixtures (source of truth for web/lib/contracts)
+     foundry/               Solidity: SessionAccount.sol (UNAUDITED session-key account), MockPool, MockERC20,
+                            MockAggregator; script/DeployTestPool.s.sol; tests (forge-std in lib/)
+     test/                  vitest unit + integration (+ anvil helpers)
+     config/verified/       verified read-only contract registry (4663-readonly.json)
+     scripts/checks.sh      full check script; scripts/ops/ stop-api.cmd/.ps1
+     Docs: ARCHITECTURE.md, api-contracts.md, SIGNOFF.md (final sign-off + env list), OPS.md,
+           VERIFICATION.md (V1-V11), HANDOFF-wren.md
+  proof-archive/            motion proof media archived out of git
+projects/quiver/            qa/ (gate-*-report.md per commit, sage-M4/M5-slices.md, sage-fixes-M3.x, lh/, poc/,
+                            sweep json, vps-deploy-plan.md, vps-deploy-log.md), shots/, vps-deploy-log.md
+research/weft-teardown/     Weft.fi teardown (REPORT.md, pages, api, chunks, video, animation spec)
+brand/quiver, brand/quiver-concepts   brand kit (BRAND.md, mark, lockup, icon, favicon, hero, final, archives)
+
+======================================================================
+3. RUN LOCALLY
+======================================================================
+Backend (quiver/backend):
+  npm ci
+  cp .env.example .env      (all values empty = MOCK mode; never commit real values)
+  npm run dev               (tsx watch src/main.ts)   or  npm start
+  Default port 8787, host 127.0.0.1 (HOST, PORT). For the web dev login set DEV_LOGIN_ENABLED=true
+  and CORS_ORIGINS=<exact web origin, e.g. http://localhost:4317> (no wildcards).
+  Optional: PRICE_SOURCE=mainnet-readonly (read-only Chainlink eth_call on 4663).
+  Dev persistence: .data/dev-store.json (QUIVR_DEV_PERSIST=1; gitignored; NOT included in zip).
+  Tests:  npm test (vitest run; last gate: 81 files / 548 tests green), npm run test:unit,
+          npm run test:integration, npm run typecheck, npm run lint (after npm run lint:install),
+          npm run fixtures:check, scripts/checks.sh (all checks; fails on fixture drift / tree change).
+  Solidity: cd foundry && forge build && forge test   (anvil tests use free ports).
+Web (quiver/web):
+  npm ci
+  cp .env.example .env.local
+     NEXT_PUBLIC_API_MODE=mock|live   NEXT_PUBLIC_API_BASE=http://localhost:<backend port>/v1
+     NEXT_PUBLIC_DEV_LOGIN=1          QUIVER_API_INTERNAL (server-side SSR/OG fetch base, default
+     http://127.0.0.1:8987/v1)        PUBLIC_BASE_URL (metadataBase; set for build AND start)
+     NEXT_PUBLIC_PRIVY_APP_ID (public, optional)   INTERNAL_PROXY_TOKEN (server-only, = backend value)
+  npm run dev | npm run build && npm start | npm run lint | npm run typecheck
+  Mock mode works with no backend at all. Contracts: re-sync with scripts/sync-contracts.sh after
+  backend contract changes.
+
+======================================================================
+4. DEPLOYMENT (current preview)
+======================================================================
+Windows VPS, public preview: http://91.107.243.172:8091 (Caddy site block :8091).
+  - Caddy reverse-proxies /v1 to the API on 127.0.0.1:8987 (not reachable from outside) and the rest
+    to the Next server on port 4517. Caddy must OVERWRITE X-Forwarded-For; it strips
+    X-Quiver-Internal-Token on the public site.
+  - Scheduled tasks QuiverApi (api-start.bat) and QuiverWeb (web-start.bat) in C:\sites\quiver;
+    releases in C:\sites\quiver\releases\<web>-<backend>\...; token files in C:\sites\quiver\env\
+    (ops.token, internal.token, ACL'd). Built from git archive tarballs, sha256-verified.
+  - Same box also hosts PumPals (:8090 / pumpals.fun) and other sites - do not disturb them.
+  - Procedure: 0 active runs -> graceful stop via scripts\ops\stop-api.cmd 8987 QuiverApi <ops token file>
+    -> schtasks /end then /run. Allow up to ~5 min API startup (warmup). Back up bat before editing.
+    Every deploy entry in vps-deploy-log.md has its rollback steps.
+  - Env on VPS: mock mode, REPLAY_RENDERER=stub, SIWE_ORIGIN set to :8091, dev login on (preview),
+    TIINGO/OPENROUTER blank, no Telegram/X/SECRETS_MASTER_KEY, TEST_POOL off. Since M5.26 bind.mjs
+    preload retired; HOST unset (=127.0.0.1), PORT=8987.
+  - Credentials for the VPS are NOT in this handoff; get them from the owner.
+
+======================================================================
+5. VERSIONS
+======================================================================
+Deployed (VPS):  backend bb835c1 (M5.26, deployed 2026-10-28 21:04 Tehran, release bb835c1-b76c459)
+                 web     b76c459 (gate PASS)
+Committed but NOT gated/deployed:
+                 backend e502d27 (M5.28: deposit amount validated first, too_many_decimals reason,
+                         guest GET /public/strategies/:id 60/min/IP, seed id test, testpool/status doc);
+                         f332668 (M5.27, gate PASS, not deployed) sits between.
+                 web     39ace33 (public strategy page /app/strategies/[id]: detail + fork, live & mock),
+                         86ecff7 (testnet deposit + test-pool swap UI on /app/wallets).
+Next step for whoever continues: gate (Robin-style QA) e502d27 + 39ace33, then deploy per section 4.
+
+======================================================================
+6. FEATURES THAT WORK (paper/mock unless stated)
+======================================================================
+Marketing site: nav + Open app, hero with own animated signal motif, interactive "type an idea"
+  demo (SayIt), two-tone statement, what it trades, "Seven things it reads" signal grid (prefills
+  /app/new?idea=, never auto-compiles), how it works / paper preview from GET /v1/public/landing,
+  Safety section (session-key policy example $250/tx, $1,000/day, min swap $15.63, 1% slippage),
+  token/fee section (draft), FAQ, final CTA, /docs, /terms (draft), /privacy, /brand press kit,
+  public /leaderboard (SSR + noscript).
+App shell: sidebar, nav, mobile menu with focus trap, Cmd-K palette with GET /v1/search
+  (markets / public strategies / traders), status dot, dev login (Privy wired only when server
+  reports privy.enabled; SIWE wallet link when SIWE_ORIGIN set).
+Builder (/app/new): idea -> AI rules with streamed progress (demo compile when no OpenRouter key),
+  rules card (Watch/When/Do), StrategyGraph with ghost/enter/hot-edge states, refine in plain
+  English, chart-screenshot compile (/compile/image; needs vision model in prod), validate / save /
+  version, AI quota + 429 countdown.
+Backtests: BacktestPanel, NYSE calendar + market_closed, cost model (30 bps + gas/spread/impact),
+  metrics, range guards, "Data: Tiingo|fallback" tag, Chainlink history.
+Paper trading: runs with live SSE (tick/trigger/fill, heartbeat/resync, single-use tickets),
+  trigger states, pause/stop, partial close, write-off, approvals (human-in-the-loop), instruct
+  (plan -> apply, never auto-applies), stop-all, per-user caps.
+Replay: /app/run/:id/replay scrubber/chapters; shareable /r/:token (video only with real renderer).
+Share cards: /c/:token with OG image; revoke.
+Discover/social: public strategies feed, public strategy page + fork / copy to paper (39ace33,
+  undeployed), publish, leaderboard, traders, profiles /u/:handle, follow, activity feed.
+Markets: tabs (stock tokens / perps / Solana / predictions), search, detail page with chart,
+  market-closed / stale states.
+Account: portfolio, autopilot (paper only: plan, guardrails, kill, log), wallets, rewards/revenue
+  (mock-labelled, paper revenue ledger off), risk page, settings (limits, session-key defaults,
+  stop all, alerts: webhook works, Telegram/X targets validated but stub senders, own RPC / own AI
+  key write-only - needs SECRETS_MASTER_KEY).
+Testnet (46630): read-only chain reads (off by default), testnet account + session-key prepare
+  (Go live prepare; key stays pending, no owner signing yet), testnet deposit PREPARE + test-pool
+  quote/swap PREPARE (prepare-only API, click-only wallet sends; off until test pool deployed,
+  TEST_POOL_ENABLED=false on VPS). Test pool contracts + DeployTestPool script exist, not broadcast.
+Ops: /v1/ops/* with OPS_TOKEN, graceful shutdown, orphan run stop (OPS.md).
+Quality (last web gate b76c459, Lighthouse 12.8.2 mobile medians): / 99, /app 99, /app/new 97
+  (CLS .090), /app/run/:id 99 (CLS .018); axe 0 serious/critical, 0 overflow at all checked widths.
+
+======================================================================
+7. REMAINING WORK
+======================================================================
+7.1 Owner inputs (SIGNOFF.md section 9 - server env only, never in web bundle; Gofi provides
+third-party keys, Robin generates random secrets and sets VPS env):
+  - Privy: PRIVY_APP_ID, PRIVY_APP_SECRET (+ optional PRIVY_VERIFICATION_KEY / PRIVY_JWKS_URL);
+    backend still needs real Privy token verification in /auth/exchange to be exercised end-to-end.
+  - OPENROUTER_API_KEY (+ LLM_MODEL, spend caps) - without it compile is the "Demo compile".
+  - LLM_VISION_MODEL (vision model for chart-screenshot compile).
+  - ALCHEMY_API_KEY (+ ALCHEMY_GAS_POLICY_ID / GAS_SPONSORSHIP_ENABLED if sponsoring gas); TESTNET_RPC_URL.
+  - SECRETS_MASTER_KEY (32 bytes; no re-encryption on rotation - stored user secrets become "not set").
+  - QUIVR_JWT_SECRET, INTERNAL_PROXY_TOKEN, OPS_TOKEN (random, operator-generated).
+  - TELEGRAM_BOT_TOKEN and X_ALERTS_TOKEN (dm.write) for real alert sends.
+  - Replay renderer: REPLAY_RENDERER=ffmpeg + FFMPEG_PATH (Windows: winget install Gyan.FFmpeg,
+    full path, libx264).
+  - Stock data vendor: TIINGO_API_KEY (licence: free tier internal only; commercial licence needed
+    for user-facing modeled data) or DATA_VENDOR_API_KEY. Product decision.
+  - Domain + SIWE_ORIGIN + CORS_ORIGINS + PUBLIC_BASE_URL for a real origin (currently IP:8091).
+  - Wallets (public addresses only): QUIVR_TREASURY (multisig recommended), QUIVR_FEE_ROUTER,
+    QUIVR_DEPLOYER, SIGNER_BACKEND (kms|privy), DEPLOYER_ADDRESS for testnet.
+  - Section 9.1 testnet deployer: fresh throwaway wallet -> Chainlink faucet for 46630 ETH ->
+    Ledger or forge encrypted keystore -> forge script DeployTestPool.s.sol dry run -> broadcast only
+    after approval -> put tUSDG/tNVDA/pool addresses in TEST_*_ADDRESS, TEST_POOL_ENABLED=true ->
+    check GET /v1/testpool/status enabled:true. Key never in env/repo.
+  - Fee: QUIVR_FEE_BPS (default 30, max 100) and whether HL/Solana legs pay it.
+  - Geo: GEO_BLOCKED_COUNTRIES (default US,CA,GB,CH,AE; add sanctioned countries?), GEO_IP_DB_PATH,
+    TERMS_VERSION final; counsel review recommended (V11 terms findings, SIGNOFF section 4).
+  - $QUIVR token: launch yes/no, venue, whether it touches fees/buyback. Not done, no contract.
+  - External-wallet copy trading: product decision (currently "Coming soon", API 501 not_available).
+  - Others optional: UNISWAP_API_KEY, ZEROX_API_KEY, CHAINLINK_STREAMS_*, PINATA_JWT, DATABASE_URL/
+    REDIS_URL (required for mainnet), CREATOR_SHARE_BPS (product decision).
+7.2 Mainnet-gated (do not enable without explicit owner sign-off, SIGNOFF section 7):
+  live execution, bridge flows, mainnet deposits, real rewards distribution / fee accounting,
+  QUIVR_MAINNET_ENABLED, allowlist + daily cap, external audit of SessionAccount/session-key policy
+  contracts, Uniswap/0x addresses verified on 4663 (V1-V3 fail-closed), L2 sequencer feed
+  (none found), owner wallet signing path in web, DEV_LOGIN_ENABLED=false, final TERMS_VERSION.
+7.3 Backend asks still open (PARITY summary): streaming autopilot plan (/autopilot/plan/stream),
+  use stored per-user RPC/AI keys at call time, real renderer, real Telegram/X senders, new venue
+  adapters (options/LP/lending - out of MVP scope). Older Wren requests: per-key maxSlippagePct in
+  prepare, day <= 64 x trade validation, expiry default/max in SessionKeyDefaults.
+7.4 Lighthouse / perf items:
+  - /app/new mobile CLS .090 - under .1 but least headroom (owner Wren).
+  - /app/run under 95 earlier because LCP is the PageHeader sub-line (layout/JS render delay); fixed
+    to 99 in b76c459 but keep an eye on it.
+  - Motion is not steady 60fps: home 56-58fps, feed 54fps with 2 long tasks at 4x CPU (web/motion/PERF.md).
+7.5 Open Low findings (from QA gate reports; verify each still applies):
+  - checks.sh TREE_UNCHANGED does not trip on files already modified before the run (M5.27 L1).
+  - m50-anvil-readonly timing flake (1/5 runs, M5.26 I1).
+  - Wallet address can be linked to several accounts; link message not full SIWE (domain/chainId).
+  - Copy loop: user can copy a re-published copy of their own strategy.
+  - Profile with no public strategies still exposes displayName/bio/following count.
+  - Image check accepts polyglots / mismatched data-URL prefix / 4096^2 bomb-like files (no pixel decode).
+  - Write-off loss capped at margin. Replay titles stored raw (UI must escape; it does).
+  - X alert target can be any handle (spam risk once wired). setAuthTag: pin authTagLength 16.
+  - If Caddy ever appends XFF instead of overwriting, per-IP caps are spoofable.
+  - /chain/testnet/status returns 200 {reachable:false} when disabled; bad EIP-55 checksums accepted.
+  - blockedFills not logged/evented/metric. /leaderboard prerender caches null if API down at build.
+  - Cmd-K palette: no focus trap (older gate; check), swallows api.strategies() errors silently.
+  - 401/404 resource errors in console on some signed-out views.
+  - ⌘K and profile "public strategies" still link to profiles (mock id mismatch stg_01M5.. vs stg_demo..).
+  - Ellis motion brief for the public strategy page + testnet panel is written (web/STATUS.md) but
+    not implemented.
+
+======================================================================
+8. DESIGN / BRAND NOTES
+======================================================================
+- Dark-first (no light theme by choice). Accent amber #FFB547 (ink variant #C9821C), cream #EDE6DA,
+  ink #0A0A0B, favicon tile #17171A. Display type Instrument Serif (wordmark is outlined Instrument
+  Serif - never retype it); mono for labels/numbers.
+- Mark (v4, user decision): v2 capsule quiver with three real archery arrows at 45 deg, leftmost
+  arrow amber; simplified 2-arrow mark at <=48px (favicon, token, avatar). Built by
+  brand/quiver/templates/qmark.py (MARK=v4). Files: brand/quiver/{mark,lockup,icon,favicon,hero,final}.
+- Amber is the only accent in marketing images; status colours only in product UI.
+  Lead with Robinhood Chain; other venues only on a small "connects to" line.
+- Demo numbers in brand assets are // MOCK; never present as real. Disclaimers under any number.
+- Motion (Ellis): data-motion hooks, transform/opacity only, reduced motion = static, pointer-only
+  effects off on touch, LCP text never animated.
+
+======================================================================
+9. THE WEFT-PARITY RULE
+======================================================================
+web/PARITY.md tracks every Weft feature (from research/weft-teardown) as done / partial / missing /
+n/a. We study Weft's MECHANICS only; Quiver uses its own design, copy and code - never copy Weft
+assets, text or code. When you ship or change a feature, update its PARITY.md row and list any
+backend need. Deliberate n/a: light theme toggle, Lenis smooth scroll, separate papertrade venue,
+token launchpad. Missing: options / LP / lending venues.
+
+======================================================================
+10. RULES OF THE ROAD
+======================================================================
+- Never commit or print secrets; .env.example holds names only. No private keys on the server ever.
+- Every change goes through a QA gate report (projects/quiver/qa/gate-*-report.md) before deploy.
+- Deploy only with 0 active runs, back up bats, record steps + rollback in vps-deploy-log.md.
+- Don't touch the other sites on the VPS. Never bind the API to 0.0.0.0.
+- Mainnet, token, broadcasts and real-money features need explicit owner sign-off.

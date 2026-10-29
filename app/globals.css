@@ -1,0 +1,102 @@
+@import "tailwindcss";
+@import "./brand-tokens.css";
+@import "../src/motion/motion.css";
+
+/* Quiver tokens — source of truth: /workspace/brand/quiver/tokens (copied to app/brand-tokens.css).
+   Aliases below only map brand names to the utility names the components use. */
+:root {
+  --bg: var(--q-bg);
+  --bg-2: var(--q-bg1);
+  --card: var(--q-bg1);
+  --card-2: var(--q-bg2);
+  --raised: var(--q-bg2);
+  --line: var(--q-line);
+  --line-2: var(--q-line2);
+  --ink: var(--q-text);
+  --ink-2: var(--q-cream);
+  --muted: var(--q-text2);   /* text3 #8A867F reserved for decorative/ports; body muted stays text2 for legibility */
+  --faint: var(--q-text3);
+  --accent: var(--q-amber);
+  --warn: #c98a5e; /* desaturated orange: degraded / warnings only. Amber = brand + primary. */
+  --accent-press: var(--q-amberPress);
+  --accent-soft: color-mix(in srgb, var(--q-amber) 10%, transparent);
+  --long: var(--q-up);
+  --short: var(--q-down);
+  --paper: var(--q-statusPaper);
+  --cream: var(--q-cream);
+  --ease: var(--q-ease);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-2: var(--bg-2);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-press: var(--accent-press);
+  --color-accent-soft: var(--accent-soft);
+  --color-long: var(--long);
+  --color-paper: var(--paper);
+  --color-warn: var(--warn);
+  --color-cream: var(--cream);
+  --color-faint: var(--faint);
+  --color-short: var(--short);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-instrument-serif);
+}
+
+html { background: var(--bg); color-scheme: dark; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-geist-sans), system-ui, sans-serif; }
+::selection { background: #ffb54738; }
+[id] { scroll-margin-top: 80px; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+.grain::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.btn { transition: background-color .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease), transform .2s var(--ease), opacity .2s var(--ease); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+/* Tables become cards below 1280px: with the 240px sidebar (lg+) a 1024 viewport leaves ~720px, less than the 800-860px table min-width. */
+@media (max-width: 1279px) {
+  .rtable { min-width: 0 !important; }
+  .rtable thead { display: none; }
+  .rtable, .rtable tbody { display: block; width: 100%; }
+  .rtable tr { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; padding: 16px; }
+  .rtable td { display: block; padding: 0 !important; min-width: 0; text-align: left !important; }
+  .rtable td:first-child, .rtable td[colspan], .rtable td:last-child:not([data-label]) { grid-column: 1 / -1; }
+  .rtable td[colspan] { padding: 8px 0 !important; text-align: center !important; }
+  .rtable td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font: 400 11.5px/1.3 var(--font-sans, inherit); color: var(--muted); letter-spacing: .01em; }
+  .rtable td:empty { display: none; }
+}
+@media (max-width: 767px) { .rtable tr { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 768px) and (max-width: 1279px) { .rtable tr { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Touch: 44px minimum targets. Block controls grow; inline links get an invisible hit area. */
+@layer base {
+@media (pointer: coarse) {
+  button, select, input:not([type=checkbox]):not([type=radio]), summary, .btn { min-height: 44px; }
+  button, .btn { min-width: 44px; }
+  summary { display: flex; align-items: center; }
+  a[href] { position: relative; }
+  a[href]::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+}
+}
+html, body { overflow-x: clip; }
+
+/* QA P2 (LCP): skip style/layout of below-the-fold landing sections until they near the viewport. */
+.cv-below > * { content-visibility: auto; contain-intrinsic-size: auto 720px; }
+
+/* M3.7 mobile menu: subtle entrance; motion-safe: in the class keeps it off under reduced motion. */
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }

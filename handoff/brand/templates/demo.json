@@ -1,0 +1,36 @@
+{
+ "_note": "// MOCK: the one canonical demo strategy. Every template (hero, banner, tweets, OG) reads this file. Numbers are illustrative, not a backtest result; replace with real figures from a real backtest before any final post.",
+ "slug": "hood-dip-buyer",
+ "prompt": "Buy $500 of HOOD on Robinhood Chain when the hourly RSI drops under 30. Take profit at +8%.",
+ "signal": {
+  "label": "Signal",
+  "title": "HOOD · RSI 14 · 1h",
+  "val": "28.6"
+ },
+ "trigger": {
+  "label": "Trigger",
+  "title": "RSI under 30",
+  "sub": "checks every block"
+ },
+ "action": {
+  "label": "Action",
+  "title": "Buy $500 of HOOD",
+  "sub": "take profit +8%"
+ },
+ "exit": {
+  "label": "Action",
+  "title": "Take profit at +8%",
+  "sub": "trailing stop 2%"
+ },
+ "size_usd": 500,
+ "backtest": {
+  "window": "90 days",
+  "return": "+12.4%",
+  "maxdd": "−4.1%",
+  "trades": "38",
+  "winrate": "61%"
+ },
+ "disclaimer": "Illustrative backtest on demo data. Not a performance claim or financial advice.",
+ "venue": "Robinhood Chain",
+ "connects": "Solana · Hyperliquid · Polymarket"
+}

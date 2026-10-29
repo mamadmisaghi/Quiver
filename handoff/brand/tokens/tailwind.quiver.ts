@@ -1,0 +1,27 @@
+// tailwind.config.ts — theme.extend
+export const quiver = {
+  colors: { q: {
+    bg: '#0A0A0B',
+    bg1: '#111113',
+    bg2: '#17171A',
+    line: '#26262B',
+    line2: '#34343B',
+    text: '#F5F3EF',
+    text2: '#B9B4AB',
+    text3: '#8A867F',
+    cream: '#EDE6DA',
+    amber: '#FFB547',
+    amberPress: '#E0952A',
+    amberDim: '#7A5A2B',
+    up: '#8FD3A8',
+    down: '#F2848F',
+    statusLive: '#8FD3A8',
+    statusPaper: '#B7ACE8',
+    statusError: '#F2848F',
+    statusIdle: '#8A867F',
+  } },
+  fontFamily: { display: ['"Instrument Serif"','Georgia','serif'], sans: ['Geist','ui-sans-serif','system-ui'], mono: ['"Geist Mono"','ui-monospace'] },
+  borderRadius: { xs:'4px', sm:'8px', md:'12px', lg:'16px', xl:'24px' },
+  boxShadow: { card: '0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -12px rgba(0,0,0,.6)', focus: '0 0 0 2px #0A0A0B, 0 0 0 4px #FFB547' },
+  transitionTimingFunction: { q: 'cubic-bezier(.45,0,.55,1)' },
+};

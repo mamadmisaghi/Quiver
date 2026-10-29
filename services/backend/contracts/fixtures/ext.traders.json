@@ -1,0 +1,120 @@
+{
+  "window": "30d",
+  "basis": "paper",
+  "items": [
+    {
+      "rank": 1,
+      "handle": "@demo_marco",
+      "isYou": false,
+      "venues": [
+        "robinhood",
+        "hyperliquid",
+        "polymarket"
+      ],
+      "paperReturnPct": "0.81",
+      "winRatePct": "100",
+      "strategies": 1,
+      "spark": [
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10009.68,
+        10073.18,
+        10081.1
+      ]
+    },
+    {
+      "rank": 2,
+      "handle": "@demo_lena",
+      "isYou": false,
+      "venues": [
+        "hyperliquid"
+      ],
+      "paperReturnPct": "0.06",
+      "winRatePct": "66.7",
+      "strategies": 1,
+      "spark": [
+        10000,
+        10007.62,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10001.69,
+        9987.62,
+        10005.5,
+        10005.5
+      ]
+    },
+    {
+      "rank": 3,
+      "handle": "@demo_okafor",
+      "isYou": false,
+      "venues": [
+        "hyperliquid"
+      ],
+      "paperReturnPct": "0.01",
+      "winRatePct": "42.9",
+      "strategies": 1,
+      "spark": [
+        10000,
+        9998.97,
+        10025.94,
+        10023.55,
+        10016.76,
+        10016.64,
+        10030.49,
+        9990.19,
+        9990.19,
+        9986.23,
+        10023.34,
+        9988.62,
+        9952.91,
+        9949.62,
+        9980.65,
+        9978.53,
+        9972.47,
+        9994.58,
+        10001.02,
+        10001.02
+      ]
+    },
+    {
+      "rank": 4,
+      "handle": "@fixture-user-example",
+      "isYou": true,
+      "venues": [],
+      "paperReturnPct": null,
+      "winRatePct": null,
+      "strategies": 0,
+      "spark": []
+    }
+  ],
+  "asOf": "2026-10-27T15:30:00.000Z",
+  "mock": true,
+  "notice": "Example data. Placeholder handles; returns are paper backtests on synthetic (mock) prices, not real performance and not a promise of future returns."
+}

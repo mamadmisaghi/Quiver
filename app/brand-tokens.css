@@ -1,0 +1,36 @@
+:root{
+  --q-bg: #0A0A0B;
+  --q-bg1: #111113;
+  --q-bg2: #17171A;
+  --q-line: #26262B;
+  --q-line2: #34343B;
+  --q-text: #F5F3EF;
+  --q-text2: #B9B4AB;
+  --q-text3: #8A867F;
+  --q-cream: #EDE6DA;
+  --q-amber: #FFB547;
+  --q-amberPress: #E0952A;
+  --q-amberDim: #7A5A2B;
+  --q-up: #8FD3A8;
+  --q-down: #F2848F;
+  --q-statusLive: #8FD3A8;
+  --q-statusPaper: #B7ACE8;
+  --q-statusError: #F2848F;
+  --q-statusIdle: #8A867F;
+  --q-font-display: "Instrument Serif", Georgia, serif;
+  --q-font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+  --q-font-mono: "Geist Mono", ui-monospace, monospace;
+  --q-radius-xs: 4px;
+  --q-radius-sm: 8px;
+  --q-radius-md: 12px;
+  --q-radius-lg: 16px;
+  --q-radius-xl: 24px;
+  --q-radius-pill: 999px;
+  --q-shadow-card: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px -12px rgba(0,0,0,.6);
+  --q-shadow-focus: 0 0 0 2px #0A0A0B, 0 0 0 4px #FFB547;
+  --q-ease: cubic-bezier(.45,0,.55,1);
+}
+html{background:var(--q-bg);color:var(--q-text);font-family:var(--q-font-sans)}
+::selection{background:var(--q-amber);color:var(--q-bg)}
+:focus-visible{outline:none;box-shadow:var(--q-shadow-focus)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

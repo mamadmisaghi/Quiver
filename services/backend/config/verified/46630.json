@@ -1,0 +1,143 @@
+{
+  "chainId": 46630,
+  "network": "robinhood-testnet",
+  "generatedAt": "2026-10-27T10:00:35.714Z",
+  "rpc": "https://rpc.testnet.chain.robinhood.com",
+  "items": [
+    {
+      "id": "V1",
+      "title": "Uniswap Universal Router / Permit2 on 46630",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://developers.uniswap.org/docs/supported-chains",
+      "method": "official deployments list + eth_getCode",
+      "bytecodeHash": "0xfdd90802f39ce5fc8bac4c2f1b3ac7bac530fd17ff46b0630f1bd00f1e14082f",
+      "note": "Uniswap lists Robinhood 4663 only; no 46630 deployment. Code exists at the 4663 UR address on 46630 (24546b) but its hash differs from mainnet (0x2ce6aaaf9f4151f5e1cbf774668772f17f532ae11b15e9284fd0a072a8b0fbde) and it has no official listing \u2192 unused (fail closed). Permit2 present on 46630 (9152b, hash 0x0117e0ed818bc3f2a8729ffc336c837e63e965f04b473047b39b35ad86aac259); harmless alone but no router to pair with.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V2",
+      "title": "Uniswap Trading API serves 46630",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://trade-api.gateway.uniswap.org/v1/quote",
+      "method": "POST /v1/quote probe",
+      "bytecodeHash": null,
+      "note": "46630 \u2192 400 RequestValidationError: \"tokenInChainId\" must be one of [MAINNET, OPTIMISM, BNB, UNICHAIN, POLYGON, MONA. 4663 \u2192 401 Unauthorized: Unauthenticated api key or session (mainnet needs an API key; read-only quotes allowed once UNISWAP_API_KEY is set).",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V3",
+      "title": "0x AllowanceHolder / Settler",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://contracts.0x.org/",
+      "method": "0x docs + eth_getCode",
+      "bytecodeHash": null,
+      "note": "0x supports 4663 only (docs.0x.org supported-chains). 46630: AllowanceHolder absent, Settler absent. Mainnet: AllowanceHolder 1009b 0x99f5e8edaceacfdd183eb5f1da8a7757b322495b80cf7928db289a1b1a09f799, Settler 21619b.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V4",
+      "title": "Stock Token registry on 46630",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://robinhood.com/us/en/rhj/assets/",
+      "method": "RH assets API (195 assets, all chainId 4663) on 2026-10-27",
+      "bytecodeHash": null,
+      "note": "No testnet stock tokens published. Registry keeps placeholder addresses (mock:true, never tradable). Probe: html 109328b.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V5",
+      "title": "Chainlink price feeds on 46630",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://docs.chain.link/data-feeds/price-feeds/addresses?network=robinhood",
+      "method": "Chainlink docs network list + RDD + eth_getCode",
+      "bytecodeHash": null,
+      "note": "Chainlink lists only 'Robinhood Chain Mainnet'; feeds-robinhood-testnet.json 404; mainnet ETH/USD proxy on 46630: no code. Prices come from mainnet-readonly (see 4663-readonly.json).",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V6",
+      "title": "Data Streams verifier proxy on 46630",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://docs.robinhood.com/chain/data-streams/",
+      "method": "RH docs + eth_getCode",
+      "bytecodeHash": null,
+      "note": "Mainnet proxy 0xcE73\u202636E7 has no code on 46630 (absent). Chainlink changelog says Data Streams reached RH testnet (2026-03-20) but the testnet proxy address was not retrievable (client-rendered page) \u2192 unverified.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V7",
+      "title": "L2 sequencer-uptime feed",
+      "status": "fail",
+      "value": null,
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "method": "RDD search for 'Sequencer'",
+      "bytecodeHash": null,
+      "note": "No sequencer-uptime feed listed for Robinhood Chain (mainnet or testnet). Fallback: block-production watchdog (designed in ARCHITECTURE \u00a76).",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V8",
+      "title": "Session-key policy enforcement",
+      "status": "partial",
+      "value": {
+        "entryPointV07": "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+      },
+      "sourceUrl": "https://eips.ethereum.org/EIPS/eip-4337",
+      "method": "Foundry tests (foundry/test/SessionAccount.t.sol) + anvil e2e",
+      "bytecodeHash": "0x8db5ff695839d655407cc8490bb7a5d82337a86a6b39c3f0258aa6c3b582fc58",
+      "note": "Quiver's policy MODEL passes all negative tests locally (transfer/approve/non-allowlisted/recipient\u2260self/over-cap/daily/expiry/revoke/replay). Alchemy session-key enforcement on 46630 NOT tested (needs Alchemy key + funded testnet account). EntryPoint v0.7 present on 46630.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V9",
+      "title": "Hyperliquid agent wallet cannot withdraw",
+      "status": "partial",
+      "value": null,
+      "sourceUrl": "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets",
+      "method": "HL docs read",
+      "bytecodeHash": null,
+      "note": "Docs: API (agent) wallets 'are only used to sign' on behalf of the master. Docs page does not explicitly state withdraw is rejected; HL testnet withdraw attempt needs a funded master account \u2192 not run.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V10",
+      "title": "Pool depth per Stock Token",
+      "status": "n/a",
+      "value": null,
+      "sourceUrl": null,
+      "method": "n/a",
+      "bytecodeHash": null,
+      "note": "No testnet pools/tokens. Mainnet depth requires Uniswap API key (read-only quotes); deferred.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    },
+    {
+      "id": "V11",
+      "title": "Third-party terms review (read-only; restrictions noted, no legal conclusions)",
+      "status": "partial",
+      "value": null,
+      "sourceUrl": "https://support.uniswap.org/hc/en-us/articles/43018872248589-API-Terms-of-Use",
+      "method": "Read public terms/docs pages 2026-10-27 (WebSearch/WebFetch). Full list with URLs in VERIFICATION.md \u00a7V11.",
+      "bytecodeHash": null,
+      "note": "Recorded restrictions for Robinhood Stock Tokens, Chainlink, Uniswap API, 0x API, Hyperliquid, Tiingo. Polymarket ToS text could not be read (US geo interstitial) -> Polymarket signal stays mock-only. Tiingo: free/Individual plans are internal-use only; redistribution needs permission -> modeled EOD stays off by default. Not a legal review; user sign-off required (SIGNOFF.md).",
+      "checkedAt": "2026-10-27T11:30:00.000Z"
+    },
+    {
+      "id": "faucet",
+      "title": "Testnet ETH faucet",
+      "status": "blocked",
+      "value": null,
+      "sourceUrl": "https://faucets.chain.link/robinhood-testnet",
+      "method": "HTTP probe",
+      "bytecodeHash": null,
+      "note": "Faucet page reachable (HTTP 200) but is a client-rendered wallet-connect flow (no documented HTTP API); a scripted claim was not possible and a browser claim was not attempted. Captcha/eligibility rules unconfirmed. No testnet funds obtained; nothing was sent. Not needed for M2: execution is exercised on local anvil.",
+      "checkedAt": "2026-10-27T10:00:35.714Z"
+    }
+  ],
+  "feeds": []
+}

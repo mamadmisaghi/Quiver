@@ -1,0 +1,235 @@
+{
+  "chainId": 4663,
+  "network": "robinhood-mainnet (READ-ONLY: eth_call only, never sign/send)",
+  "generatedAt": "2026-10-27T12:02:42.760Z",
+  "rpc": "https://rpc.mainnet.chain.robinhood.com",
+  "items": [
+    {
+      "id": "chainlink_feeds",
+      "title": "Chainlink feeds (mainnet-readonly)",
+      "status": "pass",
+      "value": [
+        "ETH",
+        "BTC",
+        "USDG",
+        "NVDA",
+        "AAPL",
+        "TSLA",
+        "SPY"
+      ],
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:35.714Z",
+      "method": "RDD + eth_getCode + decimals()/description()/latestRoundData()",
+      "bytecodeHash": null,
+      "note": "Read-only eth_call; no signing, no tx."
+    },
+    {
+      "id": "V6",
+      "title": "Data Streams verifier proxy 4663",
+      "status": "pass",
+      "value": "0xcE73c8ad08CBDEaCa6078BF0627C8fe0a9a536E7",
+      "sourceUrl": "https://docs.robinhood.com/chain/data-streams/",
+      "checkedAt": "2026-10-27T10:00:35.714Z",
+      "method": "RH docs + eth_getCode",
+      "bytecodeHash": "0x4bd86e898b2952f6f0d20fee037accf52490dbdd9279345cd4b0a7161b5c022b",
+      "note": null
+    },
+    {
+      "id": "uniswap_ur",
+      "title": "Uniswap Universal Router 2.1.1 (4663)",
+      "status": "pass",
+      "value": "0x8876789976decbfcbbbe364623c63652db8c0904",
+      "sourceUrl": "https://developers.uniswap.org/docs/supported-chains",
+      "checkedAt": "2026-10-27T10:00:35.714Z",
+      "method": "official list + eth_getCode",
+      "bytecodeHash": "0x2ce6aaaf9f4151f5e1cbf774668772f17f532ae11b15e9284fd0a072a8b0fbde",
+      "note": "Recorded for quote/simulation only. Quiver does not execute on mainnet."
+    },
+    {
+      "id": "permit2",
+      "title": "Permit2 (4663)",
+      "status": "pass",
+      "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "sourceUrl": "https://docs.uniswap.org/contracts/v4/deployments",
+      "checkedAt": "2026-10-27T10:00:35.714Z",
+      "method": "canonical address + eth_getCode",
+      "bytecodeHash": "0x5208783f52488f7d3493e5e38311ab707c1d75457fe472a19b0b4d57d66a7fca",
+      "note": null
+    },
+    {
+      "id": "0x_allowance_holder",
+      "title": "0x AllowanceHolder (4663)",
+      "status": "pass",
+      "value": "0x0000000000001fF3684f28c67538d4D072C22734",
+      "sourceUrl": "https://github.com/0xProject/0x-settler",
+      "checkedAt": "2026-10-27T10:00:35.714Z",
+      "method": "0x README + eth_getCode",
+      "bytecodeHash": "0x99f5e8edaceacfdd183eb5f1da8a7757b322495b80cf7928db289a1b1a09f799",
+      "note": "Quotes need a 0x API key."
+    },
+    {
+      "id": "rh_tokens_4663",
+      "title": "Robinhood Stock Token + WETH addresses (4663, read-only)",
+      "status": "pass",
+      "value": {
+        "NVDA": {
+          "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+          "source": "https://api.robinhood.com/rhj/assets",
+          "onchainSymbol": "NVDA",
+          "bytecodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630"
+        },
+        "AAPL": {
+          "address": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
+          "source": "https://api.robinhood.com/rhj/assets",
+          "onchainSymbol": "AAPL",
+          "bytecodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630"
+        },
+        "TSLA": {
+          "address": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d",
+          "source": "https://api.robinhood.com/rhj/assets",
+          "onchainSymbol": "TSLA",
+          "bytecodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630"
+        },
+        "SPY": {
+          "address": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C",
+          "source": "https://api.robinhood.com/rhj/assets",
+          "onchainSymbol": "SPY",
+          "bytecodeHash": "0x6c1fdd40002dcb440c7fff6a84171404d279ccb057803b65826f7546acd65630"
+        },
+        "WETH": {
+          "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+          "source": "https://docs.robinhood.com/chain/contracts/",
+          "onchainSymbol": "WETH",
+          "bytecodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
+        }
+      },
+      "sourceUrl": "https://api.robinhood.com/rhj/assets",
+      "checkedAt": "2026-10-27T12:02:42.760Z",
+      "method": "RHJ assets API (docs Token Contracts table source) / docs page for WETH + eth_getCode + symbol()",
+      "bytecodeHash": null,
+      "note": "Read-only reference. Quiver does not trade on 4663."
+    },
+    {
+      "id": "jupiter_jup",
+      "title": "JUP mint + Jupiter Price API v3 (Solana, read-only)",
+      "status": "pass",
+      "value": {
+        "mint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+        "symbol": "JUP",
+        "priceApi": "https://lite-api.jup.ag/price/v3"
+      },
+      "sourceUrl": "https://dev.jup.ag/docs/price/v3",
+      "checkedAt": "2026-10-27T12:02:42.760Z",
+      "method": "Jupiter Tokens API v2 (isVerified) + Price API v3 probe (keyless, 0.5 rps)",
+      "bytecodeHash": null,
+      "note": "Current price only (no history); keyless rate limit 0.5 req/s."
+    }
+  ],
+  "feeds": [
+    {
+      "symbol": "ETH",
+      "name": "ETH / USD",
+      "proxy": "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "ETH / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:32.287Z",
+      "lastAnswer": 2312.89603643,
+      "lastUpdatedAt": "2026-10-27T07:49:49.000Z",
+      "usage": "mainnet-readonly"
+    },
+    {
+      "symbol": "BTC",
+      "name": "BTC / USD",
+      "proxy": "0xa2c5184bF03d373Dc9dE4876eb4Bce595B460251",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "BTC / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:32.771Z",
+      "lastAnswer": 79862.57294076,
+      "lastUpdatedAt": "2026-10-27T07:51:12.000Z",
+      "usage": "mainnet-readonly"
+    },
+    {
+      "symbol": "USDG",
+      "name": "USDG / USD",
+      "proxy": "0x61B7e5650328764B076A108EFF5fa7282a1B9aD2",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "USDG / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:33.166Z",
+      "lastAnswer": 0.99989392,
+      "lastUpdatedAt": "2026-10-26T15:47:07.000Z",
+      "usage": "mainnet-readonly"
+    },
+    {
+      "symbol": "NVDA",
+      "name": "Robinhood NVDA / USD",
+      "proxy": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "RHNVDA / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:33.727Z",
+      "lastAnswer": 215.61651744,
+      "lastUpdatedAt": "2026-10-27T05:32:21.000Z",
+      "usage": "mainnet-readonly"
+    },
+    {
+      "symbol": "AAPL",
+      "name": "Robinhood AAPL / USD",
+      "proxy": "0x6B22A786bAa607d76728168703a39Ea9C99f2cD0",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "Robinhood AAPL / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:34.115Z",
+      "lastAnswer": 343.15414281,
+      "lastUpdatedAt": "2026-10-26T22:23:03.000Z",
+      "usage": "mainnet-readonly"
+    },
+    {
+      "symbol": "TSLA",
+      "name": "Robinhood TSLA / USD",
+      "proxy": "0x4A1166a659A55625345e9515b32adECea5547C38",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "RHTSLA / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:34.502Z",
+      "lastAnswer": 395.495,
+      "lastUpdatedAt": "2026-10-27T09:24:04.000Z",
+      "usage": "mainnet-readonly"
+    },
+    {
+      "symbol": "SPY",
+      "name": "Robinhood SPY / USD",
+      "proxy": "0x319724394D3A0e3669269846abE664Cd621f9f6A",
+      "chainId": 4663,
+      "decimals": 8,
+      "description": "RHSPY / USD",
+      "heartbeatSec": 86400,
+      "bytecodeHash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "sourceUrl": "https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+      "checkedAt": "2026-10-27T10:00:34.903Z",
+      "lastAnswer": 765.78335272,
+      "lastUpdatedAt": "2026-10-26T14:13:54.000Z",
+      "usage": "mainnet-readonly"
+    }
+  ]
+}

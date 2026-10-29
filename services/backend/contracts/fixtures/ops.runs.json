@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": "run_01M5YY05C04AKEA0Z9PD",
+      "strategyId": "stg_01M5YY05C0Q1G1CJB3MZ",
+      "strategyVersion": 1,
+      "mode": "paper",
+      "status": "running",
+      "startedAt": "2026-10-27T15:00:00.000Z",
+      "stoppedAt": null,
+      "lastSeq": 31,
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "pnlPct": "0",
+      "approvalMode": "auto",
+      "pendingApprovals": 0,
+      "triggerStates": [
+        {
+          "triggerId": "oversold",
+          "state": "ready",
+          "conditionTrue": false,
+          "heldForSec": 0,
+          "cooldownUntil": null,
+          "fires": 0
+        }
+      ],
+      "blockedFills": 0,
+      "ownerId": "usr_01M5YY05C0ZY28G0R4DM",
+      "ownerLabel": "fixture-user-example"
+    }
+  ],
+  "asOf": "2026-10-27T15:30:00.000Z"
+}

@@ -1,0 +1,155 @@
+{
+ "id": "stg_demo0000000000000000000001",
+ "name": "BTC oversold bounce",
+ "author": {
+  "handle": "@demo_lena",
+  "isYou": false
+ },
+ "venues": [
+  "hyperliquid"
+ ],
+ "forks": 0,
+ "paperReturn30dPct": "-0.16",
+ "spark": [
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  10000,
+  9997.43,
+  9977.05,
+  9989.34,
+  9989.34,
+  9983.89
+ ],
+ "publishedAt": "2026-10-01T00:00:00.000Z",
+ "mock": true,
+ "thesis": "Buy a small BTC perp when hourly RSI is oversold; fixed stop and take-profit.",
+ "strategy": {
+  "schemaVersion": 1,
+  "name": "BTC oversold bounce",
+  "thesis": "Buy a small BTC perp when hourly RSI is oversold; fixed stop and take-profit.",
+  "signals": [
+   {
+    "id": "rsi",
+    "maxAgeSeconds": 7200,
+    "kind": "indicator",
+    "params": {
+     "instrument": "hl:perp:BTC",
+     "name": "rsi",
+     "period": 14,
+     "timeframe": "1h"
+    }
+   }
+  ],
+  "triggers": [
+   {
+    "id": "oversold",
+    "when": {
+     "op": "lt",
+     "left": {
+      "ref": "rsi.value"
+     },
+     "right": {
+      "lit": 30
+     }
+    },
+    "forMinutes": 0,
+    "cooldownMinutes": 240,
+    "maxFires": null
+   }
+  ],
+  "actions": [
+   {
+    "id": "buy",
+    "type": "open",
+    "on": [
+     "oversold"
+    ],
+    "instrument": "hl:perp:BTC",
+    "side": "long",
+    "size": {
+     "unit": "usd",
+     "value": "200"
+    },
+    "leverage": 1,
+    "order": {
+     "type": "market",
+     "maxSlippageBps": 100,
+     "maxPriceImpactBps": 200
+    },
+    "exits": {
+     "takeProfit": {
+      "unit": "pct",
+      "value": "4"
+     },
+     "stopLoss": {
+      "unit": "pct",
+      "value": "3"
+     }
+    }
+   }
+  ],
+  "risk": {
+   "maxPositionPct": 25,
+   "maxTotalExposurePct": 100,
+   "maxDailyLossPct": 10,
+   "maxOrdersPerDay": 20,
+   "equityWhenFeedStale": "skip"
+  }
+ },
+ "humanized": {
+  "watch": [
+   "BTC 14-hour RSI · Hyperliquid"
+  ],
+  "when": [
+   "BTC 14-hour RSI is below 30; repeats, at most every 4 hours"
+  ],
+  "do": [
+   "Open a long $200 of BTC on Hyperliquid (max slippage 1%)"
+  ],
+  "exit": [
+   "BTC: take profit at +4%, stop at −3%",
+   "Risk: max 25% per position, pause after −10% in a day, max 20 orders/day"
+  ]
+ },
+ "nodes": [
+  {
+   "id": "rsi",
+   "kind": "watch",
+   "title": "BTC 14-hour RSI",
+   "detail": "BTC 14-hour RSI · Hyperliquid",
+   "venue": "hyperliquid"
+  },
+  {
+   "id": "oversold",
+   "kind": "when",
+   "title": "When",
+   "detail": "BTC 14-hour RSI is below 30; repeats, at most every 4 hours"
+  },
+  {
+   "id": "buy",
+   "kind": "do",
+   "title": "Open a long $200 of BTC",
+   "detail": "Open a long $200 of BTC on Hyperliquid (max slippage 1%)",
+   "venue": "hyperliquid"
+  },
+  {
+   "id": "buy.exit",
+   "kind": "exit",
+   "title": "Exit",
+   "detail": "BTC: take profit at +4%, stop at −3%"
+  }
+ ],
+ "forkedFrom": null
+}

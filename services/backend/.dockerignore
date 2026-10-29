@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+.env.*
+.data
+data
+coverage
+foundry
+tools
+*.tgz
+*.key
+*.pem

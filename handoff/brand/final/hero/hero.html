@@ -1,0 +1,124 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><title>Quiver — hero mock</title><style>
+@font-face{font-family:"Instrument Serif";src:url("file:///usr/share/fonts/truetype/sand-box/google/Instrument Serif/InstrumentSerif-Regular.ttf")}
+@font-face{font-family:"Instrument Serif";font-style:italic;src:url("file:///usr/share/fonts/truetype/sand-box/google/Instrument Serif/InstrumentSerif-Italic.ttf")}
+@font-face{font-family:"Geist";font-weight:100 900;src:url("file:///usr/share/fonts/truetype/sand-box/google/Geist/Geist-VariableFont_wght.ttf")}
+@font-face{font-family:"Geist Mono";font-weight:100 900;src:url("file:///usr/share/fonts/truetype/sand-box/google/Geist Mono/GeistMono-VariableFont_wght.ttf")}
+:root{--bg:#0A0A0B;--bg1:#111113;--bg2:#17171A;--line:#26262B;--line2:#34343B;--text:#F5F3EF;--text2:#B9B4AB;--text3:#8A867F;--cream:#EDE6DA;--amber:#FFB547;--amberPress:#E0952A;--amberDim:#7A5A2B;--up:#8FD3A8;--down:#F2848F;--statusLive:#8FD3A8;--statusPaper:#B7ACE8;--statusError:#F2848F;--statusIdle:#8A867F;}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--text);font-family:Geist,sans-serif;-webkit-font-smoothing:antialiased}
+.serif{font-family:"Instrument Serif",serif;font-weight:400}.mono{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums}
+/* primary button: squared 8px, amber hairline, nock notch on the left edge (not a pill) */
+.qbtn{position:relative;display:inline-flex;align-items:center;gap:9px;height:38px;padding:0 14px 0 18px;border-radius:8px;font:500 14px/1 Geist;letter-spacing:-.005em;white-space:nowrap}
+.qbtn-p{color:var(--amber);background:rgba(255,181,71,.07);box-shadow:inset 0 0 0 1px rgba(255,181,71,.55)}
+.qbtn-p::before{content:"";position:absolute;left:-1px;top:50%;width:7px;height:12px;margin-top:-6px;background:var(--bg);clip-path:polygon(0 0,100% 50%,0 100%);box-shadow:none}
+.qbtn-p::after{content:"";position:absolute;left:0;top:50%;width:7px;height:12px;margin-top:-6px;border:0;background:linear-gradient(var(--amber),var(--amber)) 0 0/100% 100%;clip-path:polygon(0 0,100% 50%,0 100%,0 calc(100% - 1.4px),calc(100% - 2.4px) 50%,0 1.4px);opacity:.55}
+.qbtn-p svg{width:12px;height:12px}
+.qbtn-g{color:var(--text);box-shadow:inset 0 0 0 1px var(--line2);font-family:"Geist Mono";font-size:13px;padding:0 14px}
+em{font-style:italic;font-family:"Instrument Serif",serif}.qn{position:absolute;background:linear-gradient(180deg,#151517,#111113);border:1px solid var(--line);border-radius:12px;padding:12px 14px 13px;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px -12px rgba(0,0,0,.6);
+ --ping:0;border-color:color-mix(in srgb,var(--amber) calc(var(--ping)*55%),var(--line))}
+.qn-k{font:500 10.5px/1 "Geist Mono";letter-spacing:.08em;text-transform:uppercase;color:var(--text3);display:flex;align-items:center;gap:7px}
+.qn-k i{width:6px;height:6px;border-radius:50%;background:var(--text3);box-shadow:0 0 0 calc(var(--ping)*5px) rgba(255,181,71,calc(var(--ping)*.18))}
+.qn-trigger .qn-k i{background:var(--cream)} /* amber is accent-only: node-kind dots stay neutral */
+.qn-action.live .qn-k i{background:var(--statusLive)} .qn-action.paper .qn-k i{background:var(--statusPaper)}
+.qn-t{font:500 14px/1.3 Geist;color:var(--text);margin-top:9px;letter-spacing:-.005em}
+.qn-v{margin-top:8px;font-size:20px;color:var(--cream);letter-spacing:-.02em}.qn-v .u{font-size:12px;color:var(--text3);margin-left:4px}
+.qn-s{margin-top:7px;font-size:11.5px;color:var(--text3)}
+.qe{fill:none;stroke:#2E2E34;stroke-width:1.25}
+.qe-lit{fill:none;stroke:var(--amber);stroke-width:1.25;opacity:0}
+.qa-tail{fill:none;stroke:var(--amber);stroke-width:1.6;stroke-linecap:round}
+.qa-head{fill:var(--amber)}
+.qport{fill:var(--bg);stroke:#5A5650;stroke-width:1.25}
+
+body{width:1440px;height:900px;overflow:hidden;position:relative}
+.amb{position:absolute;inset:0;background:radial-gradient(800px 520px at 74% 52%,rgba(255,181,71,.05),transparent 70%),radial-gradient(1200px 600px at 20% -10%,rgba(237,230,218,.035),transparent 60%)}
+header{position:absolute;left:64px;right:64px;top:28px;height:44px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;gap:11px;align-items:center}
+nav{display:flex;gap:30px;font:400 14px Geist;color:var(--text2)}
+.cta{display:flex;gap:22px;align-items:center}
+.btn{height:38px;padding:0 16px;border-radius:999px;font:500 14px/38px Geist;letter-spacing:-.005em}
+.btn.g{border:1px solid var(--line2);color:var(--text)} .btn.p{background:var(--cream);color:#0A0A0B}
+.hl{position:absolute;left:0;right:0;top:96px;height:1px;background:var(--line);opacity:.6}
+.left{position:absolute;left:96px;top:188px;width:520px}
+.lab{font:500 12px/1 "Geist Mono";letter-spacing:.12em;text-transform:uppercase;color:var(--text3);display:flex;gap:10px;align-items:center}
+.lab .dot{width:6px;height:6px;border-radius:50%;background:var(--amber);opacity:calc(.5 + var(--blink,1)*.5)}
+h1{font:400 84px/.98 "Instrument Serif";letter-spacing:-.025em;margin-top:26px} h1 em{color:var(--cream)}
+p.lede{margin-top:24px;font:400 18px/1.55 Geist;color:var(--text2);max-width:470px}
+.prompt{margin-top:36px;width:500px;border:1px solid var(--line2);border-radius:14px;background:#111113;padding:16px 16px 14px}
+.prompt .q{font:400 15px/1.5 Geist;color:var(--text);min-height:45px} .caret{display:inline-block;width:1.5px;height:18px;background:var(--amber);vertical-align:-3px;margin-left:1px}
+.prompt .row{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.chips{display:flex;gap:6px} .chip{font:500 11.5px/1 "Geist Mono";color:var(--text2);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
+.send{width:34px;height:34px;border-radius:10px;background:var(--amber);display:grid;place-items:center}
+.panel{position:absolute;left:676px;top:160px;width:676px;height:600px;border:1px solid var(--line);border-radius:20px;background:rgba(17,17,19,.72);overflow:hidden}
+.ph{height:52px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px;font:400 12.5px "Geist Mono";color:var(--text3)}
+.ph b{color:var(--text);font-weight:500} .demo{border:1px solid var(--line2);border-radius:999px;padding:5px 9px;font-size:11px;color:var(--text2)}
+.state{display:flex;gap:8px;align-items:center} .live{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+.tlink{font:500 13px 'Geist Mono';color:var(--text2);letter-spacing:.04em;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:5px}
+.qn-k i{background:var(--text3)!important} .qn-trigger .qn-k i{background:var(--cream)!important}
+.grid{position:absolute;inset:52px 0 92px 0;background-image:radial-gradient(rgba(255,255,255,.045) 1px,transparent 1px);background-size:20px 20px}
+#g{position:absolute;left:26px;top:76px}
+.stats{position:absolute;left:0;right:0;bottom:0;height:92px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr)}
+.stats div{padding:18px 20px;border-right:1px solid var(--line)} .stats div:last-child{border:0}
+.stats small{display:block;font:500 11px/1 "Geist Mono";letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.stats span{display:block;margin-top:12px;font:400 22px/1 "Geist Mono";letter-spacing:-.02em;color:var(--text)} .stats .a{color:var(--amber)}
+.chains{position:absolute;left:96px;bottom:56px;font:400 12.5px "Geist Mono";color:var(--text3);letter-spacing:.04em;display:flex;gap:22px} .chains b{color:var(--text2);font-weight:400}
+.foot{position:absolute;right:88px;bottom:56px;font:400 12px "Geist Mono";color:var(--text3)}
+</style></head><body><div class=amb></div>
+<header><div class=brand><svg viewBox="0 0 187.500 100" height="26" width="48.75" style="display:block"><g transform="scale(1.562500)"><rect id="capsule" x="3.75" y="3.75" width="112.5" height="56.5" rx="28.25" fill="none" stroke="#EDE6DA" stroke-width="7.5"/><g id="arrow-1" fill="#FFB547"><path d="M29.66 45.05 L50.87 23.83 L45.99 22.49 L59.64 18.46 L55.61 32.11 L54.27 27.23 L33.05 48.44Z"/><path d="M35.88 39.11 L29.24 38.4 L26.13 41.51 L32.77 42.22Z"/><path d="M38.99 42.22 L39.7 48.86 L36.59 51.97 L35.88 45.33Z"/><path d="M40.69 34.3 L34.04 33.59 L30.93 36.7 L37.58 37.41Z"/><path d="M43.8 37.41 L44.51 44.06 L41.4 47.17 L40.69 40.52Z"/></g><g id="arrow-2" fill="#EDE6DA"><path d="M59.66 45.05 L80.87 23.83 L75.99 22.49 L89.64 18.46 L85.61 32.11 L84.27 27.23 L63.05 48.44Z"/><path d="M65.88 39.11 L59.24 38.4 L56.13 41.51 L62.77 42.22Z"/><path d="M68.99 42.22 L69.7 48.86 L66.59 51.97 L65.88 45.33Z"/><path d="M70.69 34.3 L64.04 33.59 L60.93 36.7 L67.58 37.41Z"/><path d="M73.8 37.41 L74.51 44.06 L71.4 47.17 L70.69 40.52Z"/></g></g></svg><svg viewBox="8.0 -146.0 432.6 189.0" height="22" style="display:block"><path d="M86.80000000000001 43.0Q80.80000000000001 43.0 74.10000000000001 40.5Q67.4 38.0 62.2 31.8Q57.0 25.6 55.0 14.200000000000001Q54.0 7.800000000000001 51.8 5.0Q49.6 2.2 44.400000000000006 0.2Q34.0 -3.2 25.700000000000003 -13.5Q17.400000000000002 -23.8 12.700000000000001 -39.0Q8.0 -54.2 8.0 -72.2Q8.0 -87.80000000000001 11.5 -101.20000000000002Q15.0 -114.60000000000001 21.3 -124.70000000000002Q27.6 -134.8 36.0 -140.4Q44.400000000000006 -146.0 54.0 -146.0Q63.6 -146.0 71.9 -140.4Q80.2 -134.8 86.6 -124.70000000000002Q93.0 -114.60000000000001 96.5 -101.20000000000002Q100.0 -87.80000000000001 100.0 -72.2Q100.0 -53.800000000000004 95.1 -38.300000000000004Q90.2 -22.8 81.7 -12.600000000000001Q73.2 -2.4000000000000004 62.400000000000006 0.6000000000000001Q61.2 0.8 61.2 1.7000000000000002Q61.2 2.6 62.2 3.4000000000000004Q64.8 5.2 66.6 7.9Q68.4 10.600000000000001 69.60000000000001 14.8Q73.2 26.400000000000002 78.9 31.6Q84.60000000000001 36.800000000000004 91.4 36.800000000000004Q97.4 36.800000000000004 103.60000000000001 33.0Q105.2 32.0 106.6 32.400000000000006Q108.0 32.800000000000004 108.0 34.4Q108.0 35.800000000000004 106.4 37.2Q103.2 39.6 98.5 41.3Q93.80000000000001 43.0 86.80000000000001 43.0ZM54.0 -3.6Q68.2 -3.6 76.2 -20.6Q84.2 -37.6 84.2 -72.2Q84.2 -106.80000000000001 76.2 -123.7Q68.2 -140.6 54.0 -140.6Q40.0 -140.6 31.9 -123.7Q23.8 -106.80000000000001 23.8 -72.2Q23.8 -37.6 31.9 -20.6Q40.0 -3.6 54.0 -3.6ZM138.2 1.8Q133.2 1.8 128.6 -0.4Q124.0 -2.6 121.0 -7.4Q118.0 -12.200000000000001 118.0 -20.200000000000003V-89.80000000000001Q118.0 -93.4 116.9 -94.80000000000001Q115.8 -96.2 113.0 -96.4L109.6 -96.80000000000001Q106.2 -97.2 106.2 -99.4Q106.2 -102.0 110.0 -102.0H128.6Q131.6 -102.0 131.6 -99.0V-24.400000000000002Q131.6 -15.200000000000001 135.1 -11.3Q138.6 -7.4 144.8 -7.4Q151.0 -7.4 155.8 -10.9Q160.6 -14.4 163.5 -20.3Q166.4 -26.200000000000003 166.4 -33.2V-89.80000000000001Q166.4 -93.4 165.3 -94.80000000000001Q164.2 -96.2 161.4 -96.4L158.0 -96.80000000000001Q154.6 -97.2 154.6 -99.4Q154.6 -102.0 158.4 -102.0H177.0Q180.0 -102.0 180.0 -99.0V-21.400000000000002Q180.0 -17.8 181.1 -16.5Q182.2 -15.200000000000001 185.0 -14.8L189.2 -14.200000000000001Q191.8 -14.0 191.8 -12.200000000000001Q191.8 -10.4 188.60000000000002 -9.8Q182.4 -9.0 178.7 -6.6Q175.0 -4.2 172.2 -0.8Q170.4 1.0 169.2 1.0Q167.4 1.0 167.4 -1.4000000000000001V-10.600000000000001Q167.4 -12.200000000000001 166.3 -12.5Q165.2 -12.8 164.0 -11.600000000000001Q156.6 -4.2 150.89999999999998 -1.2000000000000002Q145.2 1.8 138.2 1.8ZM215.20000000000002 -121.0Q211.0 -121.0 208.10000000000002 -124.0Q205.20000000000002 -127.0 205.20000000000002 -131.6Q205.20000000000002 -136.20000000000002 208.10000000000002 -139.10000000000002Q211.0 -142.0 215.20000000000002 -142.0Q219.4 -142.0 222.2 -139.10000000000002Q225.0 -136.20000000000002 225.0 -131.6Q225.0 -127.0 222.2 -124.0Q219.4 -121.0 215.20000000000002 -121.0ZM198.4 0.0Q195.4 0.0 195.4 -2.2Q195.4 -4.0 198.0 -4.6000000000000005L200.4 -5.0Q205.4 -5.800000000000001 206.8 -7.500000000000001Q208.20000000000002 -9.200000000000001 208.20000000000002 -13.4V-80.60000000000001Q208.20000000000002 -84.2 207.10000000000002 -85.5Q206.0 -86.80000000000001 203.20000000000002 -87.2L199.0 -87.80000000000001Q196.4 -88.0 196.4 -90.0Q196.4 -91.60000000000001 199.6 -92.2Q205.8 -93.2 209.60000000000002 -95.4Q213.4 -97.60000000000001 217.0 -100.80000000000001Q218.8 -102.60000000000001 220.0 -102.60000000000001Q221.8 -102.60000000000001 221.8 -100.2V-13.4Q221.8 -9.200000000000001 223.0 -7.4Q224.20000000000002 -5.6000000000000005 227.60000000000002 -5.2L232.60000000000002 -4.6000000000000005Q234.8 -4.2 234.8 -2.4000000000000004Q234.8 0.0 231.8 0.0ZM273.40000000000003 1.8Q271.6 1.8 270.8 -0.4L244.20000000000002 -88.60000000000001Q242.8 -93.4 241.5 -94.80000000000001Q240.20000000000002 -96.2 237.40000000000003 -96.80000000000001L234.40000000000003 -97.4Q231.8 -98.0 231.8 -100.0Q231.8 -102.0 234.60000000000002 -102.0H267.6Q270.40000000000003 -102.0 270.40000000000003 -100.0Q270.40000000000003 -97.80000000000001 267.8 -97.4L264.6 -97.0Q259.8 -96.4 258.6 -94.7Q257.40000000000003 -93.0 258.6 -88.60000000000001L275.20000000000005 -30.8Q275.8 -28.6 277.20000000000005 -28.6Q278.6 -28.6 279.20000000000005 -30.8L295.40000000000003 -85.0Q297.0 -90.4 296.3 -93.10000000000001Q295.6 -95.80000000000001 290.6 -96.60000000000001L286.40000000000003 -97.4Q283.8 -98.0 283.8 -100.0Q283.8 -102.0 286.6 -102.0H312.0Q314.8 -102.0 314.8 -99.80000000000001Q314.8 -97.80000000000001 312.40000000000003 -97.0L310.6 -96.4Q307.6 -95.4 305.5 -92.80000000000001Q303.40000000000003 -90.2 301.40000000000003 -83.80000000000001L276.0 -0.4Q275.20000000000005 1.8 273.40000000000003 1.8ZM346.80000000000007 1.8Q337.20000000000005 1.8 329.6 -4.6Q322.00000000000006 -11.0 317.50000000000006 -22.7Q313.00000000000006 -34.4 313.00000000000006 -49.800000000000004Q313.00000000000006 -65.60000000000001 317.6 -77.60000000000001Q322.20000000000005 -89.60000000000001 330.20000000000005 -96.4Q338.20000000000005 -103.2 348.00000000000006 -103.2Q359.80000000000007 -103.2 367.1 -93.5Q374.40000000000003 -83.80000000000001 374.40000000000003 -62.0Q374.40000000000003 -55.400000000000006 369.40000000000003 -55.400000000000006H331.40000000000003Q327.40000000000003 -55.400000000000006 327.40000000000003 -50.800000000000004Q327.40000000000003 -29.6 333.6 -19.0Q339.8 -8.4 349.40000000000003 -8.4Q357.00000000000006 -8.4 361.80000000000007 -13.8Q366.6 -19.200000000000003 369.6 -32.0Q370.20000000000005 -34.2 372.20000000000005 -34.2Q374.6 -34.2 374.00000000000006 -30.200000000000003Q370.80000000000007 -12.4 363.80000000000007 -5.3Q356.80000000000007 1.8 346.80000000000007 1.8ZM330.8 -60.400000000000006H351.00000000000006Q360.6 -60.400000000000006 360.6 -70.4Q360.6 -83.4 357.40000000000003 -90.80000000000001Q354.20000000000005 -98.2 347.80000000000007 -98.2Q340.00000000000006 -98.2 334.70000000000005 -89.2Q329.40000000000003 -80.2 327.8 -63.6Q327.40000000000003 -60.400000000000006 330.8 -60.400000000000006ZM407.8 -89.2Q416.0 -103.2 427.6 -103.2Q434.2 -103.2 437.4 -99.30000000000001Q440.6 -95.4 440.6 -90.60000000000001Q440.6 -86.80000000000001 438.70000000000005 -84.4Q436.8 -82.0 432.8 -82.0Q429.6 -82.0 428.1 -83.5Q426.6 -85.0 425.70000000000005 -87.0Q424.8 -89.0 423.6 -90.5Q422.4 -92.0 419.6 -92.0Q416.0 -92.0 412.8 -87.7Q409.6 -83.4 407.5 -76.2Q405.4 -69.0 405.4 -59.800000000000004V-13.4Q405.4 -9.200000000000001 406.7 -7.4Q408.0 -5.6000000000000005 412.2 -5.2L417.6 -4.6000000000000005Q419.8 -4.2 419.8 -2.4000000000000004Q419.8 0.0 416.8 0.0H383.0Q380.0 0.0 380.0 -2.2Q380.0 -4.0 382.6 -4.6000000000000005L385.0 -5.0Q389.2 -5.800000000000001 390.5 -7.500000000000001Q391.8 -9.200000000000001 391.8 -13.4V-80.60000000000001Q391.8 -84.2 390.70000000000005 -85.5Q389.6 -86.80000000000001 386.8 -87.2L382.6 -87.80000000000001Q380.0 -88.0 380.0 -90.0Q380.0 -91.60000000000001 383.2 -92.2Q389.4 -93.2 392.7 -95.4Q396.0 -97.60000000000001 399.6 -100.80000000000001Q401.4 -102.60000000000001 402.6 -102.60000000000001Q404.4 -102.60000000000001 404.4 -100.2V-89.4Q404.4 -88.0 405.6 -87.7Q406.8 -87.4 407.8 -89.2Z" fill="#F5F3EF"/></svg></div><nav><span>Strategies</span><span>Backtests</span><span>Skills</span><span>Docs</span></nav><div class=cta><a class=tlink>$QUIVR</a><span class="qbtn qbtn-p">Open app<svg viewBox="0 0 12 12"><path d="M2.5 9.5 L9 3 M4.5 3 H9 V7.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></span></div></header><div class=hl></div>
+<div class=left><div class=lab id=lab><span class=dot></span>AI strategy builder · Robinhood Chain</div>
+<h1>Type an idea.<br>Watch it <em>trade.</em></h1>
+<p class=lede>Describe a strategy in plain English. Quiver draws it as a live graph of signals, triggers and actions, then paper trades and backtests it before you go live.</p>
+<div class=prompt><div class=q id=q></div><div class=row><div class=chips><span class=chip>Paper trade</span><span class=chip>Backtest 90d</span><span class=chip>+ Skill</span></div><div class=send title=Draft><svg width=16 height=16 viewBox="0 0 16 16"><path d="M3 13 L12 4 M6 4 H12 V10" stroke="#0A0A0B" stroke-width="1.8" fill="none" stroke-linecap="square"/></svg></div></div></div></div>
+<div class=panel><div class=ph><span>strategy / <b>hood-dip-buyer</b></span><span class=state><span class=live></span>paper · running <span class=demo>Demo data</span></span></div><div class=grid></div><div id=g></div>
+<div class=stats><div><small>Backtest 90d</small><span class=a id=s1>+12.4%</span></div><div><small>Max drawdown</small><span>−4.1%</span></div><div><small>Trades</small><span id=s3>38</span></div><div><small>Win rate</small><span>61%</span></div></div></div>
+<div class=chains><b>Built for Robinhood Chain</b><span>connects to Solana · Hyperliquid · Polymarket</span></div>
+<div class=foot>Illustrative backtest on demo data. Not a performance claim or financial advice.</div>
+<script>// Quiver live graph: orthogonal edges, light-arrows travel along them. Deterministic: render(tMs).
+(function(){
+const NS='http://www.w3.org/2000/svg';
+window.QGraph=function(root,opts){
+  const W=opts.w,H=opts.h,nodes=opts.nodes,edges=opts.edges,P=opts.period||6000;
+  root.style.position='relative';root.style.width=W+'px';root.style.height=H+'px';
+  const svg=document.createElementNS(NS,'svg');svg.setAttribute('width',W);svg.setAttribute('height',H);svg.style.position='absolute';svg.style.inset=0;root.appendChild(svg);
+  const el={};
+  nodes.forEach(n=>{const d=document.createElement('div');d.className='qn qn-'+n.kind;d.style.left=n.x+'px';d.style.top=n.y+'px';d.style.width=(n.w||190)+'px';
+    d.innerHTML=`<div class="qn-k"><i></i>${n.label}</div><div class="qn-t">${n.title}</div>`+(n.val!==undefined?`<div class="qn-v mono"><span class="v">${n.val}</span><span class="u">${n.unit||''}</span></div>`:'')+(n.sub?`<div class="qn-s mono">${n.sub}</div>`:'');
+    root.appendChild(d);el[n.id]={n,d};});
+  const port=(id,side)=>{const {n,d}=el[id];const w=n.w||190,h=d.offsetHeight;return side==='out'?[n.x+w,n.y+h/2]:[n.x,n.y+h/2];};
+  const E=edges.map(e=>{const [x1,y1]=port(e.from,'out'),[x2,y2]=port(e.to,'in');const mx=e.mx!==undefined?e.mx:(x1+x2)/2;const r=Math.min(12,Math.abs(y2-y1)/2);const s=Math.sign(y2-y1);
+    const d=Math.abs(y2-y1)<1?`M${x1} ${y1}H${x2}`:`M${x1} ${y1}H${mx-r}Q${mx} ${y1} ${mx} ${y1+s*r}V${y2-s*r}Q${mx} ${y2} ${mx+r} ${y2}H${x2}`;
+    const base=document.createElementNS(NS,'path');base.setAttribute('d',d);base.setAttribute('class','qe');svg.appendChild(base);
+    const lit=document.createElementNS(NS,'path');lit.setAttribute('d',d);lit.setAttribute('class','qe-lit');svg.appendChild(lit);
+    const tails=[0.18,0.42,1].map((o,i)=>{const p=document.createElementNS(NS,'path');p.setAttribute('d',d);p.setAttribute('class','qa-tail');p.style.opacity=o;svg.appendChild(p);return p;});
+    const head=document.createElementNS(NS,'path');head.setAttribute('d','M-7 -4.5 L1.5 0 L-7 4.5 L-5 0 Z');head.setAttribute('class','qa-head');svg.appendChild(head);
+    const dot=document.createElementNS(NS,'circle');dot.setAttribute('r',3);dot.setAttribute('class','qport');dot.setAttribute('cx',x2);dot.setAttribute('cy',y2);svg.appendChild(dot);
+    const dot2=document.createElementNS(NS,'circle');dot2.setAttribute('r',3);dot2.setAttribute('class','qport');dot2.setAttribute('cx',x1);dot2.setAttribute('cy',y1);svg.appendChild(dot2);
+    return {e,base,lit,tails,head,dot,len:base.getTotalLength()};});
+  const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; // power2.inOut
+  function render(t){
+    t=((t%P)+P)%P;
+    E.forEach(o=>{const {e,len}=o;const a=e.t0,b=e.t1;let k=(t-a)/(b-a);
+      const on=k>=0&&k<=1;const pos=ease(Math.max(0,Math.min(1,k)))*len;
+      [26,14,6].forEach((L,i)=>{const p=o.tails[i];if(!on){p.style.visibility='hidden';return;}p.style.visibility='visible';const l=Math.min(L*2.2,pos);p.setAttribute('stroke-dasharray',`${l} ${len+100}`);p.setAttribute('stroke-dashoffset',-(pos-l));});
+      if(on){const q=o.base.getPointAtLength(pos),q0=o.base.getPointAtLength(Math.max(0,pos-1.5));const ang=Math.atan2(q.y-q0.y,q.x-q0.x)*180/Math.PI;o.head.style.visibility='visible';o.head.setAttribute('transform',`translate(${q.x} ${q.y}) rotate(${ang})`);}else o.head.style.visibility='hidden';
+      // edge glow stays briefly after arrival
+      const after=(t-b)/700; const lit=on?0.35*k:(after>=0&&after<1?0.35*(1-after):0);o.lit.style.opacity=lit;
+      const ping=(after>=0&&after<1)?1-after:0;o.dot.style.opacity=0.35+0.65*ping;o.dot.setAttribute('r',3+ping*1.5);
+      const tgt=el[e.to].d;tgt.style.setProperty('--ping',Math.max(+tgt.dataset.p||0,ping));tgt.dataset.p=Math.max(+tgt.dataset.p||0,ping);
+    });
+    Object.values(el).forEach(({n,d})=>{d.style.setProperty('--ping',d.dataset.p||0);d.dataset.p=0;
+      if(n.live){const v=n.live(t/P);const s=d.querySelector('.v');if(s)s.textContent=v;}});
+  }
+  return {render,period:P};
+};
+})();
+
+const P=6000;
+const G=QGraph(document.getElementById('g'),{w:624,h:400,period:P,nodes:[
+ {id:'s1',kind:'signal',label:"Signal",title:"HOOD \u00b7 RSI 14 \u00b7 1h",val:'28.6',x:0,y:132,w:196,live:p=>(28.9-0.6*Math.sin(p*2*Math.PI)).toFixed(1)},
+ {id:'t',kind:'trigger',label:'Trigger',title:"RSI under 30",sub:"checks every block",x:232,y:132,w:180},
+ {id:'a1',kind:'action',label:'Action',title:"Buy $500 of HOOD",sub:'paper · size $500',x:448,y:30,w:176},
+ {id:'a2',kind:'action',label:'Action',title:"Take profit at +8%",sub:"trailing stop 2%",x:448,y:236,w:176}],
+ edges:[{from:'s1',to:'t',t0:200,t1:1600},{from:'t',to:'a1',t0:1900,t1:3200},{from:'t',to:'a2',t0:3900,t1:5300}]});
+const Q="Buy $500 of HOOD on Robinhood Chain when the hourly RSI drops under 30. Take profit at +8%.";
+const q=document.getElementById('q'),lab=document.getElementById('lab');
+window.__seek=function(t){G.render(t);const p=(t%P)/P;q.innerHTML=Q+'<span class=caret style="opacity:'+(Math.floor(t/530)%2?0:1)+'"></span>';lab.style.setProperty('--blink',(Math.sin(t/900)+1)/2);};
+if(!window.__manual){const s=performance.now();(function f(){__seek(performance.now()-s);requestAnimationFrame(f)})();}else __seek(0);
+</script></body></html>

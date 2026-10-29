@@ -1,0 +1,81 @@
+{
+  "period": "30d",
+  "minTrades": 3,
+  "items": [
+    {
+      "rank": 1,
+      "handle": "@demo_lena",
+      "strategyName": "BTC oversold bounce",
+      "publicStrategyId": "stg_demo0000000000000000000001",
+      "venues": [
+        "hyperliquid"
+      ],
+      "basis": "backtest",
+      "returnPct": "0.06",
+      "maxDrawdownPct": "0.35",
+      "winRatePct": "66.7",
+      "trades": 11,
+      "spark": [
+        100,
+        100.11,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.16,
+        100.03,
+        99.87,
+        100.06,
+        100.06
+      ]
+    },
+    {
+      "rank": 2,
+      "handle": "@demo_okafor",
+      "strategyName": "ETH trend follow",
+      "publicStrategyId": "stg_demo0000000000000000000002",
+      "venues": [
+        "hyperliquid"
+      ],
+      "basis": "backtest",
+      "returnPct": "0.01",
+      "maxDrawdownPct": "0.89",
+      "winRatePct": "42.9",
+      "trades": 23,
+      "spark": [
+        100,
+        100,
+        100.26,
+        100.21,
+        100.17,
+        100.17,
+        100.34,
+        99.9,
+        99.9,
+        99.85,
+        100.24,
+        99.93,
+        99.53,
+        99.52,
+        99.81,
+        99.76,
+        99.72,
+        99.95,
+        100.01,
+        100.01
+      ]
+    }
+  ],
+  "asOf": "2026-10-27T16:23:00.000Z",
+  "synthetic": true,
+  "notice": "Paper and backtest results only on synthetic prices. Not real money; past results are not a promise of future returns."
+}

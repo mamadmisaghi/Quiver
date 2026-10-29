@@ -1,0 +1,70 @@
+{
+  "id": "ins_00000000000000000000",
+  "runId": "run_01M5Z2R4N0GEP38WSAPQ",
+  "strategyId": "stg_01M5YY05C0Q1G1CJB3MZ",
+  "baseVersion": 1,
+  "text": "Change size to $250, stop loss 5% and take profit 12%",
+  "ops": [
+    {
+      "op": "set_size",
+      "actionId": "buy",
+      "size": {
+        "unit": "usd",
+        "value": "250"
+      }
+    },
+    {
+      "op": "set_exits",
+      "actionId": "buy",
+      "takeProfitPct": 12,
+      "stopLossPct": 5
+    }
+  ],
+  "changes": [
+    {
+      "path": "/actions/0/size",
+      "before": {
+        "unit": "usd",
+        "value": "200"
+      },
+      "after": {
+        "unit": "usd",
+        "value": "250"
+      },
+      "summary": "BTC size $200 → $250"
+    },
+    {
+      "path": "/actions/0/exits",
+      "before": {
+        "takeProfit": {
+          "unit": "pct",
+          "value": "4"
+        },
+        "stopLoss": {
+          "unit": "pct",
+          "value": "3"
+        }
+      },
+      "after": {
+        "takeProfit": {
+          "unit": "pct",
+          "value": "12"
+        },
+        "stopLoss": {
+          "unit": "pct",
+          "value": "5"
+        }
+      },
+      "summary": "BTC exits: take profit 12%, stop loss 5%"
+    }
+  ],
+  "issues": [],
+  "ok": true,
+  "compiler": "demo",
+  "notice": "Demo instruct: changes were read by a keyword parser, not AI. Check the diff before applying.",
+  "status": "proposed",
+  "createdAt": "2026-10-27T16:23:00.000Z",
+  "expiresAt": "2026-10-27T16:38:00.000Z",
+  "appliedAt": null,
+  "appliedVersion": null
+}

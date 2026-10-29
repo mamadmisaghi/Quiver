@@ -1,0 +1,30 @@
+{
+  "mode": "paper",
+  "by": "venue",
+  "grossExposureUsd": "1076.31",
+  "netExposureUsd": "1076.31",
+  "cashUsd": "19799.19",
+  "items": [
+    {
+      "key": "hyperliquid",
+      "label": "hyperliquid",
+      "longUsd": "876.41",
+      "shortUsd": "0",
+      "grossUsd": "876.41",
+      "netUsd": "876.41",
+      "weightPct": "81.43",
+      "positions": 2
+    },
+    {
+      "key": "robinhood",
+      "label": "robinhood",
+      "longUsd": "199.9",
+      "shortUsd": "0",
+      "grossUsd": "199.9",
+      "netUsd": "199.9",
+      "weightPct": "18.57",
+      "positions": 1
+    }
+  ],
+  "asOf": "2026-10-27T16:07:00.000Z"
+}

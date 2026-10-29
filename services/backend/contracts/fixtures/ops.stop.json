@@ -1,0 +1,22 @@
+{
+  "run": {
+    "id": "run_01M5YZQ360ZVQ9S40D6C",
+    "strategyId": "stg_01M5YZQ360QQ63B5C1BF",
+    "strategyVersion": 1,
+    "mode": "paper",
+    "status": "stopped",
+    "startedAt": "2026-10-27T15:30:00.000Z",
+    "stoppedAt": "2026-10-27T15:30:00.000Z",
+    "lastSeq": 2,
+    "equityUsd": "10000",
+    "pnlUsd": "0",
+    "pnlPct": "0",
+    "approvalMode": "auto",
+    "pendingApprovals": 0,
+    "triggerStates": [],
+    "blockedFills": 0,
+    "ownerId": "usr_01M5YY05C0ZY28G0R4DM",
+    "ownerLabel": "fixture-user-example"
+  },
+  "alreadyStopped": true
+}

@@ -1,0 +1,42 @@
+{
+  "runId": "run_01M5YZQ3600JK49MXYGF",
+  "orderId": "ord_01M5Z0VQ20QMXW7AJZ8Z",
+  "instrument": "hl:perp:SOL",
+  "requestedPct": 25,
+  "closedFully": false,
+  "status": "filled",
+  "fill": {
+    "v": 1,
+    "seq": 29,
+    "runId": "run_01M5YZQ3600JK49MXYGF",
+    "mode": "paper",
+    "ts": "2026-10-27T15:50:00.000Z",
+    "type": "fill",
+    "fillId": "fil_01M5Z0VQ20G2V1NXH0N7",
+    "orderId": "ord_01M5Z0VQ20QMXW7AJZ8Z",
+    "actionId": "a2.partial",
+    "instrument": "hl:perp:SOL",
+    "venue": "hyperliquid",
+    "side": "short",
+    "qty": "0.76619997",
+    "price": "163.55803",
+    "notionalUsd": "125.32",
+    "feeUsd": "0.06",
+    "slippageBps": 12.28,
+    "referencePrice": "163.759126",
+    "referenceSource": "mock_hyperliquid",
+    "simulated": true,
+    "txHash": null,
+    "explorerUrl": null,
+    "position": {
+      "qty": "2.29859991",
+      "avgEntry": "163.142789",
+      "unrealizedPnlUsd": "1.42"
+    }
+  },
+  "rejection": null,
+  "remaining": {
+    "qty": "2.29859991",
+    "avgEntry": "163.142789"
+  }
+}

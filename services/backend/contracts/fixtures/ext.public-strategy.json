@@ -1,0 +1,273 @@
+{
+  "id": "stg_demo0000000000000000000003",
+  "name": "Fed cut + NVDA dip",
+  "author": {
+    "handle": "@demo_marco",
+    "isYou": false
+  },
+  "venues": [
+    "robinhood",
+    "hyperliquid",
+    "polymarket"
+  ],
+  "forks": 0,
+  "paperReturn30dPct": "0.81",
+  "spark": [
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10000,
+    10009.68,
+    10073.18,
+    10081.1
+  ],
+  "publishedAt": "2026-10-10T00:00:00.000Z",
+  "mock": true,
+  "thesis": "If Fed-cut odds on Polymarket pass 70% and NVDA trades under its 20-day average, buy $200 of NVDA on Robinhood Chain and open a 2× SOL long with $250 on Hyperliquid. Stop at −8%.",
+  "strategy": {
+    "schemaVersion": 1,
+    "name": "Fed cut + NVDA dip",
+    "thesis": "If Fed-cut odds on Polymarket pass 70% and NVDA trades under its 20-day average, buy $200 of NVDA on Robinhood Chain and open a 2× SOL long with $250 on Hyperliquid. Stop at −8%.",
+    "signals": [
+      {
+        "id": "fed_odds",
+        "maxAgeSeconds": 300,
+        "kind": "odds",
+        "params": {
+          "instrument": "pm:outcome:fed-cut-december:YES"
+        }
+      },
+      {
+        "id": "nvda_px",
+        "maxAgeSeconds": 120,
+        "kind": "price",
+        "params": {
+          "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+          "source": "chainlink_stream"
+        }
+      },
+      {
+        "id": "nvda_sma20",
+        "maxAgeSeconds": 900,
+        "kind": "indicator",
+        "params": {
+          "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+          "name": "sma",
+          "period": 20,
+          "timeframe": "1d"
+        }
+      },
+      {
+        "id": "sol_funding",
+        "maxAgeSeconds": 300,
+        "kind": "funding",
+        "params": {
+          "instrument": "hl:perp:SOL"
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "id": "t1",
+        "when": {
+          "op": "and",
+          "args": [
+            {
+              "op": "gt",
+              "left": {
+                "ref": "fed_odds.value"
+              },
+              "right": {
+                "lit": 0.7
+              }
+            },
+            {
+              "op": "lt",
+              "left": {
+                "ref": "nvda_px.value"
+              },
+              "right": {
+                "ref": "nvda_sma20.value"
+              }
+            },
+            {
+              "op": "lt",
+              "left": {
+                "ref": "sol_funding.value"
+              },
+              "right": {
+                "lit": 0.0001
+              }
+            }
+          ]
+        },
+        "forMinutes": 15,
+        "cooldownMinutes": 60,
+        "maxFires": 1
+      }
+    ],
+    "actions": [
+      {
+        "id": "a1",
+        "type": "open",
+        "on": [
+          "t1"
+        ],
+        "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+        "side": "buy",
+        "size": {
+          "unit": "usd",
+          "value": "200"
+        },
+        "leverage": 1,
+        "order": {
+          "type": "market",
+          "maxSlippageBps": 50,
+          "maxPriceImpactBps": 100
+        },
+        "exits": {
+          "takeProfit": {
+            "unit": "pct",
+            "value": "15"
+          },
+          "stopLoss": {
+            "unit": "pct",
+            "value": "8"
+          }
+        }
+      },
+      {
+        "id": "a2",
+        "type": "open",
+        "on": [
+          "t1"
+        ],
+        "instrument": "hl:perp:SOL",
+        "side": "long",
+        "size": {
+          "unit": "usd",
+          "value": "250"
+        },
+        "leverage": 2,
+        "order": {
+          "type": "market",
+          "maxSlippageBps": 50,
+          "maxPriceImpactBps": 100
+        },
+        "exits": {
+          "takeProfit": {
+            "unit": "pct",
+            "value": "15"
+          },
+          "stopLoss": {
+            "unit": "pct",
+            "value": "8"
+          }
+        }
+      }
+    ],
+    "risk": {
+      "maxPositionPct": 25,
+      "maxTotalExposurePct": 100,
+      "maxDailyLossPct": 10,
+      "maxOrdersPerDay": 20,
+      "equityWhenFeedStale": "skip"
+    }
+  },
+  "humanized": {
+    "watch": [
+      "Fed cuts in December? — YES odds · Polymarket",
+      "NVDA price · Robinhood Chain",
+      "NVDA 20-day average · Robinhood Chain",
+      "SOL funding rate · Hyperliquid"
+    ],
+    "when": [
+      "Fed cuts in December? — YES odds is above 70% and NVDA price is below NVDA 20-day average and SOL funding rate is below 0.01%/h, for 15 min (once)"
+    ],
+    "do": [
+      "Buy $200 of NVDA on Robinhood Chain (max slippage 0.5%)",
+      "Open a long $250 of SOL at 2× on Hyperliquid (max slippage 0.5%)"
+    ],
+    "exit": [
+      "NVDA: take profit at +15%, stop at −8%",
+      "SOL: take profit at +15%, stop at −8%",
+      "Risk: max 25% per position, pause after −10% in a day, max 20 orders/day"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "fed_odds",
+      "kind": "watch",
+      "title": "Fed cuts in December? — YES odds",
+      "detail": "Fed cuts in December? — YES odds · Polymarket",
+      "venue": "polymarket"
+    },
+    {
+      "id": "nvda_px",
+      "kind": "watch",
+      "title": "NVDA price",
+      "detail": "NVDA price · Robinhood Chain",
+      "venue": "robinhood"
+    },
+    {
+      "id": "nvda_sma20",
+      "kind": "watch",
+      "title": "NVDA 20-day average",
+      "detail": "NVDA 20-day average · Robinhood Chain",
+      "venue": "robinhood"
+    },
+    {
+      "id": "sol_funding",
+      "kind": "watch",
+      "title": "SOL funding rate",
+      "detail": "SOL funding rate · Hyperliquid",
+      "venue": "hyperliquid"
+    },
+    {
+      "id": "t1",
+      "kind": "when",
+      "title": "When",
+      "detail": "Fed cuts in December? — YES odds is above 70% and NVDA price is below NVDA 20-day average and SOL funding rate is below 0.01%/h, for 15 min (once)"
+    },
+    {
+      "id": "a1",
+      "kind": "do",
+      "title": "Buy $200 of NVDA",
+      "detail": "Buy $200 of NVDA on Robinhood Chain (max slippage 0.5%)",
+      "venue": "robinhood"
+    },
+    {
+      "id": "a1.exit",
+      "kind": "exit",
+      "title": "Exit",
+      "detail": "NVDA: take profit at +15%, stop at −8%"
+    },
+    {
+      "id": "a2",
+      "kind": "do",
+      "title": "Open a long $250 of SOL at 2×",
+      "detail": "Open a long $250 of SOL at 2× on Hyperliquid (max slippage 0.5%)",
+      "venue": "hyperliquid"
+    },
+    {
+      "id": "a2.exit",
+      "kind": "exit",
+      "title": "Exit",
+      "detail": "SOL: take profit at +15%, stop at −8%"
+    }
+  ],
+  "forkedFrom": null
+}

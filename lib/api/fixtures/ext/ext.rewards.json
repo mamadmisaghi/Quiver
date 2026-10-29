@@ -1,0 +1,56 @@
+{
+  "mock": true,
+  "example": true,
+  "notice": "Example data. No rewards program is live. Points, seasons and any conversion are to be confirmed; nothing here is a promise of value.",
+  "points": 150,
+  "season": {
+    "id": "s0-example",
+    "name": "Season 0 (example)",
+    "startsAt": "2026-10-01T00:00:00.000Z",
+    "endsAt": "2026-12-31T23:59:59.000Z"
+  },
+  "rank": 1097,
+  "totalParticipants": 1240,
+  "quests": [
+    {
+      "id": "draft",
+      "title": "Draft your first strategy",
+      "done": true,
+      "points": 100,
+      "progress": 1
+    },
+    {
+      "id": "paper24h",
+      "title": "Run a paper trade for 24h",
+      "done": false,
+      "points": 250,
+      "progress": 0
+    },
+    {
+      "id": "publish",
+      "title": "Publish a strategy",
+      "done": false,
+      "points": 300,
+      "progress": 0
+    },
+    {
+      "id": "forked",
+      "title": "Get forked by another trader",
+      "done": false,
+      "points": 500,
+      "progress": 0
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T00:00:00.000Z",
+      "points": 50,
+      "reason": "Welcome bonus (example)"
+    },
+    {
+      "at": "2026-10-27T15:30:00.000Z",
+      "points": 100,
+      "reason": "Quest: Draft your first strategy"
+    }
+  ]
+}

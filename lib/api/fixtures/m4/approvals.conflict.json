@@ -1,0 +1,11 @@
+{
+  "error": {
+    "code": "conflict",
+    "message": "Run is halted; resume it before approving.",
+    "details": {
+      "runStatus": "halted",
+      "haltReason": "geo_block: Stock tokens are not available in your region."
+    },
+    "requestId": "req_fixture"
+  }
+}

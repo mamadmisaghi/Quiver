@@ -1,0 +1,26 @@
+{
+  "id": "run_01M5Z0VQ20DV23P9NYMM",
+  "strategyId": "stg_01M5Z0VQ20576YHC474Z",
+  "strategyVersion": 1,
+  "mode": "paper",
+  "status": "running",
+  "startedAt": "2026-10-27T15:50:00.000Z",
+  "stoppedAt": null,
+  "lastSeq": 24,
+  "equityUsd": "9998.72",
+  "pnlUsd": "-1.28",
+  "pnlPct": "-0.01",
+  "approvalMode": "confirm_each",
+  "pendingApprovals": 1,
+  "triggerStates": [
+    {
+      "triggerId": "t1",
+      "state": "done",
+      "conditionTrue": true,
+      "heldForSec": 0,
+      "cooldownUntil": null,
+      "fires": 1
+    }
+  ],
+  "blockedFills": 0
+}

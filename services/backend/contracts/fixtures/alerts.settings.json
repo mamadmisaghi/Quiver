@@ -1,0 +1,6 @@
+{
+  "provider": "webhook",
+  "providerStatus": "ok",
+  "webhookUrl": "https://hooks.example.com/quiver",
+  "signingSecretSet": true
+}

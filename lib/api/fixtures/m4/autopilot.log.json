@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "at": "2026-10-27T16:22:00.000Z",
+      "action": "rotated",
+      "fromRunId": "run_01M5Z1TV50FMFP1CABBJ",
+      "toRunId": "run_01M5Z2PA20972H7N12SW",
+      "strategyId": "stg_01M5Z1TV50Q31HGTZ2VS",
+      "reason": "every 15 min",
+      "strategyName": "BTC oversold bounce",
+      "fromStrategyName": "Fed cut + NVDA dip",
+      "toStrategyName": "BTC oversold bounce"
+    },
+    {
+      "at": "2026-10-27T16:07:00.000Z",
+      "action": "started",
+      "fromRunId": null,
+      "toRunId": "run_01M5Z1TV50FMFP1CABBJ",
+      "strategyId": "stg_01M5Z1TV50C38SX2YDQ9",
+      "reason": "autopilot enabled",
+      "strategyName": "Fed cut + NVDA dip",
+      "fromStrategyName": null,
+      "toStrategyName": "Fed cut + NVDA dip"
+    }
+  ],
+  "nextCursor": null
+}

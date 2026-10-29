@@ -1,0 +1,83 @@
+# Quiver paper beta. One engine instance. Frontend remains at the existing published Site.
+# The replay disk makes Render stop the old engine before starting the next one.
+# This is required by the PostgreSQL single-writer lock; do not remove it or scale this service.
+services:
+  - type: web
+    name: quiver-paper-api
+    runtime: docker
+    plan: 0.5c-512mb
+    numInstances: 1
+    dockerfilePath: ./services/backend/Dockerfile
+    dockerContext: ./services/backend
+    healthCheckPath: /v1/ready
+    autoDeployTrigger: off
+    disk:
+      name: quiver-replays
+      mountPath: /var/data/quiver
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "10000"
+      - key: QUIVR_MODE
+        value: mock
+      - key: DEV_LOGIN_ENABLED
+        value: "false"
+      - key: QUIVR_DEV_PERSIST
+        value: "0"
+      - key: QUIVR_MAINNET_ENABLED
+        value: "false"
+      - key: PRICE_SOURCE
+        value: mock
+      - key: DATABASE_URL
+        fromDatabase:
+          name: quiver-paper-db
+          property: connectionString
+      - key: QUIVR_JWT_SECRET
+        generateValue: true
+      - key: SECRETS_MASTER_KEY
+        generateValue: true
+      - key: OPS_TOKEN
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://quiver-studio.gofivahootan.chatgpt.site
+      - key: SIWE_ORIGIN
+        value: https://quiver-studio.gofivahootan.chatgpt.site
+      - key: PRIVY_APP_ID
+        sync: false
+      - key: PRIVY_APP_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: openai/gpt-4.1-mini
+      - key: LLM_VISION_MODEL
+        value: openai/gpt-4.1-mini
+      - key: LLM_PRICE_IN_PER_MTOK
+        value: "0.4"
+      - key: LLM_PRICE_OUT_PER_MTOK
+        value: "1.6"
+      - key: LLM_MAX_OUTPUT_TOKENS
+        value: "4000"
+      - key: LLM_MAX_INFLIGHT
+        value: "3"
+      - key: LLM_DAILY_BUDGET_USD
+        value: "5"
+      - key: TIINGO_API_KEY
+        sync: false
+      - key: REPLAY_RENDERER
+        value: ffmpeg
+      - key: FFMPEG_PATH
+        value: /usr/bin/ffmpeg
+      - key: REPLAY_RENDER_DIR
+        value: /var/data/quiver/renders
+databases:
+  - name: quiver-paper-db
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    databaseName: quiver
+    user: quiver
+    ipAllowList: []

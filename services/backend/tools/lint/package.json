@@ -1,0 +1,12 @@
+{
+  "name": "@quiver/lint",
+  "private": true,
+  "description": "M3.5: isolated ESLint toolchain. typescript-eslint needs the TypeScript JS API (<6.1); the backend type-checks with TS 7 (native), which has none.",
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}

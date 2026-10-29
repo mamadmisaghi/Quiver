@@ -1,0 +1,96 @@
+{
+ "cookie": "quiver_rt=<redacted>; Max-Age=2592000; Path=/v1/auth; HttpOnly; SameSite=Strict",
+ "bt": {
+  "future60s": [
+   422,
+   "backtest_range_invalid",
+   "future"
+  ],
+  "toNow": [
+   202,
+   null,
+   null
+  ],
+  "fromEdge": [
+   202,
+   null,
+   null
+  ],
+  "fromEdgeMinus1ms": [
+   422,
+   "backtest_range_invalid",
+   "before_data"
+  ],
+  "epoch": [
+   422,
+   "backtest_range_invalid",
+   "before_data"
+  ],
+  "farFuture": [
+   422,
+   "backtest_range_invalid",
+   "future"
+  ]
+ },
+ "equity": {
+  "0": 422,
+  "99": 422,
+  "100": 202,
+  "10000000": 202,
+  "10000001": 422,
+  "-5": 422,
+  "1e24": 422,
+  "100.5": 202,
+  "abc": 422
+ },
+ "runSeq": [
+  "201",
+  "201",
+  "201",
+  "201",
+  "201",
+  "429:limit_exceeded",
+  "429:limit_exceeded"
+ ],
+ "stopFrees": [
+  200,
+  201
+ ],
+ "restartStopped": 429,
+ "runRace": "201,201,201,201,201,429,429,429,429,429,429,429",
+ "sse10": "200,200,200,200,200,200,200,200,200,200",
+ "sse11": 429,
+ "sseAfterClose": 200,
+ "ticketReuse": 401,
+ "ticketReuseAltRoute": 401,
+ "sseRace20": "200x10 429x10",
+ "versions": {
+  "0": 404,
+  "1": 200,
+  "99": 404,
+  "abc": 404,
+  "1.5": 404,
+  "-1": 404,
+  "01": 404,
+  "1e0": 404
+ },
+ "notFoundNoAuth": 404,
+ "notFoundAuth": 404,
+ "knownNoAuth": 401,
+ "notFoundDeep": 404,
+ "headers": {
+  "access-control-allow-credentials": "true",
+  "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-site",
+  "origin-agent-cluster": "?1",
+  "referrer-policy": "no-referrer",
+  "strict-transport-security": "max-age=15552000; includeSubDomains",
+  "x-dns-prefetch-control": "off",
+  "x-download-options": "noopen",
+  "x-frame-options": "DENY",
+  "x-permitted-cross-domain-policies": "none",
+  "x-xss-protection": "0"
+ },
+ "headersOn404": "nosniff"
+}

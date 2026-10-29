@@ -1,0 +1,126 @@
+{
+  "mode": "paper",
+  "points": [
+    {
+      "ts": "2026-10-27T15:00:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:04:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:07:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:11:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:14:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:18:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:21:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:25:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:28:00.000Z",
+      "equityUsd": "10000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:32:00.000Z",
+      "equityUsd": "30000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:35:00.000Z",
+      "equityUsd": "30000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:39:00.000Z",
+      "equityUsd": "30000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:42:00.000Z",
+      "equityUsd": "30000",
+      "pnlUsd": "0",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:46:00.000Z",
+      "equityUsd": "29998.26",
+      "pnlUsd": "-1.74",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:49:00.000Z",
+      "equityUsd": "30000.37",
+      "pnlUsd": "0.37",
+      "activeRuns": 1
+    },
+    {
+      "ts": "2026-10-27T15:53:00.000Z",
+      "equityUsd": "40000.6",
+      "pnlUsd": "0.6",
+      "activeRuns": 2
+    },
+    {
+      "ts": "2026-10-27T15:56:00.000Z",
+      "equityUsd": "40000.6",
+      "pnlUsd": "0.6",
+      "activeRuns": 2
+    },
+    {
+      "ts": "2026-10-27T16:00:00.000Z",
+      "equityUsd": "40000.6",
+      "pnlUsd": "0.6",
+      "activeRuns": 2
+    },
+    {
+      "ts": "2026-10-27T16:03:00.000Z",
+      "equityUsd": "40000.6",
+      "pnlUsd": "0.6",
+      "activeRuns": 2
+    },
+    {
+      "ts": "2026-10-27T16:07:00.000Z",
+      "equityUsd": "39999.69",
+      "pnlUsd": "-0.31",
+      "activeRuns": 2
+    }
+  ],
+  "asOf": "2026-10-27T16:07:00.000Z"
+}

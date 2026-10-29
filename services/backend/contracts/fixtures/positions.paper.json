@@ -1,0 +1,51 @@
+{
+  "mode": "paper",
+  "items": [
+    {
+      "instrument": "hl:perp:SOL",
+      "symbol": "SOL",
+      "venue": "hyperliquid",
+      "runId": "run_01M5YZQ3600JK49MXYGF",
+      "strategyId": "stg_01M5YZQ360WETXCEFZZA",
+      "strategyName": "Fed cut + NVDA dip",
+      "qty": "2.29859991",
+      "side": "long",
+      "avgEntry": "163.142789",
+      "markPrice": "164.055853",
+      "unrealizedPnlUsd": "2.1",
+      "notionalUsd": "377.1",
+      "openedAt": "2026-10-27T15:46:00.000Z"
+    },
+    {
+      "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+      "symbol": "NVDA",
+      "venue": "robinhood",
+      "runId": "run_01M5YZQ3600JK49MXYGF",
+      "strategyId": "stg_01M5YZQ360WETXCEFZZA",
+      "strategyName": "Fed cut + NVDA dip",
+      "qty": "1.19564827",
+      "side": "long",
+      "avgEntry": "167.273274",
+      "markPrice": "167.18986",
+      "unrealizedPnlUsd": "-0.1",
+      "notionalUsd": "199.9",
+      "openedAt": "2026-10-27T15:46:00.000Z"
+    },
+    {
+      "instrument": "hl:perp:SOL",
+      "symbol": "SOL",
+      "venue": "hyperliquid",
+      "runId": "run_01M5Z0VQ20DV23P9NYMM",
+      "strategyId": "stg_01M5Z0VQ20576YHC474Z",
+      "strategyName": "Fed cut + NVDA dip",
+      "qty": "3.0435454",
+      "side": "long",
+      "avgEntry": "164.28209",
+      "markPrice": "164.055853",
+      "unrealizedPnlUsd": "-0.69",
+      "notionalUsd": "499.31",
+      "openedAt": "2026-10-27T16:06:00.000Z"
+    }
+  ],
+  "asOf": "2026-10-27T16:07:00.000Z"
+}

@@ -1,0 +1,44 @@
+{
+  "name": "@quiver/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit && cd contracts && tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "verify:testnet": "tsx src/verify/run.ts",
+    "lint": "tools/lint/node_modules/.bin/eslint -c tools/lint/eslint.config.mjs .",
+    "lint:install": "npm --prefix tools/lint ci",
+    "fixtures:gen": "tsx scripts/gen-ext-fixtures.ts",
+    "fixtures:gen:check": "tsx scripts/gen-ext-fixtures.ts --check",
+    "fixtures:check": "cd contracts && npm run fixtures:check && cd .. && tsx scripts/gen-ext-fixtures.ts --check",
+    "build": "node scripts/build.mjs",
+    "start:source": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.14",
+    "pg": "^8.23.1",
+    "viem": "^2.57.12",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "ws": "^8.22.0"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "items": [
+    {
+      "id": "dip",
+      "name": "Weekend dip",
+      "by": "quiver",
+      "desc": "Buys a stock token when it trades below Friday's close while the market is shut.",
+      "venues": [
+        "robinhood"
+      ],
+      "blocks": 4,
+      "prompt": "Buy $200 of NVDA stock token when the US market is closed and NVDA is 3% below its daily average; stop loss 5%."
+    },
+    {
+      "id": "funding",
+      "name": "Funding flip",
+      "by": "quiver",
+      "desc": "Opens a perp when funding changes sign and holds for an hour.",
+      "venues": [
+        "hyperliquid"
+      ],
+      "blocks": 3,
+      "prompt": "Long $200 of SOL perp when SOL funding turns negative and stays negative for 60 minutes; stop loss 4%."
+    },
+    {
+      "id": "odds",
+      "name": "Odds breakout",
+      "by": "quiver",
+      "desc": "Uses a Polymarket probability crossing a level as a trigger for any venue.",
+      "venues": [
+        "polymarket"
+      ],
+      "blocks": 2,
+      "prompt": "When Fed-cut-in-December odds cross above 70%, buy $300 of SPY stock token; take profit 3%."
+    },
+    {
+      "id": "ladder",
+      "name": "Take-profit ladder",
+      "by": "quiver",
+      "desc": "Sells in three steps at +10%, +20% and +35%, then trails the rest.",
+      "venues": [],
+      "blocks": 1,
+      "prompt": "Add a take-profit ladder: sell a third at +10%, a third at +20%, a third at +35%."
+    },
+    {
+      "id": "dca",
+      "name": "Scale in",
+      "by": "quiver",
+      "desc": "Splits an entry into equal buys spaced by time or by price.",
+      "venues": [],
+      "blocks": 1,
+      "prompt": "Buy $100 of ETH perp every day at 14:00 UTC."
+    }
+  ]
+}

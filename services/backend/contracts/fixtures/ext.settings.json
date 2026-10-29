@@ -1,0 +1,32 @@
+{
+  "limits": {
+    "maxActiveRuns": 5,
+    "maxEventStreams": 10,
+    "compilesPerDay": 30,
+    "maxStrategySignals": 24
+  },
+  "usage": {
+    "activeRuns": 1,
+    "strategies": 1,
+    "compilesUsedToday": 0
+  },
+  "sessionKeyDefaults": {
+    "perTradeCapUsd": 250,
+    "dailyCapUsd": 1000,
+    "minSwapUsd": 15.63,
+    "maxSlippagePct": 1
+  },
+  "trading": {
+    "enabledModes": [
+      "paper"
+    ],
+    "liveEnabled": false,
+    "killSwitch": false
+  },
+  "alerts": {
+    "configured": false,
+    "channels": [],
+    "note": "Alerts are not available yet: a delivery provider (email / Telegram / webhook) has not been chosen."
+  },
+  "asOf": "2026-10-27T15:30:00.000Z"
+}

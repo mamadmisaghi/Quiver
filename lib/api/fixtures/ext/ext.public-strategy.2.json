@@ -1,0 +1,172 @@
+{
+ "id": "stg_demo0000000000000000000002",
+ "name": "ETH trend follow",
+ "author": {
+  "handle": "@demo_okafor",
+  "isYou": false
+ },
+ "venues": [
+  "hyperliquid"
+ ],
+ "forks": 0,
+ "paperReturn30dPct": "-0.25",
+ "spark": [
+  10000,
+  10013.81,
+  10016.49,
+  10004.63,
+  10004.63,
+  10008.86,
+  9996.58,
+  9978.06,
+  9978.06,
+  10007.01,
+  9979.67,
+  9940.78,
+  9940.78,
+  9968.52,
+  9968.52,
+  9960.34,
+  9963.94,
+  9988.9,
+  9988.9,
+  9975.03
+ ],
+ "publishedAt": "2026-10-05T00:00:00.000Z",
+ "mock": true,
+ "thesis": "Go long ETH when price crosses above its 50-hour average.",
+ "strategy": {
+  "schemaVersion": 1,
+  "name": "ETH trend follow",
+  "thesis": "Go long ETH when price crosses above its 50-hour average.",
+  "signals": [
+   {
+    "id": "px",
+    "maxAgeSeconds": 120,
+    "kind": "price",
+    "params": {
+     "instrument": "hl:perp:ETH",
+     "source": "venue_mid"
+    }
+   },
+   {
+    "id": "ma",
+    "maxAgeSeconds": 7200,
+    "kind": "indicator",
+    "params": {
+     "instrument": "hl:perp:ETH",
+     "name": "sma",
+     "period": 50,
+     "timeframe": "1h"
+    }
+   }
+  ],
+  "triggers": [
+   {
+    "id": "cross",
+    "when": {
+     "op": "crosses_above",
+     "left": {
+      "ref": "px.value"
+     },
+     "right": {
+      "ref": "ma.value"
+     }
+    },
+    "forMinutes": 0,
+    "cooldownMinutes": 360,
+    "maxFires": null
+   }
+  ],
+  "actions": [
+   {
+    "id": "long",
+    "type": "open",
+    "on": [
+     "cross"
+    ],
+    "instrument": "hl:perp:ETH",
+    "side": "long",
+    "size": {
+     "unit": "usd",
+     "value": "200"
+    },
+    "leverage": 1,
+    "order": {
+     "type": "market",
+     "maxSlippageBps": 100,
+     "maxPriceImpactBps": 200
+    },
+    "exits": {
+     "takeProfit": {
+      "unit": "pct",
+      "value": "6"
+     },
+     "stopLoss": {
+      "unit": "pct",
+      "value": "4"
+     }
+    }
+   }
+  ],
+  "risk": {
+   "maxPositionPct": 25,
+   "maxTotalExposurePct": 100,
+   "maxDailyLossPct": 10,
+   "maxOrdersPerDay": 20,
+   "equityWhenFeedStale": "skip"
+  }
+ },
+ "humanized": {
+  "watch": [
+   "ETH price · Hyperliquid",
+   "ETH 50-hour average · Hyperliquid"
+  ],
+  "when": [
+   "ETH price crosses above ETH 50-hour average; repeats, at most every 6 hours"
+  ],
+  "do": [
+   "Open a long $200 of ETH on Hyperliquid (max slippage 1%)"
+  ],
+  "exit": [
+   "ETH: take profit at +6%, stop at −4%",
+   "Risk: max 25% per position, pause after −10% in a day, max 20 orders/day"
+  ]
+ },
+ "nodes": [
+  {
+   "id": "px",
+   "kind": "watch",
+   "title": "ETH price",
+   "detail": "ETH price · Hyperliquid",
+   "venue": "hyperliquid"
+  },
+  {
+   "id": "ma",
+   "kind": "watch",
+   "title": "ETH 50-hour average",
+   "detail": "ETH 50-hour average · Hyperliquid",
+   "venue": "hyperliquid"
+  },
+  {
+   "id": "cross",
+   "kind": "when",
+   "title": "When",
+   "detail": "ETH price crosses above ETH 50-hour average; repeats, at most every 6 hours"
+  },
+  {
+   "id": "long",
+   "kind": "do",
+   "title": "Open a long $200 of ETH",
+   "detail": "Open a long $200 of ETH on Hyperliquid (max slippage 1%)",
+   "venue": "hyperliquid"
+  },
+  {
+   "id": "long.exit",
+   "kind": "exit",
+   "title": "Exit",
+   "detail": "ETH: take profit at +6%, stop at −4%"
+  }
+ ],
+ "forkedFrom": null
+}

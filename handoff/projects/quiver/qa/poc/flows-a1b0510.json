@@ -1,0 +1,311 @@
+{
+ "compileValid": {
+  "s": 200,
+  "ms": 15006,
+  "types": [
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "partial",
+   "partial",
+   "partial",
+   "partial",
+   "partial",
+   "result"
+  ],
+  "last": "{\"type\":\"result\",\"compileId\":\"cmp_01M5YQT9A7MSYQ52WKHZ\",\"strategy\":{\"schemaVersion\":1,\"name\":\"Buy $200 of NVDA when NVDA drops 3% in a day, take profit at\",\"thesis\":\"Buy $200 of NVDA when NVDA drops 3% in a day, take profit at 5%\",\"signals\":[{\"id\":\"nvda_px\",\"maxAgeSeconds\":120,\"kind\":\"price\",\"params\":{\"instrument\":\"robinhood:token:0x00000000000000000000000000000000000000a1\",\"source\":\"chainlink_str"
+ },
+ "compileShort": {
+  "s": 422,
+  "l": "[{\"error\":{\"code\":\"validation_failed\",\"message\":\"Invalid request.\",\"details\":[{\"path\":\"/thesis\",\"message\":\"String must contain at least 8 character(s)\"}],\"requestId\":\"req_MzwWNqCRe_4\"}}]"
+ },
+ "compileGarbage": {
+  "s": 200,
+  "types": [
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "progress",
+   "error"
+  ],
+  "last": "{\"type\":\"error\",\"code\":\"unsupported_prompt\",\"message\":\"Demo compile: Couldn't find a market in that idea. Try a ticker like NVDA, AAPL, TSLA, ETH or BTC.\",\"suggestions\":[\"Buy $250 of NVDA if it drops below $120, stop loss 8%, take profit 15%\",\"Buy BTC when it falls 5% in a day, take profit 10%\",\"Buy $100 of ETH every Monday at 9am\",\"Buy AAPL when it crosses above its 50-day average\",\"Buy TSLA when"
+ },
+ "compileHuge": {
+  "s": 422
+ },
+ "compileBadJson": 422,
+ "guestSameIp": [
+  429,
+  429,
+  429,
+  429
+ ],
+ "guestSpoofedXff": 200,
+ "createStrategy": 201,
+ "createInvalid": [
+  422,
+  "{\"error\":{\"code\":\"validation_failed\",\"message\":\"Invalid request.\",\"details\":[{\"path\":\"/strategy/schemaVersion\",\"message\":\"Invalid literal value, expected 1\"},{\"path\":\"/strategy/thesis\",\"message\":\"Requ"
+ ],
+ "idorOtherUser": 404,
+ "bt30d1h": {
+  "s": "done",
+  "ms": 224,
+  "err": null,
+  "ret": "0.14",
+  "trades": 11,
+  "mdd": "0.87",
+  "pts": 360,
+  "firstEq": "10000",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-09-27T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "bt30d1hRepeat": {
+  "s": "done",
+  "ms": 223,
+  "err": null,
+  "ret": "0.14",
+  "trades": 11,
+  "mdd": "0.87",
+  "pts": 360,
+  "firstEq": "10000",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-09-27T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "bt365d1d": {
+  "s": "done",
+  "ms": 19,
+  "err": null,
+  "ret": "-0.43",
+  "trades": 43,
+  "mdd": "0.73",
+  "pts": 364,
+  "firstEq": "10000",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2025-10-27T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "bt365d15m": {
+  "s": "done",
+  "ms": 1305,
+  "err": null,
+  "ret": "-6.83",
+  "trades": 256,
+  "mdd": "8.21",
+  "pts": 495,
+  "firstEq": "10000",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2025-10-27T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "bt60d1m": {
+  "s": "done",
+  "ms": 3191,
+  "err": null,
+  "ret": "-0.74",
+  "trades": 32,
+  "mdd": "1.69",
+  "pts": 501,
+  "firstEq": "10000",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-08-28T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "bt366d": {
+  "s": 422,
+  "b": "{\"error\":{\"code\":\"validation_failed\",\"message\":\"Backtests are limited to 365 days in v1.\",\"requestId\":\"req_4UzeYrzG47E\"}}"
+ },
+ "btReversed": {
+  "s": 422,
+  "b": "{\"error\":{\"code\":\"validation_failed\",\"message\":\"`to` must be after `from`.\",\"requestId\":\"req_HWAj4qJJ1VU\"}}"
+ },
+ "btSubBar": {
+  "s": 422,
+  "b": "{\"error\":{\"code\":\"validation_failed\",\"message\":\"The range must cover at least one full bar at this resolution.\",\"requestId\":\"req_YRZyrMqzow0\"}}"
+ },
+ "btFuture": {
+  "s": "done",
+  "ms": 2,
+  "err": null,
+  "ret": "-0.63",
+  "trades": 6,
+  "mdd": "0.7",
+  "pts": 23,
+  "firstEq": "9999.7",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-10-28T13:12:26.014Z\",\"to\":\"2026-10-29T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "btZeroEquity": {
+  "s": "done",
+  "ms": 6,
+  "err": null,
+  "ret": "0",
+  "trades": 0,
+  "mdd": "0",
+  "pts": 167,
+  "firstEq": "0",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-10-20T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "btNegEquity": {
+  "s": "done",
+  "ms": 8,
+  "err": null,
+  "ret": "0",
+  "trades": 0,
+  "mdd": "0",
+  "pts": 167,
+  "firstEq": "-5",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-10-20T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "btHugeEquity": {
+  "s": 422,
+  "b": "{\"error\":{\"code\":\"validation_failed\",\"message\":\"Invalid request.\",\"details\":[{\"path\":\"/startingEquityUsd\",\"message\":\"decimal string\"}],\"requestId\":\"req_BuGZqid4ZNY\"}}"
+ },
+ "btHugeEquity2": {
+  "s": "done",
+  "ms": 8,
+  "err": null,
+  "ret": "0",
+  "trades": 8,
+  "mdd": "0",
+  "pts": 167,
+  "firstEq": "1e+24",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"2026-10-20T13:12:26.014Z\",\"to\":\"2026-10-27T13:12:26.014Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "btEpoch": {
+  "s": "done",
+  "ms": 18,
+  "err": null,
+  "ret": "-0.92",
+  "trades": 45,
+  "mdd": "1.65",
+  "pts": 364,
+  "firstEq": "10000",
+  "cov": "[{\"instrument\":\"hl:perp:BTC\",\"source\":\"mock_synthetic\",\"from\":\"1970-01-01T00:00:00.000Z\",\"to\":\"1970-12-31T00:00:00.000Z\",\"gaps\":0,\"synthetic\":true}]",
+  "keys": "endingEquityUsd,returnPct,maxDrawdownPct,sharpe,trades,winRatePct,stats,costs,feesUsd,equityCurve,fills,triggerFires,caveats,equitySeries"
+ },
+ "btConcurrent": [
+  202,
+  202,
+  202,
+  429,
+  429
+ ],
+ "runStart": [
+  201,
+  "run_01M5YQVBSMNPQVX607GX"
+ ],
+ "runDup": 409,
+ "runLive": [
+  403,
+  "mode_not_enabled"
+ ],
+ "ticketOtherUser": 404,
+ "sse1": {
+  "s": 200,
+  "ct": "text/event-stream",
+  "frames": 3,
+  "evTypes": [
+   "status",
+   "tick"
+  ],
+  "ids": [
+   3,
+   3
+  ],
+  "n": 1,
+  "ms": 8002
+ },
+ "sseResume": {
+  "s": 200,
+  "ct": "text/event-stream",
+  "frames": 2,
+  "evTypes": [
+   "status",
+   "tick"
+  ],
+  "ids": [
+   null,
+   null
+  ],
+  "n": 0,
+  "ms": 4002
+ },
+ "sseTabs": [
+  [
+   200,
+   1,
+   [
+    4,
+    4
+   ]
+  ],
+  [
+   200,
+   1,
+   [
+    4,
+    4
+   ]
+  ],
+  [
+   200,
+   1,
+   [
+    4,
+    4
+   ]
+  ]
+ ],
+ "sseTicketReuse": 200,
+ "sseBadTicket": 401,
+ "stop": [
+  200,
+  "stopped"
+ ],
+ "stopAgain": 409,
+ "sseAfterStop": {
+  "s": 200,
+  "ct": "text/event-stream",
+  "frames": 2,
+  "evTypes": [
+   "status",
+   "tick"
+  ],
+  "ids": [
+   null,
+   null
+  ],
+  "n": 0,
+  "ms": 701
+ },
+ "notFound": [
+  401,
+  "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Sign in again.\",\"requestId\":\"req_jDF97z-Yx4o\"}}"
+ ],
+ "noAuth": 401,
+ "forgedJwt": 401,
+ "corsEvil": null,
+ "corsOk": [
+  "http://localhost:4417",
+  "true"
+ ],
+ "secHeaders": {
+  "x-request-id": "req_ob-8Mi1TppY"
+ },
+ "marketsBadCursor": 200,
+ "marketsLimitHuge": 422,
+ "versionNaN": [
+  200,
+  "{\"id\":\"stg_01M5YQV6MTPCGTXQAKS4\",\"ownerId\":\"usr_01M5YQSTMYFTEVFEGKY3\",\"name\":\"BTC oversold bounce\",\"version\":1,\"status\":"
+ ],
+ "bigBody": 422,
+ "devLoginImpersonate": 1
+}

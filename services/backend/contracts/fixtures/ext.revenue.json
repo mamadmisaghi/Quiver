@@ -1,0 +1,11 @@
+{
+  "mock": true,
+  "notice": "Example data. No creator fees are live. The fee split is to be confirmed; amounts are zero until it is.",
+  "earnedUsd": "0.00",
+  "claimableUsd": "0.00",
+  "forks": 0,
+  "creatorSharePct": null,
+  "rows": [],
+  "claimEnabled": false,
+  "accounting": "off"
+}

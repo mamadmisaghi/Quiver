@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "id": "apv_01M5Z1S0J0XX1E6M19D0",
+      "runId": "run_01M5Z0VQ20DV23P9NYMM",
+      "orderId": "ord_01M5Z1S0J09XEVJPDYG1",
+      "actionId": "a2",
+      "strategyId": "stg_01M5Z0VQ20576YHC474Z",
+      "strategyName": "Fed cut + NVDA dip",
+      "actionTitle": "Long $250 of SOL at 2x",
+      "instrument": "hl:perp:SOL",
+      "venue": "hyperliquid",
+      "side": "long",
+      "notionalUsd": "500",
+      "status": "pending",
+      "createdAt": "2026-10-27T16:06:00.000Z",
+      "expiresAt": "2026-10-27T16:11:00.000Z",
+      "resolvedAt": null,
+      "result": null
+    },
+    {
+      "id": "apv_01M5Z1S0J03CJM2S7PXS",
+      "runId": "run_01M5Z0VQ20DV23P9NYMM",
+      "orderId": "ord_01M5Z1S0J0WN8A58FRX2",
+      "actionId": "a1",
+      "strategyId": "stg_01M5Z0VQ20576YHC474Z",
+      "strategyName": "Fed cut + NVDA dip",
+      "actionTitle": "Buy $200 of NVDA",
+      "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+      "venue": "robinhood",
+      "side": "buy",
+      "notionalUsd": "200",
+      "status": "pending",
+      "createdAt": "2026-10-27T16:06:00.000Z",
+      "expiresAt": "2026-10-27T16:11:00.000Z",
+      "resolvedAt": null,
+      "result": null
+    }
+  ],
+  "nextCursor": null
+}

@@ -1,0 +1,22 @@
+{
+  "id": "apv_01M5Z1S0J0XX1E6M19D0",
+  "runId": "run_01M5Z0VQ20DV23P9NYMM",
+  "orderId": "ord_01M5Z1S0J09XEVJPDYG1",
+  "actionId": "a2",
+  "strategyId": "stg_01M5Z0VQ20576YHC474Z",
+  "strategyName": "Fed cut + NVDA dip",
+  "actionTitle": "Long $250 of SOL at 2x",
+  "instrument": "hl:perp:SOL",
+  "venue": "hyperliquid",
+  "side": "long",
+  "notionalUsd": "500",
+  "status": "approved",
+  "createdAt": "2026-10-27T16:06:00.000Z",
+  "expiresAt": "2026-10-27T16:11:00.000Z",
+  "resolvedAt": "2026-10-27T16:06:00.000Z",
+  "result": {
+    "status": "filled",
+    "code": null,
+    "message": null
+  }
+}

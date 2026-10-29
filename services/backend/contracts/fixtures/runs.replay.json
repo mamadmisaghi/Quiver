@@ -1,0 +1,157 @@
+{
+  "runId": "run_01M5YZQ3600JK49MXYGF",
+  "frameMs": 300000,
+  "startTs": "2026-10-27T15:30:00.000Z",
+  "endTs": "2026-10-27T15:50:00.000Z",
+  "totalFrames": 5,
+  "truncated": false,
+  "frames": [
+    {
+      "i": 0,
+      "ts": "2026-10-27T15:30:00.000Z",
+      "lastSeq": 6,
+      "equityUsd": "10000",
+      "positions": [],
+      "events": [
+        {
+          "seq": 0,
+          "ts": "2026-10-27T15:30:00.000Z",
+          "type": "status",
+          "summary": "status starting"
+        },
+        {
+          "seq": 1,
+          "ts": "2026-10-27T15:30:00.000Z",
+          "type": "status",
+          "summary": "status running"
+        }
+      ],
+      "counts": {
+        "fills": 0,
+        "rejected": 0,
+        "halts": 0
+      }
+    },
+    {
+      "i": 1,
+      "ts": "2026-10-27T15:35:00.000Z",
+      "lastSeq": 11,
+      "equityUsd": "10000",
+      "positions": [],
+      "events": [],
+      "counts": {
+        "fills": 0,
+        "rejected": 0,
+        "halts": 0
+      }
+    },
+    {
+      "i": 2,
+      "ts": "2026-10-27T15:40:00.000Z",
+      "lastSeq": 16,
+      "equityUsd": "10000",
+      "positions": [],
+      "events": [],
+      "counts": {
+        "fills": 0,
+        "rejected": 0,
+        "halts": 0
+      }
+    },
+    {
+      "i": 3,
+      "ts": "2026-10-27T15:45:00.000Z",
+      "lastSeq": 26,
+      "equityUsd": "10000.37",
+      "positions": [
+        {
+          "instrument": "hl:perp:SOL",
+          "qty": "3.06479988",
+          "avgEntry": "163.142789"
+        },
+        {
+          "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+          "qty": "1.19564827",
+          "avgEntry": "167.273274"
+        }
+      ],
+      "events": [
+        {
+          "seq": 19,
+          "ts": "2026-10-27T15:46:00.000Z",
+          "type": "trigger_fired",
+          "summary": "trigger t1 fired"
+        },
+        {
+          "seq": 21,
+          "ts": "2026-10-27T15:46:00.000Z",
+          "type": "fill",
+          "summary": "buy 1.19564827 robinhood:token:0x00000000000000000000000000000000000000a1 @ 167.273274"
+        },
+        {
+          "seq": 23,
+          "ts": "2026-10-27T15:46:00.000Z",
+          "type": "fill",
+          "summary": "long 3.06479988 hl:perp:SOL @ 163.142789"
+        }
+      ],
+      "counts": {
+        "fills": 2,
+        "rejected": 0,
+        "halts": 0
+      }
+    },
+    {
+      "i": 4,
+      "ts": "2026-10-27T15:50:00.000Z",
+      "lastSeq": 29,
+      "equityUsd": "10000.6",
+      "positions": [
+        {
+          "instrument": "hl:perp:SOL",
+          "qty": "2.29859991",
+          "avgEntry": "163.142789"
+        },
+        {
+          "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+          "qty": "1.19564827",
+          "avgEntry": "167.273274"
+        }
+      ],
+      "events": [
+        {
+          "seq": 29,
+          "ts": "2026-10-27T15:50:00.000Z",
+          "type": "fill",
+          "summary": "short 0.76619997 hl:perp:SOL @ 163.55803"
+        }
+      ],
+      "counts": {
+        "fills": 1,
+        "rejected": 0,
+        "halts": 0
+      }
+    }
+  ],
+  "chapters": [
+    {
+      "frame": 0,
+      "seq": 0,
+      "type": "status",
+      "summary": "status starting"
+    },
+    {
+      "frame": 0,
+      "seq": 1,
+      "type": "status",
+      "summary": "status running"
+    },
+    {
+      "frame": 3,
+      "seq": 21,
+      "type": "fill",
+      "summary": "buy 1.19564827 robinhood:token:0x00000000000000000000000000000000000000a1 @ 167.273274"
+    }
+  ],
+  "digest": "sha256:be1fede8851d9d14d09816e41773b000e0c4ba54d0fa1ce8febf6f9806eb031c"
+}

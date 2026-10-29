@@ -1,0 +1,18 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+*.key
+keys/
+.secrets/
+dist/
+coverage/
+foundry/out/
+foundry/cache/
+foundry/lib/
+
+# dev-only file persistence (M3.1)
+.data/
+be.tgz
+data/renders/
+foundry/broadcast/

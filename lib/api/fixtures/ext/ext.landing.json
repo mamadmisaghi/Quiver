@@ -1,0 +1,443 @@
+{
+  "mode": "mock",
+  "venues": [
+    {
+      "id": "robinhood",
+      "name": "Robinhood Chain",
+      "status": "up",
+      "capabilities": [
+        "read",
+        "paper"
+      ],
+      "note": "Mock data (synthetic)."
+    },
+    {
+      "id": "hyperliquid",
+      "name": "Hyperliquid",
+      "status": "up",
+      "capabilities": [
+        "read",
+        "paper"
+      ],
+      "note": "Mock data (synthetic)."
+    },
+    {
+      "id": "solana",
+      "name": "Solana (Jupiter)",
+      "status": "up",
+      "capabilities": [
+        "read",
+        "paper"
+      ],
+      "note": "Mock data (synthetic)."
+    },
+    {
+      "id": "polymarket",
+      "name": "Polymarket",
+      "status": "up",
+      "capabilities": [
+        "read"
+      ],
+      "note": "Read-only: odds are signals, Quiver never trades Polymarket."
+    }
+  ],
+  "trades": [
+    {
+      "id": "stocks",
+      "label": "Tokenized stocks",
+      "venues": [
+        "robinhood"
+      ],
+      "example": "Buy NVDA when it dips under its 20-day average",
+      "status": "paper"
+    },
+    {
+      "id": "perps",
+      "label": "Perpetuals",
+      "venues": [
+        "hyperliquid"
+      ],
+      "example": "Long SOL 2× when funding turns negative",
+      "status": "paper"
+    },
+    {
+      "id": "solana",
+      "label": "Solana tokens",
+      "venues": [
+        "solana"
+      ],
+      "example": "Buy JUP when its price jumps 5% in an hour",
+      "status": "paper"
+    },
+    {
+      "id": "odds",
+      "label": "Prediction markets",
+      "venues": [
+        "polymarket"
+      ],
+      "example": "Use Fed-cut odds as a signal for any trade",
+      "status": "watch_only"
+    },
+    {
+      "id": "cross",
+      "label": "Cross-venue",
+      "venues": [
+        "robinhood",
+        "hyperliquid",
+        "polymarket"
+      ],
+      "example": "One trigger, actions on several venues at once",
+      "status": "paper"
+    }
+  ],
+  "signals": [
+    {
+      "id": "price",
+      "label": "Price",
+      "detail": "crosses, gaps, ranges",
+      "supported": true,
+      "signalKinds": [
+        "price"
+      ],
+      "note": null
+    },
+    {
+      "id": "ma",
+      "label": "Moving averages",
+      "detail": "SMA · EMA",
+      "supported": true,
+      "signalKinds": [
+        "indicator:sma",
+        "indicator:ema"
+      ],
+      "note": "VWAP is not available in v1."
+    },
+    {
+      "id": "funding",
+      "label": "Funding",
+      "detail": "Hyperliquid per hour",
+      "supported": true,
+      "signalKinds": [
+        "funding"
+      ],
+      "note": null
+    },
+    {
+      "id": "odds",
+      "label": "Odds",
+      "detail": "Polymarket YES / NO",
+      "supported": true,
+      "signalKinds": [
+        "odds"
+      ],
+      "note": "Read-only signal; Polymarket is never traded."
+    },
+    {
+      "id": "hours",
+      "label": "Market hours",
+      "detail": "NYSE open · closed · weekend",
+      "supported": true,
+      "signalKinds": [
+        "market_session"
+      ],
+      "note": null
+    },
+    {
+      "id": "momentum",
+      "label": "Momentum",
+      "detail": "RSI · % change",
+      "supported": true,
+      "signalKinds": [
+        "indicator:rsi",
+        "indicator:pct_change"
+      ],
+      "note": null
+    },
+    {
+      "id": "volatility",
+      "label": "Volatility",
+      "detail": "ATR · Bollinger",
+      "supported": true,
+      "signalKinds": [
+        "indicator:atr",
+        "indicator:bb_upper",
+        "indicator:bb_lower"
+      ],
+      "note": null
+    },
+    {
+      "id": "time",
+      "label": "Time",
+      "detail": "schedule · every N hours",
+      "supported": true,
+      "signalKinds": [
+        "timer"
+      ],
+      "note": null
+    },
+    {
+      "id": "positions",
+      "label": "Your positions",
+      "detail": "size · PnL",
+      "supported": true,
+      "signalKinds": [
+        "position"
+      ],
+      "note": null
+    },
+    {
+      "id": "earnings",
+      "label": "Earnings",
+      "detail": "days to report",
+      "supported": false,
+      "signalKinds": [],
+      "note": "Needs an earnings-calendar data source (not chosen)."
+    },
+    {
+      "id": "premium",
+      "label": "Token premium",
+      "detail": "stock token vs reference",
+      "supported": false,
+      "signalKinds": [],
+      "note": "Needs a reference-price comparison signal (planned)."
+    },
+    {
+      "id": "volume",
+      "label": "Volume",
+      "detail": "1h · 24h change",
+      "supported": false,
+      "signalKinds": [],
+      "note": "No volume feed in v1."
+    }
+  ],
+  "skills": [
+    {
+      "id": "dip",
+      "name": "Weekend dip",
+      "by": "quiver",
+      "desc": "Buys a stock token when it trades below Friday's close while the market is shut.",
+      "venues": [
+        "robinhood"
+      ],
+      "blocks": 4,
+      "prompt": "Buy $200 of NVDA stock token when the US market is closed and NVDA is 3% below its daily average; stop loss 5%."
+    },
+    {
+      "id": "funding",
+      "name": "Funding flip",
+      "by": "quiver",
+      "desc": "Opens a perp when funding changes sign and holds for an hour.",
+      "venues": [
+        "hyperliquid"
+      ],
+      "blocks": 3,
+      "prompt": "Long $200 of SOL perp when SOL funding turns negative and stays negative for 60 minutes; stop loss 4%."
+    },
+    {
+      "id": "odds",
+      "name": "Odds breakout",
+      "by": "quiver",
+      "desc": "Uses a Polymarket probability crossing a level as a trigger for any venue.",
+      "venues": [
+        "polymarket"
+      ],
+      "blocks": 2,
+      "prompt": "When Fed-cut-in-December odds cross above 70%, buy $300 of SPY stock token; take profit 3%."
+    },
+    {
+      "id": "ladder",
+      "name": "Take-profit ladder",
+      "by": "quiver",
+      "desc": "Sells in three steps at +10%, +20% and +35%, then trails the rest.",
+      "venues": [],
+      "blocks": 1,
+      "prompt": "Add a take-profit ladder: sell a third at +10%, a third at +20%, a third at +35%."
+    },
+    {
+      "id": "dca",
+      "name": "Scale in",
+      "by": "quiver",
+      "desc": "Splits an entry into equal buys spaced by time or by price.",
+      "venues": [],
+      "blocks": 1,
+      "prompt": "Buy $100 of ETH perp every day at 14:00 UTC."
+    }
+  ],
+  "featured": [
+    {
+      "id": "stg_demo0000000000000000000003",
+      "name": "Fed cut + NVDA dip",
+      "author": {
+        "handle": "@demo_marco",
+        "isYou": false
+      },
+      "venues": [
+        "robinhood",
+        "hyperliquid",
+        "polymarket"
+      ],
+      "forks": 0,
+      "paperReturn30dPct": "0.81",
+      "spark": [
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10009.68,
+        10073.18,
+        10081.1
+      ],
+      "publishedAt": "2026-10-10T00:00:00.000Z",
+      "mock": true
+    },
+    {
+      "id": "stg_demo0000000000000000000001",
+      "name": "BTC oversold bounce",
+      "author": {
+        "handle": "@demo_lena",
+        "isYou": false
+      },
+      "venues": [
+        "hyperliquid"
+      ],
+      "forks": 1,
+      "paperReturn30dPct": "0.06",
+      "spark": [
+        10000,
+        10007.62,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10016.16,
+        10001.69,
+        9987.62,
+        10005.5,
+        10005.5
+      ],
+      "publishedAt": "2026-10-01T00:00:00.000Z",
+      "mock": true
+    },
+    {
+      "id": "stg_demo0000000000000000000002",
+      "name": "ETH trend follow",
+      "author": {
+        "handle": "@demo_okafor",
+        "isYou": false
+      },
+      "venues": [
+        "hyperliquid"
+      ],
+      "forks": 1,
+      "paperReturn30dPct": "0.01",
+      "spark": [
+        10000,
+        9998.97,
+        10025.94,
+        10023.55,
+        10016.76,
+        10016.64,
+        10030.49,
+        9990.19,
+        9990.19,
+        9986.23,
+        10023.34,
+        9988.62,
+        9952.91,
+        9949.62,
+        9980.65,
+        9978.53,
+        9972.47,
+        9994.58,
+        10001.02,
+        10001.02
+      ],
+      "publishedAt": "2026-10-05T00:00:00.000Z",
+      "mock": true
+    }
+  ],
+  "preview": {
+    "strategyId": "stg_demo0000000000000000000003",
+    "name": "Fed cut + NVDA dip",
+    "author": {
+      "handle": "@demo_marco",
+      "isYou": false
+    },
+    "from": "2026-10-20T15:00:00.000Z",
+    "to": "2026-10-27T15:00:00.000Z",
+    "startingEquityUsd": "10000",
+    "equityUsd": "10081.1",
+    "pnlUsd": "81.1",
+    "pnlPct": "0.81",
+    "trades": 2,
+    "points": [
+      10000,
+      10000,
+      10000,
+      10000,
+      10000,
+      10000,
+      10000,
+      10000,
+      9994.43,
+      10005.49,
+      10003.55,
+      9987.17,
+      9991.42,
+      10015.47,
+      10025.33,
+      10019.39,
+      10040.81,
+      10070.7,
+      10081.1,
+      10081.1,
+      10081.1,
+      10081.1,
+      10081.1,
+      10081.1
+    ],
+    "events": [
+      {
+        "ts": "2026-10-23T00:59:59.999Z",
+        "type": "fired",
+        "message": "Trigger \"t1\" fired"
+      },
+      {
+        "ts": "2026-10-23T01:00:00.000Z",
+        "type": "fill",
+        "message": "Long 3.73 SOL at $134.09 · Hyperliquid (paper)"
+      },
+      {
+        "ts": "2026-10-26T03:00:00.000Z",
+        "type": "fill",
+        "message": "Closed 3.73 SOL at $155.97 · Hyperliquid (paper)"
+      }
+    ],
+    "synthetic": true
+  },
+  "asOf": "2026-10-27T15:30:00.000Z",
+  "mock": true,
+  "notice": "Example data. Paper results on synthetic (mock) prices; not real performance and not a promise of future returns. Nothing here trades real money."
+}

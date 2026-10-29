@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "seq": 20,
+  "runId": "run_01M5Z0VQ20DV23P9NYMM",
+  "mode": "paper",
+  "ts": "2026-10-27T16:06:00.000Z",
+  "type": "approval_requested",
+  "approvalId": "apv_01M5Z1S0J03CJM2S7PXS",
+  "orderId": "ord_01M5Z1S0J0WN8A58FRX2",
+  "actionId": "a1",
+  "strategyName": "Fed cut + NVDA dip",
+  "actionTitle": "Buy $200 of NVDA",
+  "instrument": "robinhood:token:0x00000000000000000000000000000000000000a1",
+  "venue": "robinhood",
+  "side": "buy",
+  "notionalUsd": "200",
+  "expiresAt": "2026-10-27T16:11:00.000Z"
+}
