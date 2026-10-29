@@ -12,11 +12,13 @@ Target: `91.107.243.172`, supplied RDP port `33096`. Credentials must remain out
 - The supplied RDP session cannot be operated with the tools exposed in this conversation. Direct management sockets are unavailable from this execution environment.
 - The existing HTTP WinRM endpoint responds and advertises Negotiate authentication. Its NTLM challenge returned a local computer/domain identity, which was used to verify the account format.
 - A read-only WinRM login was attempted using the supplied administrator credential with NTLM message encryption required. It was rejected. The same supplied account was tried once with the server-confirmed local-domain prefix; it was also rejected. These results do not prove that the password fails for RDP. Do not keep retrying credentials, disable certificate validation, enable plaintext WinRM, or remove authentication.
+- The owner subsequently confirmed an authenticated local `Test-WSMan` succeeds for the machine-qualified administrator account. The remote client still receives 401 through its HTTP proxy. No 4624/4625 event matched the client's explicit `QUIVER-CODEX` workstation marker; earlier failed-password events from a different workstation are not attributable to this client. The external authentication failure's cause remains unresolved.
+- The owner's listener inventory shows HTTP on 5985 only, with no HTTPS listener. `Cert:\LocalMachine\My` returned no certificates. An HTTPS name-mismatch observed by the remote client is therefore not evidence of a misconfigured existing WinRM HTTPS certificate on this VPS.
 - No remote shell was obtained. No old deployment was stopped/deleted, no files or services were changed on the VPS, and no new deployment is live. Establish a working authenticated management channel before applying the replacement.
 
 ## Source and native runtime preparation
 
-Latest GitHub project baseline: `704eab95b2025ed397db63f009f266c83999aa09`; Render hardening branch: `b166b2d0e7f8b280389f45cf4f23c3e8e9c03ace`. The latter adds Frankfurt placement, direct Node container shutdown and a configured vision-model regression assertion. Do not copy an old archived web/backend tree over this current application.
+Latest GitHub project baseline: `704eab95b2025ed397db63f009f266c83999aa09`; prepared native Windows source: `6bf2906bf46b8745ee14dc3601fc5f6d1a7cb261` (includes the prior Render hardening). Do not copy an old archived web/backend tree over this current application.
 
 The root default build/start scripts target the existing Cloudflare/Vinext Site. For this VPS use the explicit native Node/Next commands:
 
@@ -27,6 +29,14 @@ The root default build/start scripts target the existing Cloudflare/Vinext Site.
 Four pending optional package lifecycle scripts are explicitly disabled in `pnpm-workspace.yaml` (`@reown/appkit`, `bufferutil`, `keccak`, `utf-8-validate`). Approved required native builds such as esbuild and sharp remain enabled. Dependency versions and the frozen lockfile are unchanged.
 
 The native build initially revealed that the source's three `use cache` pages require `cacheComponents:true`. This flag is now enabled in `next.config.ts`; the native production build then passed. Frontend TypeScript and all 21 existing preview integration checks passed as well. These are local Linux checks of the native Node/Next runtime, not a successful build on Windows or deployment to the VPS. The local build used the existing HTTP preview origin only for build verification; production sign-in still requires the HTTPS step below. The current published ChatGPT Site was not rebuilt or changed.
+
+## Build preparation from the owner's RDP session
+
+`scripts/vps/prepare-release.ps1` provides a bounded alternative while inbound management access is unresolved. The owner can download this script at an immutable commit, verify its supplied SHA256 and run it in PowerShell 7 on the VPS. It downloads the pinned `6bf2906b` source archive over verified HTTPS and requires archive SHA256 `0e273f5aee424e6482d2905bf3ef0d292a17b78e0dd697c0f953deced1c2800b` before extracting or executing source.
+
+It uses the existing Node.js 24+ installation, installs pnpm 11.25.0 only into its own run directory, installs the existing frozen dependency locks, checks backend/contracts types, builds the backend, runs the 21 preview checks and builds native Next.js with its frontend type check. Output and step logs stay under `C:\sites\quiver\up\prepare-<run>`, with the source/build under a unique `releases\r-<run>-6bf2906b` directory. It stops on a failed step and restores its process environment.
+
+The script creates no service, task, database, firewall rule or management listener and does not activate a release. It requires no provider credentials. Its result explicitly records `activated:false`; a `QUIVER_PREPARE_OK` is evidence of the Windows build only. The HTTP origin used for this preparation matches the earlier preview; rebuild with the verified final HTTPS origin before production activation. Database, secret configuration, backup, task switch and restart checks below remain necessary.
 
 ## Replacement procedure once management access works
 
