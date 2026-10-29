@@ -1,5 +1,7 @@
 # Quiver: replace the earlier Windows VPS preview
 
+> **Stopped by the owner on 29 October 2026.** The owner abandoned the VPS path after reporting another error from the runtime initializer; the failing stage and any partial initialization are unknown. Do not retry, continue, clean up or deploy on that VPS as part of the current work. The selected path is now GOFi on Render: Hobby workspace, paid `1c-2g` API and a paid small PostgreSQL instance. Retain this document as a record of the earlier attempt.
+
 ## Authorized scope
 
 On 29 October 2026 the owner explicitly requested replacing the earlier Quiver deployment on the existing German Windows VPS with the latest project source, then continuing development there. They do not want to run diagnostic commands manually and have confirmed the VPS capacity is sufficient. Do not request the hardware diagnostic script again.

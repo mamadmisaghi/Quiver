@@ -32,7 +32,8 @@ GPT-5 Mini and GPT-5.1 were also tested. Their first outputs for the same sample
 
 - Repository: `mamadmisaghi/Quiver`, created by the owner. Source and brand assets are imported without credentials.
 - The published Site still runs its explicit preview compiler/synthetic rule simulation. Staging keys does not silently switch public visitors to paid AI or a mock login.
-- The persistent Node API is prepared for Render but is not yet deployed. The remaining infrastructure choice is the Render workspace; **GOFi** is the workspace exposed by the connection, and the connector requires the user to identify the destination explicitly.
+- The owner selected **GOFi** on Render and agreed to retain the Hobby workspace while using paid service/database compute. The persistent Node API is prepared but not yet deployed. The selected API compute plan is `1c-2g` (1 CPU, 2 GB RAM, $25/month); the database is `0.1c-256mb` ($6/month), with explicitly selected 1 GB database storage and a 1 GB replay disk. Budget approximately $32/month for this Quiver stack before taxes, extra usage, provider API charges and unrelated workspace resources. Workspace Pro is not included or required for this configuration.
+- The immediate owner step is adding a payment method in [Render Billing](https://dashboard.render.com/billing) with GOFi selected, while retaining Hobby. Render invoices service, database and storage usage together at workspace level; this is not a separate prepaid checkout for each resource. No paid Quiver resource has been created and no payment has been made by this conversation at this point.
 - After deployment: copy the provider secrets into Render, set the Site's fixed API URL, switch the frontend to the authenticated live adapter, and verify login/refresh plus the entire save/backtest/paper-run flow.
 - Mainnet execution remains disabled. Venue execution adapters and funding/grant permissions are separate work.
 

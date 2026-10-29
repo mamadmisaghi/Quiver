@@ -6,7 +6,7 @@ services:
     name: quiver-paper-api
     runtime: docker
     region: frankfurt
-    plan: 0.5c-512mb
+    plan: 1c-2g
     numInstances: 1
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: ./services/backend
