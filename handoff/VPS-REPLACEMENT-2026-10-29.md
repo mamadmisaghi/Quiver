@@ -14,7 +14,7 @@ Target: `91.107.243.172`, supplied RDP port `33096`. Credentials must remain out
 - A read-only WinRM login was attempted using the supplied administrator credential with NTLM message encryption required. It was rejected. The same supplied account was tried once with the server-confirmed local-domain prefix; it was also rejected. These results do not prove that the password fails for RDP. Do not keep retrying credentials, disable certificate validation, enable plaintext WinRM, or remove authentication.
 - The owner subsequently confirmed an authenticated local `Test-WSMan` succeeds for the machine-qualified administrator account. The remote client still receives 401 through its HTTP proxy. No 4624/4625 event matched the client's explicit `QUIVER-CODEX` workstation marker; earlier failed-password events from a different workstation are not attributable to this client. The external authentication failure's cause remains unresolved.
 - The owner's listener inventory shows HTTP on 5985 only, with no HTTPS listener. `Cert:\LocalMachine\My` returned no certificates. An HTTPS name-mismatch observed by the remote client is therefore not evidence of a misconfigured existing WinRM HTTPS certificate on this VPS.
-- No remote shell was obtained. No old deployment was stopped/deleted, no files or services were changed on the VPS, and no new deployment is live. Establish a working authenticated management channel before applying the replacement.
+- No remote shell was obtained. The owner ran the prepared script from their RDP session and reported `QUIVER_PREPARE_OK`: source `6bf2906b`, Node v24.22.0, release `C:\sites\quiver\releases\r-20261029-220200-88d8bf6f-6bf2906b`, web build ID `NHUMbCwCq09SoDmxtX13R`. This is evidence of a successful build on the actual Windows VPS. The report explicitly has `activated:false`; the old public deployment has not been replaced. Continue via bounded owner-run scripts while inbound management remains unavailable.
 
 ## Source and native runtime preparation
 
@@ -24,11 +24,11 @@ The root default build/start scripts target the existing Cloudflare/Vinext Site.
 
 - `npm run build:vps`: native `next build` into `.next`.
 - `npm run start:vps`: native `next start`, bound to `127.0.0.1`. Set `PORT=4517` in its service environment.
-- Backend: its own frozen `npm ci`, `npm run typecheck`, `npm run build`, then native `node services/backend/dist/main.js` from the repository root.
+- Backend: its own frozen `npm ci`, `npm run typecheck`, `npm run build`, then native `node dist/main.js` with `services/backend` as its working directory so the verified read-only registry resolves correctly.
 
 Four pending optional package lifecycle scripts are explicitly disabled in `pnpm-workspace.yaml` (`@reown/appkit`, `bufferutil`, `keccak`, `utf-8-validate`). Approved required native builds such as esbuild and sharp remain enabled. Dependency versions and the frozen lockfile are unchanged.
 
-The native build initially revealed that the source's three `use cache` pages require `cacheComponents:true`. This flag is now enabled in `next.config.ts`; the native production build then passed. Frontend TypeScript and all 21 existing preview integration checks passed as well. These are local Linux checks of the native Node/Next runtime, not a successful build on Windows or deployment to the VPS. The local build used the existing HTTP preview origin only for build verification; production sign-in still requires the HTTPS step below. The current published ChatGPT Site was not rebuilt or changed.
+The native build initially revealed that the source's three `use cache` pages require `cacheComponents:true`. This flag is now enabled in `next.config.ts`; the native production build then passed. Frontend TypeScript and all 21 existing preview integration checks passed as well. The initial checks were local Linux checks; the owner's subsequent `QUIVER_PREPARE_OK` confirms the preparation steps also completed on Windows. The build used the existing HTTP preview origin only for preparation; production sign-in still requires the HTTPS step below. The current published ChatGPT Site was not rebuilt or changed.
 
 ## Build preparation from the owner's RDP session
 
@@ -38,7 +38,17 @@ It uses the existing Node.js 24+ installation, installs pnpm 11.25.0 only into i
 
 The script creates no service, task, database, firewall rule or management listener and does not activate a release. It requires no provider credentials. Its result explicitly records `activated:false`; a `QUIVER_PREPARE_OK` is evidence of the Windows build only. The HTTP origin used for this preparation matches the earlier preview; rebuild with the verified final HTTPS origin before production activation. Database, secret configuration, backup, task switch and restart checks below remain necessary.
 
-## Replacement procedure once management access works
+## Dedicated runtime initialization from RDP
+
+`scripts/vps/initialize-runtime.ps1` is the next owner-run, commit-pinned script. It requires the reported Windows build ID and the expected existing Quiver/Caddy paths. It backs up the two launchers, task XML, Quiver Caddy configuration and legacy environment into a private directory. The live JSON state is deliberately copied only after a clean stop at activation, to avoid interfering with the old writer's rename.
+
+It installs the official PostgreSQL 17.11-5 Windows binaries, pinned to the publisher's SHA256 `80379b2c04d51c30225532e0ae04509899141e9957ed096fe749d7fd9df8f82f` ([publisher checksum](https://get.enterprisedb.com/postgresql/postgresql-17.11-5-windows-x64-binaries.zip.sha256)). It creates a dedicated `QuiverPostgres` Windows service, data directory and application database/role. The service runs as NetworkService, starts automatically with restart-on-failure actions, and listens only on `127.0.0.1:55432`. Passwords are generated and retained in an Administrators/SYSTEM-only directory, passed to initdb through a temporary private file, and never included in command arguments. A committed probe is read after restarting this dedicated service. No unrelated database or service is repurposed.
+
+The script adds a separate, marked Caddy preparation block for `https://quiver.91.107.243.172.sslip.io`, validates the full imported configuration and reloads the existing process. It preserves the earlier `:8091` block. The new HTTPS hostname serves only a readiness probe/preparation response until activation. Certificate verification is required; an unverified hostname is reported as `QUIVER_RUNTIME_PENDING_HTTPS`, not as production-ready. A Caddy validation/reload failure restores this script's prior site file. Existing active/new launchers or a non-preparation production block cause the initializer to stop before restarting the database.
+
+Finally it returns an RSA-3072 public key (`publicKeySpki`) and SHA256 fingerprint. The private key remains in the protected server directory. The next transfer can encrypt the already-supplied provider configuration for this specific VPS; no plaintext provider key needs to be committed or requested again. A runtime initialization report still has `activated:false`. Do not claim the database, TLS or service setup has succeeded until the owner returns the actual report or equivalent live evidence.
+
+## Replacement procedure via authenticated shell or owner-run scripts
 
 1. Inspect the existing Quiver task definitions and launchers plus the Quiver-specific Caddy block. Reuse the established ports: API `127.0.0.1:8987`, web `127.0.0.1:4517`, public Caddy `:8091` until a verified HTTPS origin is ready. Do not disturb the other site blocks.
 2. Archive the current Quiver source, launchers, task definitions, environment files and data to a private dated backup. The owner wants the old preview retired; the archive is for rollback, not continued public operation. Do not put secrets into a public archive or GitHub.

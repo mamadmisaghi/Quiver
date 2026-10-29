@@ -4,7 +4,7 @@ Scope: run the latest Quiver frontend as a native Node/Next server on the owner'
 
 ## Result
 
-**Local native build and scoped checks PASS. VPS deployment BLOCKED by management authentication.** The old public preview is still running. No remote change, deletion, service restart or migration is claimed.
+**Native Windows build PASS, reported by the owner. Production activation pending.** The owner returned `QUIVER_PREPARE_OK` for release `r-20261029-220200-88d8bf6f-6bf2906b`, Node v24.22.0, build ID `NHUMbCwCq09SoDmxtX13R`. Its `activated:false` means it has not replaced the old public preview. Inbound management authentication remains unresolved; bounded scripts run through the owner's existing RDP session provide the continuation path.
 
 ## Changes
 
@@ -13,6 +13,7 @@ Scope: run the latest Quiver frontend as a native Node/Next server on the owner'
 - Resolved four pending optional lifecycle-script decisions as false. esbuild/sharp native build permissions and dependency versions remain unchanged. Frozen dependency installation completed successfully.
 - Recorded owner authorization, exact access failure, backup/replacement sequence, dedicated PostgreSQL requirement, loopback service addresses and HTTPS/authentication activation steps in the VPS replacement handoff.
 - Added an owner-run PowerShell 7 preparation script for an independent Windows build while inbound management access remains unresolved. It pins both source commit and archive SHA256, uses private package-manager tooling and a new release directory, and records a build-only result without changing running services.
+- Added a separate runtime initializer for private backups, a dedicated loopback-only PostgreSQL Windows service and restart probe, a separate Caddy HTTPS preparation page, and a server-held RSA deployment key. Provider values are absent from its source. It refuses to run over an activated production block or a launcher already pointing at the new release.
 
 ## Verification
 
@@ -24,9 +25,10 @@ Scope: run the latest Quiver frontend as a native Node/Next server on the owner'
 - No backend code changed in this slice. Prior backend scoped gate was 113 passed/1 skipped; full-suite baseline still had the five documented TLS/pinned-network failures, not claimed fixed here.
 - Preparation script parsed successfully with the official PowerShell 7.6.6 runtime. A real native child exit code 7 propagated as a terminating build-step failure. The non-Windows platform guard rejected local execution before touching any VPS path. These are Linux-side script checks, not a Windows execution.
 - The 21 preview checks also passed with the preparation script's production/live environment flags. The downloaded pinned source archive matches the locally verified native runtime configuration.
+- Runtime initializer: PowerShell 7.6.6 syntax passed, its native-command helper propagated a real child exit code 9, RSA private/public import/export passed, and its embedded database JavaScript parsed. The complete downloaded PostgreSQL archive matched the publisher SHA256 and its actual executable/DLL paths matched the script. These are preparation checks, not successful runtime execution on Windows.
 
 ## Limits and required next step
 
 The authenticated Windows management channel is not available. The owner proved local WinRM authentication succeeds; the external client still receives 401 through its proxy, with no event matching its explicit workstation marker. The cause remains unresolved. The owner confirmed only an HTTP WinRM listener exists and the machine personal-certificate store returned no entries. RDP cannot be operated with this conversation's available tools. Do not retry authentication indefinitely or weaken TLS/WinRM authentication to proceed. The owner can run the prepared build script from the existing RDP session without enabling another management endpoint.
 
-Windows-specific dependency installation, runtime services, database/FFmpeg setup, private backups, retiring the old release, DNS/HTTPS, real Privy sign-in, provider calls and restart recovery on the real VPS remain unverified. Native source preparation does not satisfy the owner's request to replace the live deployment until these steps are completed.
+Windows dependency installation and builds completed according to the owner's preparation report. Runtime services, database/FFmpeg setup, private backups, retiring the old release, HTTPS, real Privy sign-in, provider calls and application restart recovery remain unverified. Native source preparation does not satisfy the owner's request to replace the live deployment until these steps are completed.
