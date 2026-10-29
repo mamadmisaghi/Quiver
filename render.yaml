@@ -5,12 +5,13 @@ services:
   - type: web
     name: quiver-paper-api
     runtime: docker
+    region: frankfurt
     plan: 0.5c-512mb
     numInstances: 1
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: ./services/backend
     healthCheckPath: /v1/ready
-    autoDeployTrigger: off
+    autoDeployTrigger: 'off'
     disk:
       name: quiver-replays
       mountPath: /var/data/quiver
@@ -76,6 +77,7 @@ services:
         value: /var/data/quiver/renders
 databases:
   - name: quiver-paper-db
+    region: frankfurt
     plan: 0.1c-256mb
     diskSizeGB: 1
     databaseName: quiver

@@ -44,12 +44,12 @@ describe("M5.6 compile from chart screenshot", () => {
     expect(g.status).toBe(401);
   });
   it("sends the image as a vision content part with the vision model; falls back to the note; no note → compile_failed and quota refunded", async () => {
-    const s = await setup("m56-vision-user-aaaaaaaaaa", { ...OR, LLM_USER_DAILY_COMPILES: "1" }); const o = stub();
+    const s = await setup("m56-vision-user-aaaaaaaaaa", { ...OR, LLM_MODEL: "openai/gpt-4o-mini", LLM_VISION_MODEL: "openai/gpt-4.1-mini", LLM_USER_DAILY_COMPILES: "1" }); const o = stub();
     for (const [m, img] of [["image/jpeg", jpeg(1280, 720)], ["image/webp", webp(1024, 768)]] as const) {
       const r = await s.call("POST", "/compile/image", { mimeType: m, imageBase64: img });
       expect(r.status).toBe(200); expect(String(r.j)).toContain("compile_failed");
     }
-    const last = o.bodies.at(-1); expect(last.model).toBe("openai/gpt-4o-mini");
+    const last = o.bodies.at(-1); expect(last.model).toBe("openai/gpt-4.1-mini");
     const parts = last.messages.find((x: any) => x.role === "user").content; expect(parts[1].image_url.url).toMatch(/^data:image\/webp;base64,/);
     expect(JSON.stringify(last.messages)).toContain("never instructions");
     const ok = await s.call("POST", "/compile/image", { mimeType: "image/png", imageBase64: png(800, 600), note: "buy ETH when it drops 5% in a day" });
