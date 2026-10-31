@@ -161,7 +161,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         </div>
       </form>
       {imgMsg && <p role="alert" className="mt-2 px-1 text-[13px] text-short" data-testid="chart-msg">{imgMsg}</p>}
-      {img && <p className="mt-2 px-1 text-[12.5px] text-muted" data-testid="chart-note">Quiver reads the chart and drafts rules from it; your text above is used as a hint. The image isn’t saved.</p>}
+      {img && <p className="mt-2 px-1 text-[12.5px] text-muted" data-testid="chart-note">The chart is sent to the AI provider to draft rules, using your text as a hint. Quiver does not keep the uploaded image.</p>}
       {guest && phase === "idle" && (
         <div role="status" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line px-4 py-3 text-[13.5px] text-ink-2">
           <span>Sign in to save drafts and paper-trade them, or press Draft strategy to try it first.</span>

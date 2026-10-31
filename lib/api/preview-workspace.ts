@@ -2,7 +2,7 @@ import { StrategyRecord as RecordSchema } from "@/lib/contracts";
 import { cachePreviewDraft, previewDrafts, removePreviewDraft, savePreviewDraft } from "./preview-drafts";
 import { ApiErr, type Strategy, type StrategyRecord } from "./types";
 
-export type PreviewWorkspace = { authenticated: boolean; cloudAvailable: boolean; aiAvailable: boolean; items: StrategyRecord[]; message?: string };
+export type PreviewWorkspace = { authenticated: boolean; cloudAvailable: boolean; aiAvailable: boolean; aiConfigured?: boolean; items: StrategyRecord[]; message?: string };
 const empty: PreviewWorkspace = { authenticated: false, cloudAvailable: false, aiAvailable: false, items: [] };
 let cloud: StrategyRecord[] = [], lastLocation: "online" | "browser" = "browser";
 export const previewSaveLocation = () => lastLocation;

@@ -6,11 +6,11 @@ import { readOnlineDrafts, removeOnlineDraft, writeOnlineDraft } from "@/lib/pre
 
 export async function GET(request: Request) {
   const owner = previewOwner(request);
-  if (!owner) return previewJson({ authenticated: false, cloudAvailable: false, aiAvailable: false, items: [] });
+  if (!owner) return previewJson({ authenticated: false, cloudAvailable: false, aiAvailable: false, aiConfigured: previewAiEnabled(), items: [] });
   try {
     const db = await previewDatabase();
     const items = await readOnlineDrafts(db, owner);
-    return previewJson({ authenticated: true, cloudAvailable: true, aiAvailable: previewAiEnabled(), items });
+    return previewJson({ authenticated: true, cloudAvailable: true, aiAvailable: previewAiEnabled(), aiConfigured: previewAiEnabled(), items });
   } catch { return previewJson({ authenticated: true, cloudAvailable: false, aiAvailable: false, items: [], message: "Online storage is unavailable. Your browser drafts are still available; export a backup and try again." }, 503); }
 }
 
