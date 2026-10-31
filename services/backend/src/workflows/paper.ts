@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Workflow, type PlanExpr, type PlanStage, expressionRefs, workflowProblems, workflowBlockers } from "../../contracts/src/workflow";
+import { type Workflow, type PlanExpr, type PlanStage, canonicalizeWorkflow, expressionRefs, workflowProblems, workflowBlockers } from "../../contracts/src/workflow";
 import { Risk } from "../../contracts/src/strategy";
 import { TF_MS, sma, ema, rsi, bb, pctChange } from "../engine/indicators";
 import { cronMatches } from "../engine/cron";
@@ -12,6 +12,7 @@ type StageState = { fills: number; lastFillAt: number | null; active: boolean; l
 export type PaperState = { version: 1; startedAt: number; lastAt: number; budget: number; principal: number; pools: Record<string, number>; positions: Record<string, Position>; stages: Record<string, StageState>; anchors: Record<string, number>; history: Record<string, [number, number][]>; previous: Record<string, number | boolean | null>; quotes: Record<string, PaperQuote>; fees: number; realized: number; day: string; dayStart: number; dayOrders: number; events: { at: number; stageId: string; kind: "buy" | "sell" | "exit" | "settle"; amount: number; price: number; fee: number; detail: string }[]; curve: [number, number][] };
 const EPS = 1e-8, feeRate = .001;
 export function paperProblems(w: Workflow, live = false) {
+  w = canonicalizeWorkflow(w);
   const errors = [...workflowProblems(w), ...workflowBlockers(w).filter((x) => live || !w.assets.some((a) => x === a.resolution?.message || x === `Choose the exact market for ${a.query}.`))];
   if (!w.budgetUsd) errors.push("Set a strategy budget to test.");
   for (const s of w.signals) {
@@ -67,6 +68,7 @@ function evaluate(e: PlanExpr, value: (ref: string) => number | boolean | null, 
 }
 /** Pure, checkpointable paper execution. The same evaluator can be driven by a browser or a server worker. */
 export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({})): PaperState {
+  w = canonicalizeWorkflow(w);
   const s = structuredClone(state); if (at <= s.lastAt) return s; s.lastAt = at;
   for (const q of incoming) if (w.assets.some((a) => a.id === q.assetId) && fresh(q, at) && (q.price > 0 || q.settled)) {
     s.quotes[q.assetId] = q; const h = s.history[q.assetId] ?? [];

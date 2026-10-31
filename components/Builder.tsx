@@ -1,4 +1,5 @@
 "use client";
+import { canonicalizeWorkflow } from "@/lib/contracts";
 import WorkflowReview from "./WorkflowReview";
 import { workflowView } from "@/services/backend/src/engine/workflow-view";
 import { useEffect, useRef, useState } from "react";
@@ -114,6 +115,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     const id = sp.get("strategy"); let on = true;
     if (id) api.strategy(id).then((rec) => {
       if (!on) return;
+      if (rec.strategy.workflow) rec.strategy.workflow = canonicalizeWorkflow(rec.strategy.workflow);
       setText(rec.strategy.thesis); setCompiledText(rec.strategy.thesis); setStrategy(rec.strategy);
       setEditingRecord({ id: rec.id, version: rec.version });
       setHumanized(rec.humanized); setNodes(deriveNodes(rec.strategy, Object.fromEntries(rec.nodes.map((node) => [node.id, node])))); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");

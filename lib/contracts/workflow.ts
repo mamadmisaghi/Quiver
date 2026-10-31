@@ -56,10 +56,27 @@ export function expressionRefs(e: PlanExpr | null, out = new Set<string>()): Set
   return out;
 }
 
+/** Normalize unambiguous provider field aliases before semantic validation. */
+export function canonicalizeWorkflow(w: Workflow): Workflow {
+  const copy = structuredClone(w);
+  const walk = (e: PlanExpr | null) => {
+    if (!e) return; if ("args" in e) { e.args.forEach(walk); return; } if ("arg" in e) { walk(e.arg); return; }
+    for (const operand of [e.left, e.right]) if ("ref" in operand) {
+      const [id, field] = operand.ref.split("."), sig = copy.signals.find((s) => s.id === id);
+      if (sig && sig.kind !== "position" && (field === sig.kind || sig.kind === "indicator" && field === sig.indicator?.name)) operand.ref = `${id}.value`;
+    }
+  };
+  copy.stages.forEach((s) => walk(s.when)); return copy;
+}
 export function workflowProblems(w: Workflow): string[] {
   const problems: string[] = [], assets = new Set(w.assets.map((a) => a.id)), sigs = new Set(w.signals.map((s) => s.id)), stages = new Set(w.stages.map((s) => s.id));
   for (const list of [w.assets, w.signals, w.stages]) if (new Set(list.map((x) => x.id)).size !== list.length) problems.push("Ids must be unique within each collection.");
   const used = new Set<string>();
+  const checkFields = (e: PlanExpr | null) => {
+    if (!e) return; if ("args" in e) { e.args.forEach(checkFields); return; } if ("arg" in e) { checkFields(e.arg); return; }
+    for (const operand of [e.left, e.right]) if ("ref" in operand) { const [id, field] = operand.ref.split("."), sig = w.signals.find((s) => s.id === id); if (sig && !(sig.kind === "position" ? ["value", "qty", "pnl_pct", "value_usd"] : ["value"]).includes(field)) problems.push(`Unknown field ${operand.ref}; use the documented signal value.`); }
+  };
+  w.stages.forEach((s) => checkFields(s.when));
   for (const s of w.signals) if (s.assetId && !assets.has(s.assetId)) problems.push(`Unknown asset on ${s.id}.`);
   for (const s of w.signals) {
     if (s.kind === "drawdown" && !s.drawdown) problems.push(`Choose a drawdown reference on ${s.id}.`);

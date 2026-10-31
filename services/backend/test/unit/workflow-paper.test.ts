@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { drawdownDraft } from "../../src/compile/drawdown";
-import { Workflow, workflowProblems } from "../../contracts/src/workflow";
+import { Workflow, canonicalizeWorkflow, workflowProblems } from "../../contracts/src/workflow";
 import { recurringDraft } from "../../src/compile/recurring";
 import { Risk } from "../../contracts/src/strategy";
 import { createPaper, stepPaper, paperEquity, paperProblems, type PaperQuote } from "../../src/workflows/paper";
@@ -15,6 +15,7 @@ describe("percentage dip intent", () => {
     const w = Workflow.parse(drawdownDraft(text)); expect(w.assets[0].query).toBe("NEET"); expect(w.stages[0].when).toMatchObject({ op: "gte", right: { lit: 30 } }); expect(w.signals[0].kind).toBe("drawdown"); expect(w.signals[0].drawdown?.reference).toBe("needs_choice");
     if (!text.includes("100") && !text.includes("۱۰۰")) expect(w.stages[0].amount.value).toBeNull(); expect(workflowProblems(w)).toEqual([]);
   });
+  it("normalizes an equivalent drawdown field and rejects invented fields", () => { const w = drop(); w.stages[0].when = { op: "gte", left: { ref: "drop.drawdown" }, right: { lit: 30 } }; expect(workflowProblems(w).join(" ")).toContain("Unknown field"); expect(workflowProblems(canonicalizeWorkflow(w))).toEqual([]); const bad = structuredClone(w); bad.stages[0].when = { op: "gt", left: { ref: "drop.invented" }, right: { lit: 30 } }; expect(workflowProblems(canonicalizeWorkflow(bad)).join(" ")).toContain("Unknown field"); });
   it("does not ignore suffixes or a different purchased asset", () => { expect(drawdownDraft("Buy NEET whenever it drops 30% then buy NVDA")).toBeNull(); expect(drawdownDraft("every time NEET drops 30% buy $100 of NVDA")).toBeNull(); });
   it("requires reference, amount and budget before running", () => { const w = Workflow.parse(drawdownDraft("Buy NEET whenever it drops 30%")); expect(paperProblems(w).join(" ")).toMatch(/reference/); expect(() => createPaper(w)).toThrow(); });
 });
