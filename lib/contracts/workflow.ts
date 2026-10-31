@@ -74,6 +74,7 @@ export function prepareWorkflowInput(raw: unknown): unknown {
 /** Normalize unambiguous provider field aliases before semantic validation. */
 export function canonicalizeWorkflow(w: Workflow): Workflow {
   const copy = structuredClone(w);
+  for (const signal of copy.signals) { if (signal.kind !== "drawdown") delete signal.drawdown; if (signal.kind !== "indicator") signal.indicator = null; if (signal.kind !== "timer") signal.schedule = null; }
   const walk = (e: PlanExpr | null) => {
     if (!e) return; if ("args" in e) { e.args.forEach(walk); return; } if ("arg" in e) { walk(e.arg); return; }
     for (const operand of [e.left, e.right]) if ("ref" in operand) {
