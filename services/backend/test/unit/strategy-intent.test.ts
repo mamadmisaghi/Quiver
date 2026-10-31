@@ -102,6 +102,23 @@ describe("intent and market identity", () => {
     expect(calls).toEqual(["QuiverWorkflow", "IntentAudit"]);
     const result = ev.at(-1); expect(result?.type).toBe("result"); if (result?.type === "result") { expect(result.strategy.workflow).toBeUndefined(); expect(result.strategy.actions[0].size.value).toBe("100"); expect(result.strategy.actions[0].instrument).toContain("robinhood:"); }
   });
+  it("repairs an audit-detected direction error and rechecks before returning any result", async () => {
+    const text = "Buy $100 of Nvidia if price is below $120", w = base();
+    w.assets[0] = { ...w.assets[0], query: "Nvidia", sourceText: "Nvidia", venue: "robinhood" };
+    w.stages[0].repeat = null; w.stages[0].sourceText = text;
+    w.stages[0].when = { op: "gt", left: { ref: "price.value" }, right: { lit: 120 } };
+    let drafts = 0, audits = 0;
+    const call = async (o: any) => {
+      if (o.schema.name === "IntentAudit") { audits++; return { json: { faithful: drafts === 2, issues: drafts === 2 ? [] : ["Use below, not above, $120."] }, inputTokens: 1, outputTokens: 1, costUsd: .001 }; }
+      drafts++; const plan = structuredClone(w);
+      if (drafts === 2) { expect(o.repair.issues[0].message).toContain("below"); plan.stages[0].when = { op: "lt", left: { ref: "price.value" }, right: { lit: 120 } }; }
+      return { json: plan, inputTokens: 1, outputTokens: 1, costUsd: .001 };
+    };
+    const ev = await collect(planCompile({ thesis: text }, { ...deps, openrouter: { apiKey: "test-placeholder", model: "test", budget: { capUsd: 1, spentToday: () => 0, add: () => {} }, call } }));
+    expect(drafts).toBe(2); expect(audits).toBe(2); expect(ev.filter((e) => e.type === "result")).toHaveLength(1);
+    const last = ev.at(-1); if (last?.type !== "result") throw new Error("missing checked result");
+    expect(last.strategy.triggers[0].when).toMatchObject({ op: "lt" }); expect(last.usage.attempts).toBe(4); expect(last.usage.costUsd).toBe("0.004000");
+  });
   it("an audit mismatch blocks a structurally valid draft", async () => {
     const text = "Buy $100 of NEET if its price is below $0.003", w = base(); w.stages[0].sourceText = text; w.stages[0].repeat = null;
     const call = async (o: any) => ({ json: o.schema.name === "IntentAudit" ? { faithful: false, issues: ["The comparison direction is wrong."] } : w, inputTokens: 1, outputTokens: 1, costUsd: .001 });

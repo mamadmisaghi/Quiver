@@ -16,7 +16,7 @@ import { recurringDraft } from "./recurring";
 export const PLANNER_PROMPT = `You translate the user's trading intent into a precise reviewable Workflow JSON, not a template or investment recommendation. Return only schema-matching JSON.
 Read English and Persian, including misspellings. Preserve every asset, amount, threshold, venue, side, leverage, condition, repeat, exit and funding dependency. Never substitute a familiar asset. Nvidia=NVIDIA=NVDA, Bitcoin=BTC, NEET is a Solana token query (never NVDA), Pump.fun=PUMP. Unknown assets remain exact queries. Never invent contracts, market ids, budgets, event deadlines or order amounts.
 assets: one entry per distinct instrument/venue/outcome. sourceText is ONLY the exact asset name/ticker/event phrase quoted from the user's text (no paraphrase). query can normalize an alias; for events use a concise search phrase preserving the event. Polymarket is both a signal source and a BUY/SELL outcome action destination. Preserve YES vs NO; null if unspecified. Do not replace one event with Fed cuts. Missing venue/kind/outcome may be null. Equity shares and tokenized shares are not interchangeable: preserve specified venue and otherwise leave venue null.
-For a percentage price DROP, use kind drawdown with drawdown:{reference:"peak"|"last_fill"|"lookback"|"needs_choice",lookbackMinutes:null or number}. Its value is positive percentage points of price decline, never an absolute price. If no reference/time window was stated, reference needs_choice. Repeated drops use repeat:{intervalMinutes:null,maxTimes:null,conditionMode:"each_time"}, one purchase per new drop event, not continuous orders while a condition stays true.
+For a percentage price DROP, use kind drawdown with drawdown:{reference:"peak"|"last_fill"|"lookback"|"needs_choice",lookbackMinutes:null or number}. Its value is positive percentage points of price decline, never an absolute price. Buy after a 30% drop MUST use gte(drawdown.value,30), never lte or a negative threshold. If no reference/time window was stated, reference needs_choice. Repeated drops use repeat:{intervalMinutes:null,maxTimes:null,conditionMode:"each_time"}, one purchase per new drop event, not continuous orders while a condition stays true.
 signals: only signals actually referenced in a stage's when expression. price/drawdown/indicator/funding/odds/position need assetId; timer uses schedule; custom describes an unsupported condition faithfully. refs are signalId.value, or position qty/pnl_pct/value_usd. Odds use 0..1, other percentages use percentage points. RSI period default 14, timeframe 1h if missing; document that assumption in assumptions, not questions. SMA 20-day means period20,timeframe1d. Include BOTH price and moving-average signal for a comparison. and/or must preserve all requested conditions.
 For refs, use the declared SIGNAL id, never the asset id.
 stages: one per requested action. Standard stop-loss/take-profit/time exits belong on the opening stage exits; do not generate a separate close stage for an ordinary take-profit. sourceText is an exact contiguous excerpt of the user's action clause, containing its amount if stated. conditionText preserves the condition's meaning. when=null only for immediate actions or conditions represented by after. Unknown conditions use custom signals, never invent a true condition. after lists stage dependencies: filled, closed, realized_profit (after a profitable close), resolved_profit (after a prediction market settles profitably). An unrealized gain is not spendable profit. Independent actions stay parallel, not arbitrarily ordered.
@@ -123,15 +123,15 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
   }
   if (!d.openrouter) { yield* compile(req, d); return; }
   yield { type: "progress", step: "reading", label: "Understanding your intent", attempt: 1 };
-  const o = d.openrouter, call = o.call ?? callOpenRouter, deadline = Date.now() + (o.totalBudgetMs ?? 45_000);
+  const o = d.openrouter, call = o.call ?? callOpenRouter, deadline = Date.now() + (o.totalBudgetMs ?? 90_000);
   const user = req.baseStrategy ? `Current strategy (preserve all unedited fields):\n${JSON.stringify(req.baseStrategy)}\nRequested edit: ${req.instruction ?? req.thesis}` : req.image ? `Read the attached chart and preserve its actual instrument and levels. Ask when unreadable. User note: ${req.note ?? ""}` : req.thesis;
-  let previous: unknown = null, problems: string[] = [], workflow: Workflow | null = null;
+  let previous: unknown = d.plannerRepair?.previous ?? null, problems: string[] = d.plannerRepair?.problems ?? [], workflow: Workflow | null = null;
   const usage = { attempts: 0, inputTokens: 0, outputTokens: 0, costUsd: "0" }; let cost = 0;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const left = deadline - Date.now(); if (left < 500) break;
     if (attempt > 1) yield { type: "progress", step: "repairing", label: "Checking the draft against your request", attempt };
     try {
-      const result = await budgeted(o.budget, () => call({ apiKey: o.apiKey, model: o.model, maxTokens: o.budget.maxOutputTokens ?? 6000, system: PLANNER_PROMPT, user, image: req.image, schema: { name: "QuiverWorkflow", schema: z.toJSONSchema(WorkflowInput, { io: "input" }) }, signal: AbortSignal.timeout(Math.min(o.callTimeoutMs ?? 25_000, left)), ...(attempt > 1 ? { repair: { previous, issues: problems.map((message) => ({ path: "/", code: "schema" as const, severity: "error" as const, message })) } } : {}) }));
+      const result = await budgeted(o.budget, () => call({ apiKey: o.apiKey, model: o.model, maxTokens: o.budget.maxOutputTokens ?? 6000, system: PLANNER_PROMPT, user, image: req.image, schema: { name: "QuiverWorkflow", schema: z.toJSONSchema(WorkflowInput, { io: "input" }) }, signal: AbortSignal.timeout(Math.min(o.callTimeoutMs ?? 25_000, left)), ...((attempt > 1 || d.plannerRepair) ? { repair: { previous, issues: problems.map((message) => ({ path: "/", code: "schema" as const, severity: "error" as const, message })) } } : {}) }));
       if (!result) { yield { type: "error", code: o.budget.refusal?.() === "busy" ? "compile_busy" : "compile_cost_cap", message: o.budget.refusal?.() === "busy" ? "The AI compiler is busy. Please retry shortly." : "The AI budget has been reached. Your existing draft is unchanged." }; return; }
       usage.attempts++; usage.inputTokens += result.inputTokens; usage.outputTokens += result.outputTokens; cost += result.costUsd;
       previous = result.json; const parsed = WorkflowInput.safeParse(prepareWorkflowInput(result.json));
@@ -155,7 +155,18 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     if (!audit) throw new Error("verification_budget");
     usage.attempts++; usage.inputTokens += audit.inputTokens; usage.outputTokens += audit.outputTokens; cost += audit.costUsd;
     const verdict = Verdict.parse(audit.json);
-    if (!verdict.faithful || verdict.issues.length) { yield { type: "error", code: "intent_not_verified", message: "The draft did not pass the intent check. " + (verdict.issues[0] ?? "Please clarify the steps and retry.") }; return; }
+    if (!verdict.faithful || verdict.issues.length) {
+      const remaining = deadline - Date.now();
+      if (!d.plannerRepair && remaining > 1000) {
+        yield { type: "progress", step: "repairing", label: "Correcting the rule found by the independent check", attempt: 2 };
+        for await (const event of planCompile(req, { ...d, plannerRepair: { previous: workflow, problems: verdict.issues.length ? verdict.issues : ["Correct the workflow to match every requested condition."] }, openrouter: { ...o, totalBudgetMs: remaining } })) {
+          if (event.type === "result") yield { ...event, usage: { attempts: event.usage.attempts + usage.attempts, inputTokens: event.usage.inputTokens + usage.inputTokens, outputTokens: event.usage.outputTokens + usage.outputTokens, costUsd: (Number(event.usage.costUsd) + cost).toFixed(6) } };
+          else yield event;
+        }
+        return;
+      }
+      yield { type: "error", code: "intent_not_verified", message: "The draft did not pass the intent check. " + (verdict.issues[0] ?? "Please clarify the steps and retry.") }; return;
+    }
   } catch { yield { type: "error", code: "intent_check_unavailable", message: "The draft could not be checked against your request. Retry; no unverified replacement was saved." }; return; }
   yield { type: "progress", step: "resolving_markets", label: "Looking up the requested markets", attempt: 1 };
   workflow = await resolveWorkflow(workflow);

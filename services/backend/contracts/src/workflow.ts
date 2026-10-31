@@ -85,7 +85,7 @@ export function canonicalizeWorkflow(w: Workflow): Workflow {
       if (sig && sig.kind !== "position" && (field === sig.kind || sig.kind === "indicator" && field === sig.indicator?.name)) operand.ref = `${id}.value`;
     }
   };
-  copy.stages.forEach((s) => walk(s.when)); return copy;
+  copy.stages.forEach((s) => { if (s.funding.kind === "budget") s.funding.from = []; walk(s.when); }); return copy;
 }
 export function workflowProblems(w: Workflow): string[] {
   const problems: string[] = [], assets = new Set(w.assets.map((a) => a.id)), sigs = new Set(w.signals.map((s) => s.id)), stages = new Set(w.stages.map((s) => s.id));

@@ -24,6 +24,7 @@ export async function budgeted<T extends { costUsd: number }>(b: LlmBudget, fn: 
 }
 export interface CompileDeps {
   registry: Registry; stockTokensAllowed: boolean;
+  plannerRepair?: { previous: unknown; problems: string[] };
   retainWorkflow?: boolean; // Preview lab keeps verified market identities and plan controls.
   openrouter?: { apiKey: string; model: string; budget: LlmBudget; callTimeoutMs?: number; totalBudgetMs?: number; call?: typeof callOpenRouter };
   delayMs?: number; // demo pacing for the UI; default 0 (the no-key path must answer in <200ms)
