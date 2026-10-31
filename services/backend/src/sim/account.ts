@@ -1,7 +1,7 @@
 import type { Action } from "../../contracts/src/strategy";
 import type { InstrumentMeta } from "../venues/registry";
 
-export interface Pos { instrument: string; kind: InstrumentMeta["kind"]; qty: number; avgEntry: number; leverage: number; openedAt: number; peak: number; trough: number; actionId: string; exits?: Action["exits"]; realizedUsd: number }
+export interface Pos { instrument: string; kind: InstrumentMeta["kind"]; qty: number; avgEntry: number; leverage: number; openedAt: number; peak: number; trough: number; actionId: string; exits?: Action["exits"]; realizedUsd: number; ladderBaseQty?: number; ladderFilled?: number[] }
 
 /** Paper account. Spot: cash pays notional. Perps: cash pays fees only; margin = |qty|·avg/leverage is reserved. */
 export class PaperAccount {

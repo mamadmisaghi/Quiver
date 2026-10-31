@@ -17,3 +17,5 @@ export * from "./social";
 export * from "./replayshare";
 export * from "./secrets";
 export * from "./testnet";
+
+export * from "./workflow";

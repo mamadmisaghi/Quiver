@@ -36,7 +36,7 @@ export interface ExecutorDeps {
   /** M5.19: daily-resolution backtest — Stock Token orders decided after the close queue for the next session's open. */
   stockNextOpen?: boolean;
 }
-interface Order { orderId: string; action: Action; meta: InstrumentMeta; signedSide: 1 | -1; notional: number; qty?: number; t: number; reducing: boolean; exitOf?: string }
+interface Order { orderId: string; action: Action; meta: InstrumentMeta; signedSide: 1 | -1; notional: number; qty?: number; t: number; reducing: boolean; exitOf?: string; ladderRung?: number }
 export interface ApprovalRec { id: string; orderId: string; action: Action; exitOf?: string; instrument: string; venue: string; side: "buy" | "sell" | "long" | "short"; notional: number; status: "pending" | "approved" | "rejected" | "expired" | "canceled"; createdAt: number; expiresAt: number; resolvedAt: number | null; result: { status: "filled" | "rejected" | "error"; code: string | null; message: string | null } | null }
 export interface FillRec { ts: number; actionId: string; instrument: string; side: string; qty: number; price: number; feeUsd: number; realized: number; reducing: boolean }
 
@@ -48,7 +48,7 @@ export class Executor {
   st: EngineState; acct: PaperAccount; halted = false; haltReason: string | null = null;
   processed = new Set<string>(); pending: Order[] = []; fills: FillRec[] = []; costs = { spreadUsd: 0, impactUsd: 0, gasUsd: 0 }; fires: { ts: number; triggerId: string }[] = [];
   lastSnap: Snapshot = {}; approvals: Map<string, ApprovalRec>; lastTickSignals = new Map<string, string>();
-  constructor(readonly d: ExecutorDeps) { this.approvals = d.approvals ?? new Map(); this.st = initState(d.strategy); this.acct = new PaperAccount(d.startingEquity); }
+  constructor(readonly d: ExecutorDeps) { if (d.strategy.workflow) throw new Error("Workflow drafts cannot execute until their adapters and scheduler are activated."); this.approvals = d.approvals ?? new Map(); this.st = initState(d.strategy); this.acct = new PaperAccount(d.startingEquity); }
 
   mark = (id: string, t?: number) => this.d.mkt.price(id, t ?? this.now)?.value ?? null;
   private now = 0;
@@ -121,11 +121,22 @@ export class Executor {
       let why: string | null = null;
       if (x.stopLoss) why = x.stopLoss.unit === "pct" ? (pnlPct <= -Number(x.stopLoss.value) ? "stop_loss" : null) : (dir > 0 ? m <= Number(x.stopLoss.value) : m >= Number(x.stopLoss.value)) ? "stop_loss" : null;
       if (!why && x.takeProfit) why = x.takeProfit.unit === "pct" ? (pnlPct >= Number(x.takeProfit.value) ? "take_profit" : null) : (dir > 0 ? m >= Number(x.takeProfit.value) : m <= Number(x.takeProfit.value)) ? "take_profit" : null;
-      if (!why && x.takeProfits?.length && pnlPct >= Number(x.takeProfits[0].atPct)) why = "take_profit";
+
       if (!why && x.trailingStopPct) { const ref = dir > 0 ? p.peak : p.trough; const dd = ((ref - m) / ref) * 100 * dir; if (dd >= Number(x.trailingStopPct)) why = "trailing_stop"; }
       if (!why && x.timeExitHours && t - p.openedAt >= x.timeExitHours * 3_600_000) why = "time_exit";
-      if (!why) continue;
       const a = this.d.strategy.actions.find((y) => y.id === p.actionId)!;
+      if (!why && x.takeProfits?.length) {
+        p.ladderBaseQty ??= Math.abs(p.qty); p.ladderFilled ??= [];
+        for (const [index, rung] of x.takeProfits.entries()) {
+          if (p.ladderFilled.includes(index) || pnlPct < Number(rung.atPct)) continue;
+          if ([...this.pending, ...this.awaitingOpen.map((v) => v.o)].some((o) => o.meta.id === p.instrument && o.ladderRung === index)) continue;
+          const remaining = this.acct.positions.get(p.instrument); if (!remaining) break;
+          const fraction = Math.min(1, p.ladderBaseQty * Number(rung.sellFraction) / Math.abs(remaining.qty));
+          await this.submit({ ...a, id: `${a.id}.tp${index + 1}`, type: "close" }, newId("ord", t), t, p.actionId, fraction, false, index);
+        }
+        continue;
+      }
+      if (!why) continue;
       const key = `exit:${p.actionId}:${p.openedAt}`; if (this.processed.has(key)) continue; this.processed.add(key);
       this.d.emit({ type: "warning", code: why, message: `${why.replace("_", " ")} hit on ${this.d.registry.get(p.instrument)?.symbol} (${pnlPct.toFixed(2)}%). Closing.` }, t);
       await this.submit({ ...a, id: `${a.id}.exit`, type: "close" } as Action, newId("ord", t), t, p.actionId);
@@ -133,7 +144,7 @@ export class Executor {
   }
 
   /** Risk gate -> intent -> fill (or defer). Returns true if it passed the gate. */
-  async submit(a: Action, orderId: string, t: number, exitOf?: string, fraction = 1, approved = false): Promise<boolean> {
+  async submit(a: Action, orderId: string, t: number, exitOf?: string, fraction = 1, approved = false, ladderRung?: number): Promise<boolean> {
     const meta = this.d.registry.get(a.instrument)!; const s = this.d.strategy; const mk = (id: string) => this.mark(id, t);
     const pos = this.acct.positions.get(a.instrument); const mark = mk(a.instrument);
     const reducing = a.type === "close";
@@ -177,7 +188,7 @@ export class Executor {
     }
     this.acct.ordersToday++;
     this.d.emit({ type: "intent", orderId, actionId: a.id, instrument: a.instrument, venue: meta.venue, side: reducing ? (signedSide > 0 ? (meta.kind === "perp" ? "long" : "buy") : meta.kind === "perp" ? "short" : "sell") : a.side, notionalUsd: usd(notional), maxSlippageBps: a.order.maxSlippageBps }, t);
-    const o: Order = { orderId, action: a, meta, signedSide, notional, qty, t, reducing, exitOf };
+    const o: Order = { orderId, action: a, meta, signedSide, notional, qty, t, reducing, exitOf, ladderRung };
     if (this.d.fillModel === "next_bar") { this.pending.push(o); return true; }
     await this.fillFromQuote(o, t);
     return true;
@@ -254,10 +265,14 @@ export class Executor {
   freeze() { this.frozen = true; this.pending = []; this.awaitingOpen = []; }
   private doFill(o: Order, price: number, fee: number, ref: number, refSrc: string, slip: number, t: number) {
     if (this.frozen) { this.blockedFills++; return; }
-    const qty = o.qty ?? o.notional / price;
+    const existing = this.acct.positions.get(o.meta.id);
+    // A deferred reducing order must never flip a position if another exit filled first.
+    if (o.reducing && (!existing || Math.sign(existing.qty) === o.signedSide)) return;
+    const qty = o.reducing ? Math.min(o.qty ?? o.notional / price, Math.abs(existing!.qty)) : o.qty ?? o.notional / price;
     const realized = this.acct.apply(o.meta, o.signedSide * qty, price, fee, t, o.exitOf ?? o.action.id, o.action.leverage, o.action.exits);
     this.d.onSpend?.(o.notional);
     const p = this.acct.positions.get(o.meta.id);
+    if (p && o.ladderRung !== undefined) { p.ladderFilled ??= []; if (!p.ladderFilled.includes(o.ladderRung)) p.ladderFilled.push(o.ladderRung); }
     const side = this.sideOf(o);
     this.fills.push({ ts: t, actionId: o.action.id, instrument: o.meta.id, side, qty, price, feeUsd: fee, realized, reducing: o.reducing });
     this.d.emit({ type: "fill", fillId: newId("fil", t), orderId: o.orderId, actionId: o.action.id, instrument: o.meta.id, venue: o.meta.venue, side, qty: dec(qty, 8), price: dec(price, 6), notionalUsd: usd(qty * price), feeUsd: usd(fee), slippageBps: Number(slip.toFixed(2)), referencePrice: dec(ref, 6), referenceSource: refSrc, simulated: true, txHash: null, explorerUrl: null,

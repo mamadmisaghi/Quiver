@@ -1,6 +1,7 @@
 import { StrategyRecord as RecordSchema } from "@/lib/contracts";
 import { cachePreviewDraft, previewDrafts, removePreviewDraft, savePreviewDraft } from "./preview-drafts";
 import { ApiErr, type Strategy, type StrategyRecord } from "./types";
+import { previewRecord } from "@/lib/preview/records";
 
 export type PreviewWorkspace = { authenticated: boolean; cloudAvailable: boolean; aiAvailable: boolean; aiConfigured?: boolean; items: StrategyRecord[]; message?: string };
 const empty: PreviewWorkspace = { authenticated: false, cloudAvailable: false, aiAvailable: false, items: [] };
@@ -42,4 +43,16 @@ export async function deletePreviewDraft(id: string) {
   const r = await fetch(`/api/preview/workspace?id=${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!r.ok && r.status !== 401) throw new Error("The online draft could not be removed. Try again.");
   removePreviewDraft(id); cloud = cloud.filter((v) => v.id !== id);
+}
+
+export async function updatePreviewDraft(current: StrategyRecord, strategy: Strategy, expectedVersion: number) {
+  if (current.version !== expectedVersion) throw new ApiErr("conflict", "This draft changed. Reload before saving.", 409);
+  const record = { ...previewRecord(strategy, current.id, current.ownerId, current.createdAt, current.forkedFrom), version: expectedVersion + 1, updatedAt: new Date().toISOString() };
+  // Only an already-online record uses the compare-and-swap endpoint. New/browser/example drafts are saved with the same id.
+  const online = cloud.some((r) => r.id === current.id);
+  if (!online) { cachePreviewDraft(record); return uploadPreviewDraft(record); }
+  const response = await fetch("/api/preview/workspace", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: current.id, strategy, expectedVersion }) });
+  const data = await response.json() as { message?: string };
+  if (!response.ok) throw new ApiErr(response.status === 409 ? "conflict" : "internal", data.message ?? "Could not save the change. Reload and retry.", response.status);
+  const saved = RecordSchema.parse(data); cachePreviewDraft(saved); cloud = mergePreviewDrafts(cloud, [saved]); lastLocation = "online"; return saved;
 }

@@ -1,8 +1,8 @@
-import { StrategyRecord } from "@/lib/contracts";
+import { StrategyRecord, UpdateStrategyReq } from "@/lib/contracts";
 import type { StrategyRecord as RecordData } from "@/lib/api/types";
 import { previewRecord } from "@/lib/preview/records";
 import { previewAiEnabled, previewDatabase, previewJson, previewOwner, readPreviewBody, sameOrigin } from "@/lib/preview/server";
-import { readOnlineDrafts, removeOnlineDraft, writeOnlineDraft } from "@/lib/preview/storage";
+import { readOnlineDrafts, removeOnlineDraft, writeOnlineDraft, replaceOnlineDraft } from "@/lib/preview/storage";
 
 export async function GET(request: Request) {
   const owner = previewOwner(request);
@@ -25,12 +25,33 @@ export async function POST(request: Request) {
     const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(owner));
     const uid = "usr_" + Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 20);
     record = previewRecord(incoming.strategy, incoming.id, uid, incoming.createdAt, incoming.forkedFrom ?? null);
+    record.version = incoming.version; record.updatedAt = new Date().toISOString();
   } catch { return previewJson({ message: "Fix the draft's markets, rules and risk limits before saving." }, 422); }
   try {
     const db = await previewDatabase();
-    if (!await writeOnlineDraft(db, owner, record)) return previewJson({ message: "Your online workspace has 50 drafts. Export a backup before making space." }, 409);
+    const current = (await readOnlineDrafts(db, owner)).find((r) => r.id === record.id);
+    if (current) {
+      if (JSON.stringify(current.strategy) === JSON.stringify(record.strategy)) return previewJson(current);
+      return previewJson({ message: "This draft already has an online version. Reload it before editing; the online copy was not overwritten." }, 409);
+    }
+    if (!await writeOnlineDraft(db, owner, record, true)) return previewJson({ message: "The workspace is full or this draft was saved in another tab. Reload before retrying." }, 409);
     return previewJson(record);
   } catch { return previewJson({ message: "The online copy could not be saved. Export your browser backup and try again." }, 503); }
+}
+
+export async function PATCH(request: Request) {
+  if (!sameOrigin(request)) return previewJson({ message: "Use the Quiver website." }, 403);
+  const owner = previewOwner(request); if (!owner) return previewJson({ message: "Sign in to update your online draft." }, 401);
+  try {
+    const body = UpdateStrategyReq.extend({ id: StrategyRecord.shape.id }).parse(await readPreviewBody(request, 64_000));
+    const db = await previewDatabase();
+    const current = (await readOnlineDrafts(db, owner)).find((r) => r.id === body.id);
+    if (!current) return previewJson({ message: "That draft was not found in your workspace." }, 404);
+    if (current.version !== body.expectedVersion) return previewJson({ message: "This draft changed in another tab. Reload and try again." }, 409);
+    const next = { ...previewRecord(body.strategy, current.id, current.ownerId, current.createdAt, current.forkedFrom), version: current.version + 1, updatedAt: new Date().toISOString() };
+    if (!await replaceOnlineDraft(db, owner, next, body.expectedVersion)) return previewJson({ message: "This draft changed in another tab. Reload and try again." }, 409);
+    return previewJson(next);
+  } catch { return previewJson({ message: "Could not save valid changes. Check the values and retry." }, 422); }
 }
 
 export async function DELETE(request: Request) {

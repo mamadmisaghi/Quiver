@@ -1,6 +1,6 @@
 import { previewCompile, previewCompileImage } from "./preview-compile";
 import { previewBacktest } from "./preview-backtest";
-import { listPreviewDrafts, persistPreviewDraft } from "./preview-workspace";
+import { listPreviewDrafts, persistPreviewDraft, updatePreviewDraft } from "./preview-workspace";
 import { mockDetail, mockHistory } from "./market-mock";
 // MOCK adapter: implements QuiverApi from contract fixtures. Swap for live.ts via NEXT_PUBLIC_API_MODE=live.
 import * as C from "@/lib/contracts";
@@ -138,6 +138,11 @@ export const mockApi: QuiverApi = {
   async runs(q = {}) { return parse(C.Page(C.Run), { items: [...runState.values()].filter((r) => !q.strategyId || r.strategyId === q.strategyId), nextCursor: null }); },
   async run(id) { const r = runState.get(id); if (!r) throw new ApiErr("not_found", "Run not found", 404); return r; },
   async createStrategy(strategy) { return persistPreviewDraft(strategy); },
+  async updateStrategy(id, strategy, expectedVersion) {
+    const current = await mockApi.strategy(id);
+    if (current.activeRunId) throw new ApiErr("conflict", "Stop the active run before changing its saved limits.", 409);
+    return updatePreviewDraft(current, strategy, expectedVersion);
+  },
   backtest: previewBacktest,
   async backtestStatus() { throw new ApiErr("not_found", "Preview tests complete immediately and are not saved on a server.", 404); },
   async startRun(req) {

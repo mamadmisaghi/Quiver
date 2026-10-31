@@ -34,6 +34,7 @@ import type { Config } from "../config";
 import { Warmup, WARMUP_NOTICE, WARMUP_OBJ } from "../warmup";
 import { TiingoHistory, TiingoOverlay, tiingoSupports, type TiingoHttp } from "../venues/tiingo";
 import { humanize } from "../engine/humanize";
+import { planCompile } from "../compile/planner";
 import { hasErrors, validateStrategy } from "../engine/validate";
 import { signJwt, verifyJwt, randomToken } from "../lib/auth";
 import { iso, systemClock, type Clock } from "../lib/clock";
@@ -249,8 +250,8 @@ export function createApp(o: AppOptions) {
   const strategyRecord = (s: StrategyRow, v?: number) => {
     const ver = v !== undefined ? s.versions.find((x) => x.version === v) : s.versions.at(-1); if (!ver) throw new ApiErr("not_found", "Version not found.");
     const active = [...runs.live.values()].find((l) => l.run.strategyId === s.id && l.run.status !== "stopped");
-    return { id: s.id, ownerId: s.ownerId, name: ver.strategy.name, version: ver.version, status: s.archived ? "archived" as const : hasErrors(ver.issues) ? "invalid" as const : "valid" as const,
-      strategy: ver.strategy, humanized: ver.humanized, issues: ver.issues, venues: [...new Set(ver.strategy.actions.map((a) => registry.get(a.instrument)?.venue).concat(ver.strategy.signals.map((g) => ("instrument" in g.params ? registry.get(g.params.instrument)?.venue : undefined))).filter(Boolean))] as any,
+    return { id: s.id, ownerId: s.ownerId, name: ver.strategy.name, version: ver.version, status: s.archived ? "archived" as const : ver.strategy.workflow ? "draft" as const : hasErrors(ver.issues) ? "invalid" as const : "valid" as const,
+      strategy: ver.strategy, humanized: ver.humanized, issues: ver.issues, venues: ver.strategy.workflow ? [...new Set(ver.strategy.workflow.assets.flatMap((a) => a.venue ? [a.venue] : []))] : [...new Set(ver.strategy.actions.map((a) => registry.get(a.instrument)?.venue).concat(ver.strategy.signals.map((g) => ("instrument" in g.params ? registry.get(g.params.instrument)?.venue : undefined))).filter(Boolean))] as any,
       createdAt: iso(s.createdAt), updatedAt: iso(s.updatedAt), activeRunId: active?.run.id ?? null,
       nodes: strategyNodes(ver.strategy, registry, ver.humanized), public: !!s.public, forkedFrom: s.forkedFrom ?? null };
   };
@@ -410,7 +411,7 @@ export function createApp(o: AppOptions) {
     if (u) { limit(`c:${u.id}`, 6, 60_000); chargeCompile(u); }
     else limit(`g:${ip}:${today()}`, 3, 86_400_000);
     const key = userAiKey(u) ?? cfg.OPENROUTER_API_KEY;
-    const gen = compile(b, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
+    const gen = planCompile(b, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
       openrouter: key ? { apiKey: key, model: cfg.LLM_MODEL ?? "openai/gpt-4.1-mini", budget: llmBudget } : undefined });
     c.header("content-type", "application/x-ndjson"); c.header("cache-control", "no-store");
     return stream(c, async (s) => { for await (const ev of gen) await s.write(JSON.stringify(ev) + "\n"); });
@@ -448,7 +449,7 @@ export function createApp(o: AppOptions) {
     chargeCompile(u);
     store.audit.push({ at: clock.now(), userId: u.id, action: "compile.image", target: `${chk.mime}:${chk.width}x${chk.height}:${chk.bytes}:${chk.sha256.slice(0, 16)}` });
     const note = b.note?.replace(/\p{Cc}/gu, " ").trim() || undefined;
-    const gen = compile({ thesis: note ?? "Strategy from a chart screenshot", note, image: { mime: chk.mime, base64: b.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
+    const gen = planCompile({ thesis: note ?? "Strategy from a chart screenshot", note, image: { mime: chk.mime, base64: b.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
       openrouter: { apiKey: key, model: cfg.LLM_VISION_MODEL ?? cfg.LLM_MODEL ?? "openai/gpt-4.1-mini", budget: llmBudget } });
     c.header("content-type", "application/x-ndjson"); c.header("cache-control", "no-store");
     return stream(c, async (s) => { let failed = false; for await (const ev of gen) { if (ev.type === "error") failed = true; await s.write(JSON.stringify(ev) + "\n"); }
@@ -459,7 +460,7 @@ export function createApp(o: AppOptions) {
     return c.json({ ok: !!v.strategy && !hasErrors(v.issues), strategy: v.strategy, humanized: v.strategy ? humanize(v.strategy, registry) : null, issues: v.issues });
   });
   const saveVersion = (c: Context<Env>, raw: unknown) => {
-    const v0 = validateStrategy(raw, { registry, stockTokensAllowed: true }); const v = { ...v0, issues: [...v0.issues, ...geoNote(c.get("user"), v0.strategy)] };
+    const v0 = validateStrategy(raw, { registry, stockTokensAllowed: true, purpose: "draft" }); const v = { ...v0, issues: [...v0.issues, ...geoNote(c.get("user"), v0.strategy)] };
     if (!v.strategy) throw new ApiErr("strategy_invalid", "Strategy is invalid.", v.issues);
     return { strategy: v.strategy, humanized: humanize(v.strategy, registry), issues: v.issues, createdAt: clock.now() };
   };

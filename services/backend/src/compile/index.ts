@@ -63,6 +63,7 @@ export async function* compile(req: { thesis: string; baseStrategy?: Strategy; i
     if (fallbackWhy) { strategy = null; issues = []; }
   }
   if (fallbackWhy) {
+    if (d.openrouter) { yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not produce a verified strategy. Retry; no substitute rules were generated." }; return; }
     compiler = "demo";
     notice = fallbackWhy === "no_key" ? DEMO_NOTICE : `${fallbackWhy === "timeout" ? "The AI compiler timed out" : fallbackWhy === "busy" ? "The AI compiler is busy" : fallbackWhy === "invalid" ? "The AI compiler couldn't produce valid rules" : "The AI compiler is unavailable"}, so this is a ${DEMO_NOTICE[0].toLowerCase()}${DEMO_NOTICE.slice(1)}`;
     yield prog("resolving_markets"); await wait();
@@ -80,6 +81,9 @@ export async function* compile(req: { thesis: string; baseStrategy?: Strategy; i
     }
   }
   if (!strategy) { yield { type: "error", code: "compile_failed", message: "Couldn't turn that into valid rules. Try rephrasing with a market, a condition and an amount." }; return; }
+  // Unused declarations are not executable conditions and must not appear as disconnected nodes.
+  const refs = JSON.stringify(strategy.triggers);
+  strategy.signals = strategy.signals.filter((s) => refs.includes(`\"${s.id}.`));
   yield prog("checking_risk"); await wait();
   const h = humanize(strategy, d.registry);
   for (const node of strategyNodes(strategy, d.registry, h)) yield { type: "partial", node };

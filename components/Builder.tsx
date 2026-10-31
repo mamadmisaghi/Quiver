@@ -1,4 +1,6 @@
 "use client";
+import WorkflowReview from "./WorkflowReview";
+import { workflowView } from "@/services/backend/src/engine/workflow-view";
 import { useEffect, useRef, useState } from "react";
 import StrategyGraph from "./StrategyGraph";
 import Link from "./Link";
@@ -14,6 +16,7 @@ import SignInButton from "./SignInButton";
 import { SAMPLE_PROMPT, SUGGESTIONS } from "@/lib/copy";
 import PreviewWorkspaceNotice from "./PreviewWorkspaceNotice";
 import { previewSaveLocation } from "@/lib/api/preview-workspace";
+import { strategyNodes as deriveNodes } from "@/lib/api/graph";
 
 type Phase = "idle" | "drafting" | "done" | "error";
 type Step = { step: string; label: string };
@@ -51,6 +54,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [took, setTook] = useState(0);
   const [compiledText, setCompiledText] = useState<string | null>(null);
   const [compiledImage, setCompiledImage] = useState<string | null>(null);
+  const [editingRecord, setEditingRecord] = useState<{ id: string; version: number } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -83,21 +87,23 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
 
   const run = async (instruction?: string, thesis = text) => {
     const baseForRefine = strategy;
+    const old = { strategy, humanized, nodes, issues, demo, savedId };
+    const effectiveInstruction = instruction ?? (strategy && /^\s*(add|change|edit|tighten|remove|adjust|increase|decrease|set|only trade|اضافه|تغییر|حذف|ویرایش)(?:\s|$)/i.test(thesis) ? thesis : undefined);
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
     setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
     const fresh: GNode[] = [];
     try {
-      const useImg = img && !instruction;
+      const useImg = img && !effectiveInstruction;
       const onEv = (e: Parameters<Parameters<typeof api.compile>[1]>[0]) => {
         if (c.signal.aborted) return;
         if (e.type === "progress") setSteps((s) => [...s.filter((x) => x.step !== e.step), { step: e.step, label: e.label }]);
         else if (e.type === "partial") { fresh.push(e.node); setNodes([...fresh]); }
-        else if (e.type === "result") { setCompiledText(thesis); setCompiledImage(img?.url ?? null); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
-        else if (e.type === "error") { setErr(e.code === "unsupported_prompt" ? e.message.replace(/^Demo compile:\s*/, "") : errCopy(e.code, e.message)); setSuggest(e.suggestions ?? []); setPhase("error"); }
+        else if (e.type === "result") { if (effectiveInstruction) setText(e.strategy.thesis); setCompiledText(effectiveInstruction ? e.strategy.thesis : thesis); setCompiledImage(img?.url ?? null); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
+        else if (e.type === "error") { if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setErr(e.message.replace(/^Demo compile:\s*/, "")); setSuggest(e.suggestions ?? []); setPhase(old.strategy ? "done" : "error"); }
       };
       if (useImg) await api.compileImage({ mimeType: img.mime, imageBase64: img.b64, ...(thesis.trim() ? { note: thesis.trim().slice(0, 500) } : {}) }, onEv, c.signal);
-      else await api.compile({ thesis, ...(instruction && baseForRefine ? { baseStrategy: baseForRefine, instruction } : {}) }, onEv, c.signal);
-    } catch (x) { if ((x as Error).name !== "AbortError") { setErr(imgErr(x) ?? errOf(x, "Compile failed")); setSuggest(x instanceof ApiErr ? sugg(x.details) : []); setPhase("error"); } }
+      else await api.compile({ thesis, ...(effectiveInstruction && baseForRefine ? { baseStrategy: baseForRefine, instruction: effectiveInstruction } : {}) }, onEv, c.signal);
+    } catch (x) { if ((x as Error).name !== "AbortError") { setErr(imgErr(x) ?? errOf(x, "Compile failed")); setSuggest(x instanceof ApiErr ? sugg(x.details) : []); if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setPhase(old.strategy ? "done" : "error"); } }
   };
   const [guest, setGuest] = useState(API_MODE !== "mock");
   useEffect(() => {
@@ -108,30 +114,32 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     if (id) api.strategy(id).then((rec) => {
       if (!on) return;
       setText(rec.strategy.thesis); setCompiledText(rec.strategy.thesis); setStrategy(rec.strategy);
-      setHumanized(rec.humanized); setNodes(rec.nodes); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
-      if (API_MODE === "mock") setDemo("Saved preview draft. Tests use synthetic prices; continuous paper runs are pending activation.");
+      setEditingRecord({ id: rec.id, version: rec.version });
+      setHumanized(rec.humanized); setNodes(deriveNodes(rec.strategy, Object.fromEntries(rec.nodes.map((node) => [node.id, node])))); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
+      setDemo(null);
+      if (API_MODE === "mock") setSaveNotice("Saved preview draft. Continuous paper runs are pending activation.");
     }).catch((e) => on && setErr(errOf(e, "Could not open this draft.")));
     return () => { on = false; ctl.current?.abort(); };
   }, [initialPrompt]);
   const saveDraft = async () => {
     if (!strategy || dirty) return;
     setSaving(true); setErr(null);
-    try { const record = await api.createStrategy(strategy); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
+    try { const record = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy); setEditingRecord({ id: record.id, version: record.version }); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
     catch (e) { setErr(errOf(e, "Could not save this draft.")); }
     finally { setSaving(false); }
   };
 
   useEffect(() => onSession(() => setGuest(false)), []);
 
-  const edges = strategy ? strategyEdges(strategy).map((e) => ({ ...e, hot: true })) : [];
+  const edges = strategy ? strategyEdges(strategy).map((e) => ({ ...e, hot: false })) : [];
   const graphNodes = phase === "done" || nodes.length ? nodes : [];
   const venues = [...new Set(nodes.map((n) => n.venue).filter(Boolean))] as NonNullable<GNode["venue"]>[];
   const drafting = phase === "drafting";
 
   return (
     <div className="mx-auto max-w-[1040px] px-5 py-10 sm:px-8 sm:py-14">
-      <h1 className="text-[clamp(1.9rem,3.4vw,2.6rem)] font-medium tracking-[-0.035em]">New strategy</h1>
-      <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">Say the trade in plain English. Quiver drafts the rules and the graph. Nothing runs until you press start.</p>
+      <h1 className="text-[clamp(1.9rem,3.4vw,2.6rem)] font-medium tracking-[-0.035em]">{editingRecord ? "Edit strategy" : "New strategy"}</h1>
+      <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">Describe the strategy in your own words. Quiver drafts the rules and the graph. Nothing runs until you press start.</p>
 
       {API_MODE === "mock" && <PreviewWorkspaceNotice onReady={setPreviewAiReady} />}
       {/* 1 — Prompt */}
@@ -178,10 +186,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {/* 2 — AI draft */}
       <section aria-live="polite" className="mt-10 grid gap-4" data-motion="draft">
         <ol className="grid grid-cols-1 items-center gap-x-6 gap-y-2.5 md:grid-cols-2 rounded-[14px] border border-line bg-bg-2 px-5 py-4">
-          <li className="col-span-full font-mono text-[12px] uppercase tracking-[.14em] text-muted">{API_MODE === "mock" && !previewAiReady ? "Text draft" : "AI draft"}</li>
+          <li className="col-span-full font-mono text-[12px] uppercase tracking-[.14em] text-muted">Strategy draft</li>
           {steps.length === 0 && <li className="flex h-5 min-w-0 items-start gap-2.5 text-[13px] leading-5 text-muted"><span className="mt-[3px] h-3.5 w-3.5 shrink-0 rounded-full border border-line-2" />{phase === "idle" ? "Waiting for your thesis" : phase === "done" ? "Saved draft loaded" : "Starting…"}</li>}
           {steps.map((s, i) => {
-            const done = phase !== "drafting" || i < steps.length - 1, now = !done;
+            const done = phase === "done" || (phase === "drafting" && i < steps.length - 1), now = phase === "drafting" && !done;
             return (
               <li key={s.step} className="flex h-5 min-w-0 items-start gap-2.5 text-[13px] leading-5">
                 <span className={`mt-[3px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border ${done ? "border-accent bg-accent-soft" : "border-line-2"}`}>
@@ -216,6 +224,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         </div>
       </section>
 
+      {strategy?.workflow && phase !== "drafting" && <WorkflowReview workflow={strategy.workflow} onChange={(workflow) => {
+        const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
+      }} />}
+
       {/* 3 — Readable rules */}
       <section className={`mt-6 grid gap-px overflow-hidden rounded-[14px] border border-line bg-line md:grid-cols-4`} data-motion="rules">
         {(["watch", "when", "do", "exit"] as const).map((k) => (
@@ -229,17 +241,17 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       </section>
 
       {/* M5 fix (Robin gate 4ab4ad6): refine is CompileReq {baseStrategy, instruction} on the same compile stream. */}
-      {strategy && phase === "done" && !dirty && (API_MODE !== "mock" || previewAiReady) && <RefineBar onRefine={(t) => run(t)} />}
+      {strategy && phase !== "drafting" && !dirty && <RefineBar onRefine={(t) => run(t)} />}
       <div data-reserve="after" className="min-h-[160px] md:min-h-[96px]">
       {issues.length > 0 && <ul className="mt-4 space-y-1 text-[13px]">{issues.map((i) => <li key={i.path + i.code} className={i.severity === "error" ? "text-short" : "text-muted"}>{i.severity === "error" ? "" : "Note: "}{i.message}</li>)}</ul>}
-      {phase === "done" && strategy && <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>}
+      {phase === "done" && strategy && !strategy.workflow && <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>}
       </div>
       <p className="mt-8 pb-24 text-[12px] text-muted">{DEMO_LABEL}. Stock tokens are not available to US persons. Trading can lose money.</p>
 
       {/* Action bar pinned to the viewport bottom; Paper-trade it is the only amber primary on the page once drafted */}
       <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 -mx-5 border-t border-line bg-bg/90 px-5 py-3 backdrop-blur-md lg:bottom-0 sm:-mx-8 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1 truncate">{phase === "done" ? API_MODE === "mock" ? "Preview draft" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
+          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1 truncate">{phase === "done" ? strategy?.workflow ? "Workflow draft · execution pending" : API_MODE === "mock" ? "Preview draft" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {err && phase === "done" && <span role="status" className="text-[12.5px] text-short">{err}</span>}
             {phase === "done" && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
@@ -249,7 +261,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
             <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
-            <button type="button" onClick={paperTrade} title={API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={API_MODE === "mock" || dirty || phase !== "done" || starting || issues.some((i) => i.severity === "error")} className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-40">{API_MODE === "mock" ? "Paper engine not connected" : starting ? "Starting…" : "Paper-trade it →"}</button>
+            <button type="button" onClick={paperTrade} title={API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={!!strategy?.workflow || API_MODE === "mock" || dirty || phase !== "done" || starting || issues.some((i) => i.severity === "error")} className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-40">{strategy?.workflow ? "Workflow execution pending" : API_MODE === "mock" ? "Paper engine not connected" : starting ? "Starting…" : "Paper-trade it →"}</button>
           </div>
         </div>
       </div>

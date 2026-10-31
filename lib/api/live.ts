@@ -220,6 +220,7 @@ export const liveApi: QuiverApi = {
   runs: (q = {}) => req((C) => C.Page(C.Run), "/runs" + qs(q)),
   run: (id) => req((C) => C.Run, `/runs/${id}`),
   createStrategy: (strategy) => req((C) => C.StrategyRecord, "/strategies", post({ strategy }, true)),
+  updateStrategy: (id, strategy, expectedVersion) => req((C) => C.StrategyRecord, `/strategies/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ strategy, expectedVersion }) }),
   startRun: (b) => req((C) => C.Run, "/runs", post(b, true)),
   control: (id, action) => req((C) => C.Run, `/runs/${id}/control`, post({ action })),
   /** SSE over fetch (so we can read `retry:` and send Last-Event-ID). Each (re)connect mints a fresh ticket.

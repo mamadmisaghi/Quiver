@@ -1,8 +1,9 @@
 import { compile, type CompileDeps } from "@/services/backend/src/compile";
+import { planCompile } from "@/services/backend/src/compile/planner";
 import { MOCK_INSTRUMENTS, Registry } from "@/services/backend/src/venues/registry";
 
 export function streamPreviewCompile(request: Request, input: Parameters<typeof compile>[0], ai?: CompileDeps["openrouter"]) {
-  const iterator = compile(input, { registry: new Registry(MOCK_INSTRUMENTS), stockTokensAllowed: true, openrouter: ai });
+  const iterator = planCompile(input, { registry: new Registry(MOCK_INSTRUMENTS), stockTokensAllowed: true, openrouter: ai });
   const encoder = new TextEncoder();
   return new Response(new ReadableStream({
     async pull(controller) {

@@ -13,6 +13,5 @@ export async function POST(request: Request) {
   let ai;
   try { ai = await previewAi(request); }
   catch { return previewJson({ message: "AI accounting is unavailable. Please try again shortly." }, 503); }
-  if (!ai && (parsed.data.baseStrategy || parsed.data.instruction)) return previewJson({ message: "Sign in with ChatGPT for AI refinement. You can also edit the complete description and press Draft strategy." }, 422);
   return streamPreviewCompile(request, parsed.data, ai);
 }
