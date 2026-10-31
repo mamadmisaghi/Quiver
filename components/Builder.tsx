@@ -228,7 +228,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       </section>
 
       {strategy?.workflow && phase !== "drafting" && <WorkflowReview workflow={strategy.workflow} onChange={(workflow) => {
-        const view = workflowView(workflow); setStrategy({ ...strategy, workflow, risk: { ...strategy.risk, ...(workflow.risk ?? {}) } }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
+        const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
       }} />}
 
       {strategy?.workflow && phase === "done" && !dirty && <WorkflowLab key={JSON.stringify(strategy)} strategy={strategy} />}
