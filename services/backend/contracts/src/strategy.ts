@@ -1,6 +1,7 @@
 // Strategy schema v1 — the ONLY thing the LLM may output and the ONLY thing the rule engine executes.
 // Modeled on the mechanics of weft.fi's public schema (signals/triggers/actions/risk); our own design.
 import { z } from "zod";
+import { Workflow } from "./workflow";
 import { Decimal, SCHEMA_VERSION, Venue } from "./common";
 
 const LocalId = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/); // e.g. "nvda_px", "t1"
@@ -100,11 +101,16 @@ export const Strategy = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   name: z.string().min(1).max(80),
   thesis: z.string().max(2000), // original natural-language text, display only, never executed
-  signals: z.array(Signal).min(1).max(24),
-  triggers: z.array(Trigger).min(1).max(24),
-  actions: z.array(Action).min(1).max(32),
+  signals: z.array(Signal).max(24),
+  triggers: z.array(Trigger).max(24),
+  actions: z.array(Action).max(32),
   risk: Risk,
-}).strict();
+  workflow: Workflow.optional(),
+}).strict().superRefine((s, ctx) => {
+  if (!s.workflow) for (const key of ["signals", "triggers", "actions"] as const) {
+    if (!s[key].length) ctx.addIssue({ code: "too_small", origin: "array", minimum: 1, inclusive: true, path: [key] });
+  }
+});
 export type Strategy = z.infer<typeof Strategy>;
 
 /** Semantic validation output (refs resolve, venues allowed, geo, caps). Produced by POST /strategies/validate. */

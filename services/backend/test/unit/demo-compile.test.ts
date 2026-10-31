@@ -62,19 +62,19 @@ describe("M3.1 demo compiler (deterministic, no AI)", () => {
 describe("M3.1 LLM path never hangs", () => {
   const budget = { spentToday: () => 0, add: () => {}, capUsd: 5 };
   const thesis = "Buy BTC when it falls 5% in a day";
-  it("times out per call and falls back to demo", async () => {
+  it("times out per call without inventing a fallback", async () => {
     const hang = (o: { signal?: AbortSignal }) => new Promise<never>((_, rej) => o.signal!.addEventListener("abort", () => rej(o.signal!.reason)));
     const t0 = Date.now(); const ev = await collect(compile({ thesis }, { registry, stockTokensAllowed: true, openrouter: { apiKey: "test", model: "x", budget, callTimeoutMs: 100, totalBudgetMs: 400, call: hang as any } }));
-    expect(Date.now() - t0).toBeLessThan(1500); const r = ev.at(-1); expect(r.type).toBe("result"); expect(r.compiler).toBe("demo"); expect(r.notice).toMatch(/timed out/);
+    expect(Date.now() - t0).toBeLessThan(1500); const r = ev.at(-1); expect(r).toMatchObject({ type: "error", code: "ai_draft_unavailable" });
   });
-  it("network error → demo fallback", async () => {
+  it("network error → explicit failure", async () => {
     const ev = await collect(compile({ thesis }, { registry, stockTokensAllowed: true, openrouter: { apiKey: "test", model: "x", budget, call: (async () => { throw new TypeError("fetch failed"); }) as any } }));
-    expect(ev.at(-1)).toMatchObject({ type: "result", compiler: "demo" }); expect(ev.at(-1).notice).toMatch(/unavailable/);
+    expect(ev.at(-1)).toMatchObject({ type: "error", code: "ai_draft_unavailable" });
   });
-  it("invalid AI output after repairs → demo fallback", async () => {
+  it("invalid AI output after repairs → explicit failure", async () => {
     let n = 0; const bad = async () => { n++; return { json: { nope: true }, inputTokens: 1, outputTokens: 1, costUsd: 0 }; };
     const ev = await collect(compile({ thesis }, { registry, stockTokensAllowed: true, openrouter: { apiKey: "test", model: "x", budget, call: bad as any } }));
-    expect(n).toBe(3); expect(ev.at(-1)).toMatchObject({ type: "result", compiler: "demo" });
+    expect(n).toBe(3); expect(ev.at(-1)).toMatchObject({ type: "error", code: "ai_draft_unavailable" });
   });
   it("valid AI output → compiler ai", async () => {
     const good = async () => ({ json: demoCompile(thesis, registry).ok ? (demoCompile(thesis, registry) as any).strategy : null, inputTokens: 1, outputTokens: 1, costUsd: 0.001 });

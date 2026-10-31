@@ -14,7 +14,7 @@ export function SayIt() {
           <H2 className="mt-5 max-w-[14ch]">Write one sentence. Get a <Em>strategy</Em>.</H2>
           <Lead className="mt-6">You describe the setup. Quiver finds the markets, picks the price feeds and lays the rules out as a graph you can read in five seconds.</Lead>
           <ol className="mt-10 space-y-px overflow-hidden rounded-[14px] border border-line">
-            {[["Say it", "Plain English, or paste a chart you marked up."], ["Check it", "Every rule is shown as a node. Review the rules, then revise your description."], ["Practice it", "Paper-trade on live prices. Go live only when you choose."]].map(([t, d], i) => (
+            {[["Say it", "Describe your rules, or sign in to use the configured chart AI."], ["Check it", "Every rule is shown as a node. Review the rules, then revise your description."], ["Practice it", "Test your draft on labelled synthetic prices. Continuous paper runs are pending activation."]].map(([t, d], i) => (
               <li key={t} className="flex gap-5 bg-bg-2 px-5 py-4">
                 <span className="tnum pt-0.5 font-mono text-[12px] text-accent">0{i + 1}</span>
                 <div><div className="text-[15px] font-medium">{t}</div><div className="mt-0.5 text-[13.5px] text-muted">{d}</div></div>

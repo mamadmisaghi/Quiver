@@ -10,20 +10,22 @@ import { demoCompile } from "./demo";
 import { callOpenRouter, systemPrompt } from "./openrouter";
 
 /** reserve()/settle() (M4.9.1): reserve an estimate before a call (null = would exceed the cap), settle with the real cost. */
-export interface LlmBudget { spentToday(): number; add(usd: number): void; capUsd: number; reserve?(): number | null; settle?(est: number, actual: number): void; checkpoint?(): Promise<void>; /** M4.9.2: why the last reserve() said no */ refusal?(): "cap" | "busy" | null; maxOutputTokens?: number }
+export interface LlmBudget { spentToday(): number; add(usd: number): void; capUsd: number; reserve?(): number | null | Promise<number | null>; settle?(est: number, actual: number): void | Promise<void>; checkpoint?(): Promise<void>; /** M4.9.2: why the last reserve() said no */ refusal?(): "cap" | "busy" | null; maxOutputTokens?: number }
 /** Runs one budgeted call: refuses (returns null) when the reservation doesn't fit; always settles. */
 export async function budgeted<T extends { costUsd: number }>(b: LlmBudget, fn: () => Promise<T>): Promise<T | null> {
   if (!b.reserve) { if (b.spentToday() >= b.capUsd) return null; const r = await fn(); b.add(r.costUsd); return r; }
-  const est = b.reserve(); if (est == null) return null;
+  const est = await b.reserve(); if (est == null) return null;
   let cost = 0;
   try {
     await b.checkpoint?.(); // Record the reservation before a paid provider request.
     cost = est; // A timeout can still be billed; retain the reservation if the cost is unknown.
-    const r = await fn(); cost = Number.isFinite(r.costUsd) && r.costUsd >= 0 ? r.costUsd : est; return r;
-  } finally { b.settle!(est, cost); await b.checkpoint?.(); }
+    const r = await fn(); cost = Number.isFinite(r.costUsd) && r.costUsd >= 0 ? r.costUsd : est; return { ...r, costUsd: cost };
+  } finally { await b.settle!(est, cost); await b.checkpoint?.(); }
 }
 export interface CompileDeps {
   registry: Registry; stockTokensAllowed: boolean;
+  plannerRepair?: { previous: unknown; problems: string[] };
+  retainWorkflow?: boolean; // Preview lab keeps verified market identities and plan controls.
   openrouter?: { apiKey: string; model: string; budget: LlmBudget; callTimeoutMs?: number; totalBudgetMs?: number; call?: typeof callOpenRouter };
   delayMs?: number; // demo pacing for the UI; default 0 (the no-key path must answer in <200ms)
 }
@@ -63,6 +65,7 @@ export async function* compile(req: { thesis: string; baseStrategy?: Strategy; i
     if (fallbackWhy) { strategy = null; issues = []; }
   }
   if (fallbackWhy) {
+    if (d.openrouter) { yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not produce a verified strategy. Retry; no substitute rules were generated." }; return; }
     compiler = "demo";
     notice = fallbackWhy === "no_key" ? DEMO_NOTICE : `${fallbackWhy === "timeout" ? "The AI compiler timed out" : fallbackWhy === "busy" ? "The AI compiler is busy" : fallbackWhy === "invalid" ? "The AI compiler couldn't produce valid rules" : "The AI compiler is unavailable"}, so this is a ${DEMO_NOTICE[0].toLowerCase()}${DEMO_NOTICE.slice(1)}`;
     yield prog("resolving_markets"); await wait();
@@ -80,6 +83,9 @@ export async function* compile(req: { thesis: string; baseStrategy?: Strategy; i
     }
   }
   if (!strategy) { yield { type: "error", code: "compile_failed", message: "Couldn't turn that into valid rules. Try rephrasing with a market, a condition and an amount." }; return; }
+  // Unused declarations are not executable conditions and must not appear as disconnected nodes.
+  const refs = JSON.stringify(strategy.triggers);
+  strategy.signals = strategy.signals.filter((s) => refs.includes(`\"${s.id}.`));
   yield prog("checking_risk"); await wait();
   const h = humanize(strategy, d.registry);
   for (const node of strategyNodes(strategy, d.registry, h)) yield { type: "partial", node };

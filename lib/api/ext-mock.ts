@@ -1,4 +1,4 @@
-import { savePreviewDraft } from "./preview-drafts";
+import { persistPreviewDraft } from "./preview-workspace";
 // MOCK adapter for contract v1.1 extensions, backed by Sage's ext.* fixtures (parsed, so drift fails loudly).
 import * as C from "@/lib/contracts";
 import equity from "./fixtures/ext/ext.run-equity.json";
@@ -32,7 +32,7 @@ export const mockExt = (run: (id: string) => Promise<Run>): QuiverApiExt => ({
   async forkPublicStrategy(id) {
     const d = C.PublicStrategyDetail.parse([pub1, pub2, pub3].find((x) => x.id === id) ?? (() => { throw new ApiErr("not_found", "Strategy not found.", 404); })());
     // Preview forks persist as local drafts; no run is started.
-    return savePreviewDraft(d.strategy, d.id);
+    return persistPreviewDraft(d.strategy, d.id);
   },
   async traders(window = "30d") { return C.LeaderboardRes.parse({ ...traders, window }); },
   async rewards() { return C.RewardsRes.parse(rewards); },

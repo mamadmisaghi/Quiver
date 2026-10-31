@@ -74,7 +74,7 @@ export const CompileEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("partial"), node: z.object({ id: z.string(), kind: z.enum(["watch", "when", "do", "exit"]), title: z.string(), detail: z.string(), venue: Venue.optional() }) }),
   z.object({ type: z.literal("result"), compileId: z.string(), strategy: Strategy, humanized: Humanized, issues: z.array(ValidationIssue), usage: z.object({ attempts: z.number().int(), inputTokens: z.number().int(), outputTokens: z.number().int(), costUsd: Decimal }),
     /** "demo" = deterministic keyword compiler (no AI key, or AI failed/timed out); show a "Demo compile" label with `notice`. */
-    compiler: z.enum(["ai", "demo"]).default("ai"), notice: z.string().nullable().default(null) }),
+    compiler: z.enum(["ai", "demo", "rules"]).default("ai"), notice: z.string().nullable().default(null) }),
   /** code: unsupported_prompt (demo compiler couldn't map the idea; show `suggestions` as clickable examples) | compile_failed | compile_cost_cap | ... */
   z.object({ type: z.literal("error"), code: z.string(), message: z.string(), suggestions: z.array(z.string()).optional() }),
 ]);

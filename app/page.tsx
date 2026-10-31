@@ -22,7 +22,7 @@ export default function Home() {
           <div className="mx-auto max-w-[1200px] px-5 pb-20 pt-24 sm:px-8 sm:pb-28 sm:pt-28">
             <div className="max-w-[760px]">
               <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-line-2 bg-card/60 px-3 py-1 font-mono text-[12px] uppercase tracking-[.14em] text-ink-2 backdrop-blur">
-                <span data-motion="pulse-dot" className="relative h-1.5 w-1.5 rounded-full bg-accent" /> Paper trading live on Robinhood Chain
+                <span data-motion="pulse-dot" className="relative h-1.5 w-1.5 rounded-full bg-accent" /> Strategy builder · paper preview
               </p>
               <h1
                 className="text-balance text-[clamp(2.75rem,7vw,5.6rem)] font-medium leading-[.98] tracking-[-0.045em]">

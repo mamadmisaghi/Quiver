@@ -29,6 +29,9 @@ const Link = forwardRef<HTMLAnchorElement, Props>(function Link(
 
     const target = new URL(anchor.href);
     if (target.origin !== window.location.origin) return;
+    // Builder state and the selected draft are initialized on mount. A native
+    // navigation also refreshes versioned lab assets after a new deployment.
+    if (target.pathname === "/app/new") return;
     if (target.pathname === window.location.pathname && target.search === window.location.search && target.hash) return;
 
     event.preventDefault();

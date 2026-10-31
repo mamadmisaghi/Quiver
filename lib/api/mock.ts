@@ -1,6 +1,6 @@
-import { previewCompile } from "./preview-compile";
+import { previewCompile, previewCompileImage } from "./preview-compile";
 import { previewBacktest } from "./preview-backtest";
-import { previewDrafts, savePreviewDraft } from "./preview-drafts";
+import { listPreviewDrafts, persistPreviewDraft, updatePreviewDraft } from "./preview-workspace";
 import { mockDetail, mockHistory } from "./market-mock";
 // MOCK adapter: implements QuiverApi from contract fixtures. Swap for live.ts via NEXT_PUBLIC_API_MODE=live.
 import * as C from "@/lib/contracts";
@@ -130,19 +130,24 @@ export const mockApi: QuiverApi = {
     return parse(C.Page(C.Market), { items, nextCursor: null });
   },
   async strategies(q = {}) {
-    return parse(C.ListStrategiesRes, { items: [...previewDrafts(), ...F.STRATEGIES].filter((s) => !q.status || s.status === q.status), nextCursor: null });
+    return parse(C.ListStrategiesRes, { items: [...await listPreviewDrafts(), ...F.STRATEGIES].filter((s) => !q.status || s.status === q.status), nextCursor: null });
   },
-  async strategy(id) { return previewDrafts().find((s) => s.id === id) ?? record(id); },
-  async compileImage() { throw new ApiErr("not_available", "Chart reading needs the AI service. Describe the rules in text for now.", 503); },
+  async strategy(id) { const draft = (await listPreviewDrafts()).find((s) => s.id === id); if (draft) return draft; if (F.STRATEGIES.some((s) => s.id === id)) return record(id); throw new ApiErr("not_found", "That draft was not found. Import its backup or sign in to its workspace.", 404); },
+  compileImage: previewCompileImage,
   compile: previewCompile,
   async runs(q = {}) { return parse(C.Page(C.Run), { items: [...runState.values()].filter((r) => !q.strategyId || r.strategyId === q.strategyId), nextCursor: null }); },
   async run(id) { const r = runState.get(id); if (!r) throw new ApiErr("not_found", "Run not found", 404); return r; },
-  async createStrategy(strategy) { return savePreviewDraft(strategy); },
+  async createStrategy(strategy) { return persistPreviewDraft(strategy); },
+  async updateStrategy(id, strategy, expectedVersion) {
+    const current = await mockApi.strategy(id);
+    if (current.activeRunId) throw new ApiErr("conflict", "Stop the active run before changing its saved limits.", 409);
+    return updatePreviewDraft(current, strategy, expectedVersion);
+  },
   backtest: previewBacktest,
   async backtestStatus() { throw new ApiErr("not_found", "Preview tests complete immediately and are not saved on a server.", 404); },
   async startRun(req) {
     const r = parse(C.StartRunReq, req);
-    if (previewDrafts().some((s) => s.id === r.strategyId)) throw new ApiErr("mode_not_enabled", "Your draft is saved in this browser. Connect the paper engine before running custom strategies.", 403);
+    if (!F.STRATEGIES.some((s) => s.id === r.strategyId)) throw new ApiErr("mode_not_enabled", "Your draft is saved. Connect the continuous paper engine before starting a custom run.", 403);
     if (r.mode !== "paper") throw new ApiErr("mode_not_enabled", "Coming after paper beta", 403);
     const existing = [...runState.values()].find((x) => x.strategyId === r.strategyId && x.status !== "stopped");
     if (existing) return existing;

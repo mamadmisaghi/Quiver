@@ -35,7 +35,7 @@ export interface QuiverApi extends QuiverApiExt, QuiverMarketApi, QuiverAuthApi,
   me(): Promise<Me>;
   venues(): Promise<VenueInfo[]>;
   markets(q?: MarketsQuery): Promise<Page<Market>>;
-  strategies(q?: { status?: StrategySummary["status"] }): Promise<Page<StrategySummary>>;
+  strategies(q?: { status?: StrategySummary["status"]; limit?: number; cursor?: string }): Promise<Page<StrategySummary>>;
   strategy(id: string): Promise<StrategyRecord>;
   /** POST /v1/compile — NDJSON stream of CompileEvent. */
   compile(req: CompileReq, onEvent: (e: C.CompileEvent) => void, signal?: AbortSignal): Promise<void>;
@@ -45,6 +45,7 @@ export interface QuiverApi extends QuiverApiExt, QuiverMarketApi, QuiverAuthApi,
   run(id: string): Promise<Run>;
   /** POST /v1/strategies {strategy} (idempotent). */
   createStrategy(strategy: C.Strategy): Promise<StrategyRecord>;
+  updateStrategy(id: string, strategy: C.Strategy, expectedVersion: number): Promise<StrategyRecord>;
   startRun(req: StartRunReq): Promise<Run>;
   control(id: string, action: RunControl): Promise<Run>;
   /** GET /v1/runs/:id/events/stream via a stream ticket. */
