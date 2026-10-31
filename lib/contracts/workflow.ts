@@ -56,6 +56,21 @@ export function expressionRefs(e: PlanExpr | null, out = new Set<string>()): Set
   return out;
 }
 
+/** Accept a provider's declared-id shorthand; canonical storage still requires id.field. */
+export function prepareWorkflowInput(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const copy = structuredClone(raw) as Record<string, any>;
+  if (!Array.isArray(copy.assets) || !Array.isArray(copy.signals) || !Array.isArray(copy.stages)) return copy;
+  const ids = new Set([...copy.assets, ...copy.signals].map((x) => x?.id));
+  if (copy.assets.length === 1) for (const sig of copy.signals) if (sig && sig.assetId == null && ["price", "drawdown", "indicator", "funding", "odds", "position"].includes(sig.kind)) sig.assetId = copy.assets[0]?.id;
+  let remaining = 1000;
+  const walk = (e: any) => {
+    if (!e || typeof e !== "object" || --remaining < 0) return;
+    if (Array.isArray(e.args)) e.args.forEach(walk); else if (e.arg) walk(e.arg);
+    else for (const operand of [e.left, e.right]) if (operand && typeof operand.ref === "string" && ids.has(operand.ref) && /^[a-z][a-z0-9_]{0,31}$/.test(operand.ref)) operand.ref += ".value";
+  };
+  copy.stages.forEach((s) => walk(s?.when)); return copy;
+}
 /** Normalize unambiguous provider field aliases before semantic validation. */
 export function canonicalizeWorkflow(w: Workflow): Workflow {
   const copy = structuredClone(w);

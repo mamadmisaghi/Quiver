@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { drawdownDraft } from "../../src/compile/drawdown";
-import { Workflow, canonicalizeWorkflow, workflowProblems } from "../../contracts/src/workflow";
+import { Workflow, WorkflowInput, prepareWorkflowInput, canonicalizeWorkflow, workflowProblems } from "../../contracts/src/workflow";
 import { recurringDraft } from "../../src/compile/recurring";
 import { Risk } from "../../contracts/src/strategy";
 import { createPaper, stepPaper, paperEquity, paperProblems, type PaperQuote } from "../../src/workflows/paper";
@@ -17,6 +17,7 @@ describe("percentage dip intent", () => {
   });
   it("normalizes an equivalent drawdown field and rejects invented fields", () => { const w = drop(); w.stages[0].when = { op: "gte", left: { ref: "drop.drawdown" }, right: { lit: 30 } }; expect(workflowProblems(w).join(" ")).toContain("Unknown field"); expect(workflowProblems(canonicalizeWorkflow(w))).toEqual([]); const bad = structuredClone(w); bad.stages[0].when = { op: "gt", left: { ref: "drop.invented" }, right: { lit: 30 } }; expect(workflowProblems(canonicalizeWorkflow(bad)).join(" ")).toContain("Unknown field"); });
   it("resolves an asset reference only when its signal is unambiguous", () => { const w = drop(); w.stages[0].when = { op: "gte", left: { ref: "asset.value" }, right: { lit: 30 } }; expect(canonicalizeWorkflow(w).stages[0].when).toMatchObject({ left: { ref: "drop.value" } }); w.signals.push({ ...w.signals[0], id: "other" }); expect(workflowProblems(canonicalizeWorkflow(w)).join(" ")).toContain("Unknown signal"); });
+  it("accepts declared-id shorthand before schema parsing without accepting arbitrary references", () => { const raw = structuredClone(drop()) as any; raw.stages[0].when.left.ref = "asset"; raw.signals[0].assetId = null; const parsed = WorkflowInput.parse(prepareWorkflowInput(raw)); expect(canonicalizeWorkflow(parsed).stages[0].when).toMatchObject({ left: { ref: "drop.value" } }); raw.stages[0].when.left.ref = "arbitrary"; expect(WorkflowInput.safeParse(prepareWorkflowInput(raw)).success).toBe(false); });
   it("does not ignore suffixes or a different purchased asset", () => { expect(drawdownDraft("Buy NEET whenever it drops 30% then buy NVDA")).toBeNull(); expect(drawdownDraft("every time NEET drops 30% buy $100 of NVDA")).toBeNull(); });
   it("requires reference, amount and budget before running", () => { const w = Workflow.parse(drawdownDraft("Buy NEET whenever it drops 30%")); expect(paperProblems(w).join(" ")).toMatch(/reference/); expect(() => createPaper(w)).toThrow(); });
 });
