@@ -29,12 +29,24 @@ export async function readPreviewBody(request: Request, max: number): Promise<un
 export function previewAiEnabled() {
   return process.env.QUIVER_PREVIEW_AI_ENABLED === "true" && !!process.env.OPENROUTER_API_KEY;
 }
+export const previewPublicAiEnabled = () => previewAiEnabled() && process.env.QUIVER_PREVIEW_PUBLIC_AI === "true";
+// Anonymous callers get only compiler access. This key never authorizes records or connected accounts.
+export async function anonymousBudgetKey(request: Request) {
+  const day = new Date().toISOString().slice(0, 10);
+  const input = `${day}:${request.headers.get("cf-connecting-ip") ?? "shared-preview"}`;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(process.env.OPENROUTER_API_KEY!), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const hash = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(input));
+  return "anon:" + Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
 const number = (value: string | undefined, fallback: number, min: number, max: number) => {
   const n = Number(value); return value && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 export async function previewAi(request: Request, vision = false): Promise<CompileDeps["openrouter"]> {
-  const owner = previewOwner(request); if (!owner || !previewAiEnabled()) return undefined;
+  if (!previewAiEnabled()) return undefined;
+  const authenticated = previewOwner(request);
+  if (!authenticated && !previewPublicAiEnabled()) return undefined;
+  const owner = authenticated ?? await anonymousBudgetKey(request);
   const db = await previewDatabase();
   return { apiKey: process.env.OPENROUTER_API_KEY!, model: (vision ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL) || "openai/gpt-4.1-mini",
-    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 4000, 256, 4000) }) };
+    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 4000, 256, 6000), maxOwnerCalls: authenticated ? 60 : 30, publicCapUsd: 1 }) };
 }

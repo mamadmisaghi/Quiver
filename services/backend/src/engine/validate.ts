@@ -20,7 +20,7 @@ export function validateStrategy(raw: unknown, ctx: ValidateCtx): { strategy: St
   if (s.workflow) {
     workflowProblems(s.workflow).forEach((message) => err("/workflow", "schema", message));
     if (s.signals.length || s.triggers.length || s.actions.length) err("/workflow", "schema", "A workflow draft cannot also contain a different executable strategy.");
-    err("/workflow", "schema", "Workflow draft saved for review. Its market connections and continuous execution are not activated.", ctx.purpose === "draft" ? "warning" : "error");
+    err("/workflow", "schema", "Workflow draft: review the remaining details, then test it in the workflow lab. Continuous execution is pending activation.", ctx.purpose === "draft" ? "warning" : "error");
     return { strategy: s, issues };
   }
   if (!s.signals.length || !s.triggers.length) err("/triggers", "strategy_needs_rule", "A strategy needs at least one signal and rule.");

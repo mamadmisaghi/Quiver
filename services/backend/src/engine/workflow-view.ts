@@ -25,12 +25,12 @@ export function workflowView(w: Workflow) {
   for (const sg of w.signals) {
     const label = sg.description || `${sg.assetId ? name(sg.assetId) : ""} ${sg.kind}`;
     watch.push(label);
-    nodes.push({ id: `wf_sig_${sg.id}`, kind: "watch", title: label, detail: `${label}${sg.indicator ? `\n${sg.indicator.name.toUpperCase()} · ${sg.indicator.period} periods · ${sg.indicator.timeframe}` : ""}${sg.schedule ? `\n${sg.schedule.cron} · ${sg.schedule.tz}` : ""}`, ...(sg.assetId && assetVenue(sg.assetId) ? { venue: assetVenue(sg.assetId) } : {}) });
+    nodes.push({ id: `wf_sig_${sg.id}`, kind: "watch", title: label, detail: `${label}${sg.indicator ? `\n${sg.indicator.name.toUpperCase()} · ${sg.indicator.period} periods · ${sg.indicator.timeframe}` : ""}${sg.drawdown ? `\nDrop reference: ${sg.drawdown.reference.replaceAll("_", " ")}${sg.drawdown.reference === "lookback" && sg.drawdown.lookbackMinutes ? ` over ${sg.drawdown.lookbackMinutes} minutes` : ""}; one fill per new decline, never repeat on an unchanged quote.` : ""}${sg.schedule ? `\n${sg.schedule.cron} · ${sg.schedule.tz}` : ""}`, ...(sg.assetId && assetVenue(sg.assetId) ? { venue: assetVenue(sg.assetId) } : {}) });
   }
   for (const s of w.stages) {
     const gate = `wf_when_${s.id}`, action = `wf_do_${s.id}`, finish = `wf_exit_${s.id}`;
     const dependencies = s.after.map((d) => `${d.stageId}: ${{ filled: "order filled", closed: "position closed", realized_profit: "position closed with available realized profit", resolved_profit: "market settled with available realized profit" }[d.event]}`);
-    const timing = s.repeat ? `Repeat every ${s.repeat.intervalMinutes ?? "unspecified"} min; ${s.repeat.maxTimes ? `up to ${s.repeat.maxTimes} times` : "until the allocated budget cannot cover the next order and fees"}. ${s.repeat.conditionMode === "each_time" ? "Recheck the condition before every order." : s.repeat.conditionMode === "once_then_repeat" ? "Initial condition starts the repeating purchases." : "Choose whether to recheck the condition every time."}` : "Run once.";
+    const timing = s.repeat ? `${s.repeat.intervalMinutes ? `Repeat every ${s.repeat.intervalMinutes} min` : "Repeat on each new condition event"}; ${s.repeat.maxTimes ? `up to ${s.repeat.maxTimes} times` : "until the allocated budget cannot cover the next order and fees"}. ${s.repeat.conditionMode === "each_time" ? "Recheck the condition before every order." : s.repeat.conditionMode === "once_then_repeat" ? "Initial condition starts the repeating purchases." : "Choose whether to recheck the condition every time."}` : "Run once.";
     const cond = [s.when ? conditionText(w, s.when) : s.conditionText || "When started", ...dependencies, timing].filter(Boolean).join("\n");
     when.push(cond);
     nodes.push({ id: gate, kind: "when", title: s.after.length ? "After previous stage" : "When", detail: cond });

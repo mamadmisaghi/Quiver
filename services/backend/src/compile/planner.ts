@@ -10,11 +10,13 @@ import { strategyNodes } from "../engine/nodes";
 import { hasErrors, validateStrategy } from "../engine/validate";
 import { newId } from "../lib/ids";
 import { localRefine } from "./refine";
+import { drawdownDraft } from "./drawdown";
 import { recurringDraft } from "./recurring";
 
 export const PLANNER_PROMPT = `You translate the user's trading intent into a precise reviewable Workflow JSON, not a template or investment recommendation. Return only schema-matching JSON.
 Read English and Persian, including misspellings. Preserve every asset, amount, threshold, venue, side, leverage, condition, repeat, exit and funding dependency. Never substitute a familiar asset. Nvidia=NVIDIA=NVDA, Bitcoin=BTC, NEET is a Solana token query (never NVDA), Pump.fun=PUMP. Unknown assets remain exact queries. Never invent contracts, market ids, budgets, event deadlines or order amounts.
 assets: one entry per distinct instrument/venue/outcome. sourceText is ONLY the exact asset name/ticker/event phrase quoted from the user's text (no paraphrase). query can normalize an alias; for events use a concise search phrase preserving the event. Polymarket is both a signal source and a BUY/SELL outcome action destination. Preserve YES vs NO; null if unspecified. Do not replace one event with Fed cuts. Missing venue/kind/outcome may be null. Equity shares and tokenized shares are not interchangeable: preserve specified venue and otherwise leave venue null.
+For a percentage price DROP, use kind drawdown with drawdown:{reference:"peak"|"last_fill"|"lookback"|"needs_choice",lookbackMinutes:null or number}. Its value is positive percentage points of price decline, never an absolute price. If no reference/time window was stated, reference needs_choice. Repeated drops use repeat:{intervalMinutes:null,maxTimes:null,conditionMode:"each_time"}, one purchase per new drop event, not continuous orders while a condition stays true.
 signals: only signals actually referenced in a stage's when expression. price/indicator/funding/odds/position need assetId; timer uses schedule; custom describes an unsupported condition faithfully. refs are signalId.value, or position qty/pnl_pct/value_usd. Odds use 0..1, other percentages use percentage points. RSI period default 14, timeframe 1h if missing; document that assumption in assumptions, not questions. SMA 20-day means period20,timeframe1d. Include BOTH price and moving-average signal for a comparison. and/or must preserve all requested conditions.
 stages: one per requested action. sourceText is an exact contiguous excerpt of the user's action clause, containing its amount if stated. conditionText preserves the condition's meaning. when=null only for immediate actions or conditions represented by after. Unknown conditions use custom signals, never invent a true condition. after lists stage dependencies: filled, closed, realized_profit (after a profitable close), resolved_profit (after a prediction market settles profitably). An unrealized gain is not spendable profit. Independent actions stay parallel, not arbitrarily ordered.
 amount: usd for dollar budgets/margin, pct_equity for % equity, native for units, pct_position for partial closes, pct_profits for a share of the named realized profit pool. If no amount was stated use value:null and ask. funding: profits must name its stage sources and have realized_profit/resolved_profit dependencies. Budget is a dedicated strategy allocation; budgetUsd=null if not given, never use the whole account implicitly. Reusing profits must not spend the principal.
@@ -67,7 +69,7 @@ export function lowerWorkflow(w: Workflow, thesis: string, d: CompileDeps, risk 
   for (const s of w.signals) {
     const instrument = s.assetId ? ids.get(s.assetId) : undefined;
     const b = { id: s.id, maxAgeSeconds: 120 };
-    if (s.kind === "custom") return draft;
+    if (s.kind === "custom" || s.kind === "drawdown") return draft;
     if (s.kind === "timer") { if (!s.schedule) return draft; signals.push({ ...b, kind: "timer", params: s.schedule }); }
     else {
       if (!instrument) return draft;
@@ -109,7 +111,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     if (!d.openrouter) { yield { type: "error", code: "ai_required", message: "Sign in for this refinement. Your current strategy has not been changed." }; return; }
   }
   if (!req.baseStrategy && isEditRequest(req.thesis)) { yield { type: "error", code: "needs_strategy", message: "Open the strategy you want to edit, then use Refine this draft. No unrelated strategy was created." }; return; }
-  const recurring = !req.baseStrategy && !req.image ? recurringDraft(req.thesis) : null;
+  const recurring = !req.baseStrategy && !req.image ? drawdownDraft(req.thesis) ?? recurringDraft(req.thesis) : null;
   if (recurring) {
     yield { type: "progress", step: "resolving_markets", label: "Looking up the requested token", attempt: 1 };
     const workflow = await resolveWorkflow(recurring), strategy = lowerWorkflow(workflow, req.thesis, d);
@@ -139,7 +141,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
       problems = req.image ? workflowProblems(workflow) : intentProblems(workflow, req.instruction ?? req.note ?? req.thesis, req.baseStrategy);
       if (req.image) workflow.assumptions.push("Levels and asset names were read from the attached chart. Review them before saving.");
       if (!problems.length) break; workflow = null;
-    } catch { yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not finish a verified draft. Please retry; no substitute strategy was generated." }; return; }
+    } catch (error) { console.warn("ai_compile_unavailable", { reason: error instanceof Error ? error.message.slice(0, 100) : "unknown" }); yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not finish a verified draft. Please retry; no substitute strategy was generated." }; return; }
   }
   if (!workflow || problems.length) { yield { type: "error", code: "intent_not_verified", message: "The draft did not faithfully match your request. Try separating the steps or clarifying the highlighted detail. " + (problems[0] ?? "Please retry.") }; return; }
   // A second, independent pass checks meaning, not merely JSON validity. It cannot change the plan.

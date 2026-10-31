@@ -3,6 +3,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { anonymousBudgetKey } from "../lib/preview/server";
 import { createPreviewBudget } from "../lib/preview/budget";
 import { readOnlineDrafts, writeOnlineDraft, removeOnlineDraft, replaceOnlineDraft } from "../lib/preview/storage";
 import { previewRecord } from "../lib/preview/records";
@@ -77,6 +78,17 @@ try {
   assert.equal(sqlite.prepare("SELECT cost_micros FROM preview_ai_reservations WHERE owner_id = 'ai-unknown'").get()!.cost_micros, 100000); checks++;
   const broken = createPreviewBudget({ prepare: () => { throw new Error("database unavailable"); } } as unknown as D1Database, "ai", options);
   await assert.rejects(() => budgeted(broken, async () => { providerCalls++; return { costUsd: 0.001 }; })); assert.equal(providerCalls, 0); checks++;
+
+  const publicOpts = { capUsd: 5, publicCapUsd: .3, maxOwnerCalls: 2, maxInflight: 3, maxOutputTokens: 4000, now: () => now + 3 * 86_400_000 };
+  for (let i = 0; i < 2; i++) { const b = createPreviewBudget(db, "anon:first", publicOpts); assert.equal(await b.reserve!(), .1); await b.settle!(.1, .01); }
+  assert.equal(await createPreviewBudget(db, "anon:first", publicOpts).reserve!(), null); checks++;
+  const manyPublic = Array.from({length: 10}, (_, i) => createPreviewBudget(db, `anon:other${i}`, publicOpts));
+  const accepted = await Promise.all(manyPublic.map((b) => b.reserve!())); assert.equal(accepted.filter((v) => v !== null).length, 2); checks++;
+  const oldKey = process.env.OPENROUTER_API_KEY; process.env.OPENROUTER_API_KEY = "unit-test-placeholder";
+  const anonRequest = new Request("https://quiver.example", { headers: { "cf-connecting-ip": "192.0.2.1" } });
+  const key1 = await anonymousBudgetKey(anonRequest), key2 = await anonymousBudgetKey(anonRequest);
+  assert.equal(key1, key2); assert(!key1.includes("192.0.2.1"));
+  if (oldKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = oldKey; checks++;
 
   const backup = draftBackup([a]); const parsed = parseDraftBackup(JSON.stringify(backup));
   assert.equal(draftFingerprint(parsed[0].strategy), draftFingerprint(a.strategy));

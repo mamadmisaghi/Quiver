@@ -11,6 +11,7 @@ import { HUMANIZED } from "@/lib/api/fixtures";
 import { API_MODE, api, ApiErr, reasonOf, errCopy, errOf, strategyEdges, demoNodes, DEMO_LABEL, type GNode, type Humanized, type Strategy, type ValidationIssue } from "@/lib/api";
 import { onSession } from "@/lib/api/session";
 // QA P2 LCP: the backtest panel only renders after a draft, so keep it out of the initial chunk
+const WorkflowLab = dynamic(() => import("./WorkflowLab"), { ssr: false });
 const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
 import SignInButton from "./SignInButton";
 import { SAMPLE_PROMPT, SUGGESTIONS } from "@/lib/copy";
@@ -225,8 +226,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       </section>
 
       {strategy?.workflow && phase !== "drafting" && <WorkflowReview workflow={strategy.workflow} onChange={(workflow) => {
-        const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
+        const view = workflowView(workflow); setStrategy({ ...strategy, workflow, risk: { ...strategy.risk, ...(workflow.risk ?? {}) } }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
       }} />}
+
+      {strategy?.workflow && phase === "done" && !dirty && <WorkflowLab key={JSON.stringify(strategy)} strategy={strategy} />}
 
       {/* 3 — Readable rules */}
       <section className={`mt-6 grid gap-px overflow-hidden rounded-[14px] border border-line bg-line md:grid-cols-4`} data-motion="rules">
@@ -261,7 +264,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
             <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
-            <button type="button" onClick={paperTrade} title={API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={!!strategy?.workflow || API_MODE === "mock" || dirty || phase !== "done" || starting || issues.some((i) => i.severity === "error")} className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-40">{strategy?.workflow ? "Workflow execution pending" : API_MODE === "mock" ? "Paper engine not connected" : starting ? "Starting…" : "Paper-trade it →"}</button>
+            <button type="button" onClick={() => strategy?.workflow ? document.getElementById("workflow-lab")?.scrollIntoView({ behavior: "smooth", block: "start" }) : paperTrade()} title={strategy?.workflow ? "Open the workflow test lab" : API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={(!strategy?.workflow && API_MODE === "mock") || dirty || phase !== "done" || starting || issues.some((i) => i.severity === "error")} className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-40">{strategy?.workflow ? "Test workflow →" : API_MODE === "mock" ? "Paper engine not connected" : starting ? "Starting…" : "Paper-trade it →"}</button>
           </div>
         </div>
       </div>

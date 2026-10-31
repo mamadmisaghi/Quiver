@@ -20,7 +20,8 @@ export type MarketCandidate = z.infer<typeof MarketCandidate>;
 export const MarketResolution = z.object({ status: z.enum(["matched", "choose", "unavailable", "not_found"]), candidates: z.array(MarketCandidate).max(8), selectedId: z.string().max(160).nullable(), checkedAt: z.string(), message: z.string().max(500) });
 export const PlanAsset = z.object({ id: Id, query: z.string().min(1).max(200), sourceText: z.string().min(1).max(300), venue: Venue.nullable(), kind: z.enum(["token", "perp", "spot", "outcome"]).nullable(), outcome: z.string().max(80).nullable(), resolution: MarketResolution.optional() });
 export const PlanSignal = z.object({
-  id: Id, assetId: Id.nullable(), kind: z.enum(["price", "indicator", "funding", "odds", "timer", "position", "custom"]),
+  id: Id, assetId: Id.nullable(), kind: z.enum(["price", "drawdown", "indicator", "funding", "odds", "timer", "position", "custom"]),
+  drawdown: z.object({ reference: z.enum(["needs_choice", "peak", "last_fill", "lookback"]), lookbackMinutes: z.number().positive().max(525600).nullable() }).optional(),
   indicator: z.object({ name: z.enum(["sma", "ema", "rsi", "atr", "bb_upper", "bb_lower", "pct_change"]), period: z.number().int().min(2).max(500), timeframe: z.enum(["1m", "5m", "15m", "1h", "4h", "1d"]) }).nullable(),
   schedule: z.object({ cron: z.string().max(64), tz: z.string().max(64) }).nullable(), description: z.string().max(400),
 });
@@ -60,6 +61,10 @@ export function workflowProblems(w: Workflow): string[] {
   for (const list of [w.assets, w.signals, w.stages]) if (new Set(list.map((x) => x.id)).size !== list.length) problems.push("Ids must be unique within each collection.");
   const used = new Set<string>();
   for (const s of w.signals) if (s.assetId && !assets.has(s.assetId)) problems.push(`Unknown asset on ${s.id}.`);
+  for (const s of w.signals) {
+    if (s.kind === "drawdown" && !s.drawdown) problems.push(`Choose a drawdown reference on ${s.id}.`);
+    if (s.drawdown?.reference === "lookback" && !s.drawdown.lookbackMinutes) problems.push(`Set a lookback period on ${s.id}.`);
+  }
   for (const s of w.stages) {
     if (!assets.has(s.assetId)) problems.push(`Unknown asset on ${s.id}.`);
     expressionRefs(s.when).forEach((id) => { used.add(id); if (!sigs.has(id)) problems.push(`Unknown signal ${id}.`); });
@@ -81,6 +86,7 @@ export function workflowProblems(w: Workflow): string[] {
 export function workflowBlockers(w: Workflow): string[] {
   const out = [...w.questions];
   w.assets.forEach((a) => { if (!a.resolution?.selectedId) out.push(a.resolution?.message ?? `Choose the exact market for ${a.query}.`); });
+  w.signals.forEach((s) => { if (s.drawdown?.reference === "needs_choice") out.push(`Choose the price reference for the drop on ${s.id}.`); });
   w.stages.forEach((s) => {
     const a = w.assets.find((a) => a.id === s.assetId), selected = a?.resolution?.candidates.find((c) => c.id === a.resolution?.selectedId);
     if (selected?.maxLeverage && s.leverage > selected.maxLeverage) out.push(`${s.id}: requested ${s.leverage}× exceeds this market's ${selected.maxLeverage}× maximum. Refine the leverage or market.`);
@@ -88,7 +94,6 @@ export function workflowBlockers(w: Workflow): string[] {
     if (s.amount.value === null) out.push(`Set the amount for ${s.id}.`);
     if (s.repeat && !w.budgetUsd && s.funding.kind === "budget") out.push("Set a dedicated strategy budget before repeated purchases.");
     if (s.repeat?.conditionMode === "needs_choice") out.push(`Choose whether ${s.id} checks the condition every time or only to start.`);
-    if (s.after.some((d) => /profit/.test(d.event))) out.push(`Stage ${s.id} waits for realized, available profit; unrealized P&L cannot fund it.`);
   });
   return [...new Set(out)];
 }

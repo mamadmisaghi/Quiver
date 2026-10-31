@@ -1,12 +1,12 @@
 import { StrategyRecord, UpdateStrategyReq } from "@/lib/contracts";
 import type { StrategyRecord as RecordData } from "@/lib/api/types";
 import { previewRecord } from "@/lib/preview/records";
-import { previewAiEnabled, previewDatabase, previewJson, previewOwner, readPreviewBody, sameOrigin } from "@/lib/preview/server";
+import { previewAiEnabled, previewPublicAiEnabled, previewDatabase, previewJson, previewOwner, readPreviewBody, sameOrigin } from "@/lib/preview/server";
 import { readOnlineDrafts, removeOnlineDraft, writeOnlineDraft, replaceOnlineDraft } from "@/lib/preview/storage";
 
 export async function GET(request: Request) {
   const owner = previewOwner(request);
-  if (!owner) return previewJson({ authenticated: false, cloudAvailable: false, aiAvailable: false, aiConfigured: previewAiEnabled(), items: [] });
+  if (!owner) return previewJson({ authenticated: false, cloudAvailable: false, aiAvailable: previewPublicAiEnabled(), aiConfigured: previewAiEnabled(), items: [] });
   try {
     const db = await previewDatabase();
     const items = await readOnlineDrafts(db, owner);

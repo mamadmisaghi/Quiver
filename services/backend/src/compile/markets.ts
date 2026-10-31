@@ -2,14 +2,14 @@ import type { Workflow, MarketCandidate } from "../../contracts/src/workflow";
 import { MOCK_INSTRUMENTS } from "../venues/registry";
 
 type Asset = Workflow["assets"][number];
-const ALIASES: Record<string, string> = { nvidia: "NVDA", "انویدیا": "NVDA", "انودیا": "NVDA", bitcoin: "BTC", "بیت کوین": "BTC", "بیت‌کوین": "BTC", ethereum: "ETH", ether: "ETH", "اتریوم": "ETH", tesla: "TSLA", apple: "AAPL", microsoft: "MSFT", "pump.fun": "PUMP", pumpfun: "PUMP", "pump fun": "PUMP", "پامپ فان": "PUMP", "neet": "NEET" };
+const ALIASES: Record<string, string> = { "نیت": "NEET", "نییت": "NEET", "بیتکوین": "BTC", "سولانا": "SOL", "نویدیا": "NVDA", nvidia: "NVDA", "انویدیا": "NVDA", "انودیا": "NVDA", bitcoin: "BTC", "بیت کوین": "BTC", "بیت‌کوین": "BTC", ethereum: "ETH", ether: "ETH", "اتریوم": "ETH", tesla: "TSLA", apple: "AAPL", microsoft: "MSFT", "pump.fun": "PUMP", pumpfun: "PUMP", "pump fun": "PUMP", "پامپ فان": "PUMP", "neet": "NEET" };
 export const canonicalSymbol = (q: string) => ALIASES[q.trim().toLowerCase()] ?? q.trim().toUpperCase().replace(/^\$/, "");
 type JsonFetch = (url: string, init?: RequestInit) => Promise<unknown>;
 const cache = new Map<string, { at: number; value: unknown }>();
 /** Only fixed public market-data hosts. No account keys, balances, user identity or prompts are sent. */
-export const marketJson: JsonFetch = async (url, init) => {
+export async function marketJson(url: string, init?: RequestInit, ttlMs = 120_000): Promise<unknown> {
   const key = url + (init?.body ?? ""), old = cache.get(key);
-  if (old && Date.now() - old.at < 120_000) return old.value;
+  if (old && Date.now() - old.at < ttlMs) return old.value;
   // Workers support manual/follow only. A manual 3xx fails the res.ok check below;
   // redirects are never followed to an unverified host.
   const res = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(6000) });
@@ -34,7 +34,7 @@ export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Prom
       const out: MarketCandidate[] = [];
       for (const m of markets) {
         if (m.closed || m.archived || m.active === false || !m.id || !m.question) continue;
-        const outcomes = list(m.outcomes); const tokens = list(m.clobTokenIds);
+        const outcomes = list(m.outcomes); const tokens = list(m.version === "v2" ? m.positionIds : m.clobTokenIds);
         outcomes.forEach((o, i) => { if (typeof o !== "string" || !tokens[i]) return; if (a.outcome && o.toLowerCase() !== a.outcome.toLowerCase()) return;
           const id = `pm:outcome:${String(m.id)}:${o.toUpperCase()}`;
           if (out.some((v) => v.id === id)) return;
