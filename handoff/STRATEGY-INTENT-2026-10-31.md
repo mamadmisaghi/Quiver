@@ -16,11 +16,11 @@ This release fixes the reported NEET-to-NVDA substitution, unrelated refinement 
 ## Verification
 
 - Backend: 531 passed, 9 skipped across 83 test files; two network fixture files (m421 and m513) excluded because their required transport is unavailable in this environment.
-- Includes 25 new strategy-intent tests for parsing, grounding, market identity, AI audit failures, dependency graphs, edits, execution guards and partial exits.
+- Includes 26 new strategy-intent tests for parsing, grounding, market identity, AI audit failures, dependency graphs, edits, execution guards and partial exits.
 - Preview integration checks: 21 passed. Site storage checks: 19 passed, including stale-version and insert-only protections.
 - Frontend and backend TypeScript checks passed. Backend bundle built.
 - Browser QA: exact NEET example preserved its asset/price/amount/interval; budget and repeat behavior updated the graph; node details opened; saving worked. Risk max position changed from 25% to 80% inline, advanced the same draft version and survived reload.
-- Local preview could not reach the public market lookup endpoints. Resolver behavior has injected-response tests; production lookup must be verified after publication.
+- Published QA exposed an edge-runtime incompatibility with redirect mode. Requests now use manual redirect handling and reject non-2xx responses, retaining the fixed-host boundary. All 26 targeted intent tests passed after this fix. Live market lookup is checked again after publication.
 - Authenticated paid AI calls were not exercised in this browser session. Model integration paths are covered with test doubles; arbitrary-language accuracy is not guaranteed.
 
 ## Remaining before continuous production use

@@ -10,8 +10,10 @@ const cache = new Map<string, { at: number; value: unknown }>();
 export const marketJson: JsonFetch = async (url, init) => {
   const key = url + (init?.body ?? ""), old = cache.get(key);
   if (old && Date.now() - old.at < 120_000) return old.value;
-  const res = await fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(6000) });
-  if (!res.ok) throw new Error("market_lookup_failed");
+  // Workers support manual/follow only. A manual 3xx fails the res.ok check below;
+  // redirects are never followed to an unverified host.
+  const res = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(6000) });
+  if (!res.ok) throw new Error(`market_lookup_http_${res.status}`);
   const reader = res.body?.getReader(); if (!reader) throw new Error("empty_market_response");
   const chunks: Uint8Array[] = []; let size = 0;
   try { while (true) { const r = await reader.read(); if (r.done) break; size += r.value.byteLength; if (size > 2_000_000) { await reader.cancel(); throw new Error("market_response_too_large"); } chunks.push(r.value); } } finally { reader.releaseLock(); }
@@ -67,7 +69,11 @@ export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Prom
     // A ticker is not an identity. An exact mint or an already-known mint can auto-resolve; arbitrary same-name tokens require a choice.
     const trusted = known.find((k) => out.some((c) => c.id === k.id));
     return result(trusted ? out.filter((c) => c.id === trusted.id) : out, out.length ? "Solana token found. Confirm the mint address to distinguish tokens sharing this name." : `No exact Solana token match for “${a.query}”. Add its mint address in Refine.`, exactMint || !!trusted);
-  } catch { return { status: "unavailable", candidates: [], selectedId: null, checkedAt, message: `The market lookup for ${a.query} is unavailable. The requested asset is preserved; no substitute was selected.` }; }
+  } catch (error) {
+    // Operational diagnostics contain only the fixed provider and error, never the prompt or account data.
+    console.warn("market_lookup_unavailable", { provider: a.venue ?? a.kind ?? "solana", reason: error instanceof Error ? error.message.slice(0, 160) : "unknown" });
+    return { status: "unavailable", candidates: [], selectedId: null, checkedAt, message: `The market lookup for ${a.query} is unavailable. The requested asset is preserved; no substitute was selected.` };
+  }
 }
 
 export async function resolveWorkflow(w: Workflow, get?: JsonFetch): Promise<Workflow> {

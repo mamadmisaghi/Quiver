@@ -4,7 +4,7 @@ import { CompileEvent } from "../../contracts/src/events";
 import { recurringDraft } from "../../src/compile/recurring";
 import { localRefine } from "../../src/compile/refine";
 import { intentProblems, lowerWorkflow, planCompile } from "../../src/compile/planner";
-import { resolveMarket } from "../../src/compile/markets";
+import { marketJson, resolveMarket } from "../../src/compile/markets";
 import { workflowView } from "../../src/engine/workflow-view";
 import { strategyNodes } from "../../src/engine/nodes";
 import { validateStrategy } from "../../src/engine/validate";
@@ -19,6 +19,18 @@ const mint1 = "So11111111111111111111111111111111111111112", mint2 = "JUPyiwrYJF
 const pairs = { pairs: [mint1, mint2].map((address) => ({ chainId: "solana", baseToken: { address, name: "NEET", symbol: "NEET" }, liquidity: { usd: 5000 } })) };
 
 describe("intent and market identity", () => {
+  it("reads market JSON on edge runtimes while rejecting redirects", async () => {
+    const mock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if (init?.redirect === "error") throw new TypeError("Unsupported redirect mode at the edge");
+      return Response.json({ pairs: [] });
+    });
+    try {
+      await expect(marketJson("https://api.dexscreener.com/latest/dex/search?q=edge-test")).resolves.toEqual({ pairs: [] });
+      mock.mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://unverified.example" } }));
+      await expect(marketJson("https://api.dexscreener.com/latest/dex/search?q=redirect-test")).rejects.toThrow("market_lookup_http_302");
+      expect(mock).toHaveBeenCalledTimes(2);
+    } finally { mock.mockRestore(); }
+  });
   it("preserves NEET, $100, 0.003, one minute and missing budget", () => {
     const w = base(); expect(w.assets[0].query).toBe("NEET");
     expect(w.stages[0]).toMatchObject({ amount: { value: 100 }, when: { op: "lt", right: { lit: .003 } }, repeat: { intervalMinutes: 1, maxTimes: null, conditionMode: "needs_choice" } });
