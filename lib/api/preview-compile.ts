@@ -1,8 +1,8 @@
 import { CompileEvent } from "@/lib/contracts";
 import { ApiErr, type QuiverApi } from "./types";
 
-export const previewCompile: QuiverApi["compile"] = async (body, onEvent, signal) => {
-  const response = await fetch("/api/preview/compile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
+async function stream(path: string, body: unknown, onEvent: Parameters<QuiverApi["compile"]>[1], signal?: AbortSignal) {
+  const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
   if (!response.ok) {
     const error = await response.json().catch(() => null) as { message?: string } | null;
     throw new ApiErr("compile_failed", error?.message ?? "The preview compiler is unavailable. Try again.", response.status);
@@ -24,4 +24,6 @@ export const previewCompile: QuiverApi["compile"] = async (body, onEvent, signal
     pending += decoder.decode(); if (pending.trim()) consume(pending);
     if (!terminal && !signal?.aborted) throw new ApiErr("compile_failed", "The draft was interrupted. Try again.", 502);
   } finally { reader.releaseLock(); }
-};
+}
+export const previewCompile: QuiverApi["compile"] = (body, onEvent, signal) => stream("/api/preview/compile", body, onEvent, signal);
+export const previewCompileImage: QuiverApi["compileImage"] = (body, onEvent, signal) => stream("/api/preview/compile-image", body, onEvent, signal);

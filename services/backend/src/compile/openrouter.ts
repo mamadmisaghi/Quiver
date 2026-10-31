@@ -39,5 +39,6 @@ export async function callOpenRouter(opts: { apiKey: string; model: string; maxT
   const text: string = body.choices?.[0]?.message?.content ?? "";
   const m = text.match(/\{[\s\S]*\}/);
   let json: unknown; try { json = JSON.parse(m ? m[0] : text); } catch { json = null; }
-  return { json, inputTokens: body.usage?.prompt_tokens ?? 0, outputTokens: body.usage?.completion_tokens ?? 0, costUsd: Number(body.usage?.cost ?? 0) };
+  const reported = body.usage?.cost == null ? NaN : Number(body.usage.cost);
+  return { json, inputTokens: body.usage?.prompt_tokens ?? 0, outputTokens: body.usage?.completion_tokens ?? 0, costUsd: reported };
 }

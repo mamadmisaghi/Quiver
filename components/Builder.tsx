@@ -12,6 +12,8 @@ import { onSession } from "@/lib/api/session";
 const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
 import SignInButton from "./SignInButton";
 import { SAMPLE_PROMPT, SUGGESTIONS } from "@/lib/copy";
+import PreviewWorkspaceNotice from "./PreviewWorkspaceNotice";
+import { previewSaveLocation } from "@/lib/api/preview-workspace";
 
 type Phase = "idle" | "drafting" | "done" | "error";
 type Step = { step: string; label: string };
@@ -48,13 +50,16 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [err, setErr] = useState<string | null>(null);
   const [took, setTook] = useState(0);
   const [compiledText, setCompiledText] = useState<string | null>(null);
+  const [compiledImage, setCompiledImage] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const dirty = compiledText !== null && compiledText !== text;
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [previewAiReady, setPreviewAiReady] = useState(false);
   const [demo, setDemo] = useState<string | null>(null); // compiler === "demo" → notice text
   const [suggest, setSuggest] = useState<string[]>([]); // unsupported_prompt suggestions
   const ctl = useRef<AbortController | null>(null);
   const [img, setImg] = useState<Img | null>(null); // held in memory only; never stored
+  const dirty = compiledText !== null && (compiledText !== text || compiledImage !== (img?.url ?? null));
   const [imgMsg, setImgMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => () => { if (img) URL.revokeObjectURL(img.url); }, [img]);
@@ -79,7 +84,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const run = async (instruction?: string, thesis = text) => {
     const baseForRefine = strategy;
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
-    setSavedId(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
+    setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
     const fresh: GNode[] = [];
     try {
       const useImg = img && !instruction;
@@ -87,7 +92,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         if (c.signal.aborted) return;
         if (e.type === "progress") setSteps((s) => [...s.filter((x) => x.step !== e.step), { step: e.step, label: e.label }]);
         else if (e.type === "partial") { fresh.push(e.node); setNodes([...fresh]); }
-        else if (e.type === "result") { setCompiledText(thesis); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
+        else if (e.type === "result") { setCompiledText(thesis); setCompiledImage(img?.url ?? null); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
         else if (e.type === "error") { setErr(e.code === "unsupported_prompt" ? e.message.replace(/^Demo compile:\s*/, "") : errCopy(e.code, e.message)); setSuggest(e.suggestions ?? []); setPhase("error"); }
       };
       if (useImg) await api.compileImage({ mimeType: img.mime, imageBase64: img.b64, ...(thesis.trim() ? { note: thesis.trim().slice(0, 500) } : {}) }, onEv, c.signal);
@@ -104,14 +109,14 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       if (!on) return;
       setText(rec.strategy.thesis); setCompiledText(rec.strategy.thesis); setStrategy(rec.strategy);
       setHumanized(rec.humanized); setNodes(rec.nodes); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
-      if (API_MODE === "mock") setDemo("Saved preview draft. No AI service or paper engine is connected.");
+      if (API_MODE === "mock") setDemo("Saved preview draft. Tests use synthetic prices; continuous paper runs are pending activation.");
     }).catch((e) => on && setErr(errOf(e, "Could not open this draft.")));
     return () => { on = false; ctl.current?.abort(); };
   }, [initialPrompt]);
   const saveDraft = async () => {
     if (!strategy || dirty) return;
     setSaving(true); setErr(null);
-    try { const record = await api.createStrategy(strategy); setSavedId(record.id); }
+    try { const record = await api.createStrategy(strategy); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
     catch (e) { setErr(errOf(e, "Could not save this draft.")); }
     finally { setSaving(false); }
   };
@@ -128,7 +133,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       <h1 className="text-[clamp(1.9rem,3.4vw,2.6rem)] font-medium tracking-[-0.035em]">New strategy</h1>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">Say the trade in plain English. Quiver drafts the rules and the graph. Nothing runs until you press start.</p>
 
-      {API_MODE === "mock" && <p role="note" className="mt-4 rounded-[12px] border border-line px-4 py-3 text-[13px] leading-relaxed text-ink-2">Preview: describe simple rules in English. The limited text compiler uses your market, condition and amount; free-form AI, chart reading and custom paper runs are not connected yet. Drafts can be saved in this browser.</p>}
+      {API_MODE === "mock" && <PreviewWorkspaceNotice onReady={setPreviewAiReady} />}
       {/* 1 — Prompt */}
       <form className="mt-8 rounded-[14px] border border-line-2 bg-card p-1.5 transition-colors focus-within:border-accent/50" data-motion="prompt"
         onSubmit={(e) => { e.preventDefault(); if (text.trim() || img) run(); }}>
@@ -146,7 +151,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
                 <img src={img.url} alt="" className="h-6 w-6 rounded-full object-cover" />
                 <span className="max-w-[12ch] truncate sm:max-w-[22ch]" title={img.name}>{img.name}</span><span className="tnum shrink-0">{img.bytes < 1e6 ? `${Math.max(1, Math.round(img.bytes / 1e3))} KB` : `${(img.bytes / 1e6).toFixed(1)} MB`}</span>
                 <button type="button" onClick={() => setImg(null)} aria-label="Remove chart" className="grid h-6 w-6 place-items-center rounded-full hover:bg-white/10" data-testid="chart-remove">×</button></span>
-              : <button type="button" disabled={API_MODE === "mock"} title={API_MODE === "mock" ? "Chart reading needs the AI service" : undefined} onClick={() => fileRef.current?.click()} className="btn rounded-full border border-line-2 px-2.5 py-1 hover:border-white/30 hover:text-ink" data-testid="chart-attach">Attach chart</button>}
+              : <button type="button" disabled={API_MODE === "mock" && !previewAiReady} title={API_MODE === "mock" && !previewAiReady ? "Sign in with ChatGPT for configured chart AI" : undefined} onClick={() => fileRef.current?.click()} className="btn min-h-11 rounded-full border border-line-2 px-2.5 py-1 hover:border-white/30 hover:text-ink disabled:opacity-40" data-testid="chart-attach">Attach chart</button>}
             <span className="hidden font-mono sm:inline">Ctrl / ⌘ Enter</span>
           </div>
           <button type="submit" disabled={drafting || (text.trim().length < 8 && !img)}
@@ -173,7 +178,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {/* 2 — AI draft */}
       <section aria-live="polite" className="mt-10 grid gap-4" data-motion="draft">
         <ol className="grid grid-cols-1 items-center gap-x-6 gap-y-2.5 md:grid-cols-2 rounded-[14px] border border-line bg-bg-2 px-5 py-4">
-          <li className="col-span-full font-mono text-[12px] uppercase tracking-[.14em] text-muted">{API_MODE === "mock" ? "Text draft" : "AI draft"}</li>
+          <li className="col-span-full font-mono text-[12px] uppercase tracking-[.14em] text-muted">{API_MODE === "mock" && !previewAiReady ? "Text draft" : "AI draft"}</li>
           {steps.length === 0 && <li className="flex h-5 min-w-0 items-start gap-2.5 text-[13px] leading-5 text-muted"><span className="mt-[3px] h-3.5 w-3.5 shrink-0 rounded-full border border-line-2" />{phase === "idle" ? "Waiting for your thesis" : phase === "done" ? "Saved draft loaded" : "Starting…"}</li>}
           {steps.map((s, i) => {
             const done = phase !== "drafting" || i < steps.length - 1, now = !done;
@@ -224,7 +229,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       </section>
 
       {/* M5 fix (Robin gate 4ab4ad6): refine is CompileReq {baseStrategy, instruction} on the same compile stream. */}
-      {strategy && phase === "done" && API_MODE !== "mock" && <RefineBar onRefine={(t) => run(t)} />}
+      {strategy && phase === "done" && !dirty && (API_MODE !== "mock" || previewAiReady) && <RefineBar onRefine={(t) => run(t)} />}
       <div data-reserve="after" className="min-h-[160px] md:min-h-[96px]">
       {issues.length > 0 && <ul className="mt-4 space-y-1 text-[13px]">{issues.map((i) => <li key={i.path + i.code} className={i.severity === "error" ? "text-short" : "text-muted"}>{i.severity === "error" ? "" : "Note: "}{i.message}</li>)}</ul>}
       {phase === "done" && strategy && <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>}
@@ -242,12 +247,13 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
               {confirmEach && <label className="flex items-center gap-1 text-muted"><span className="sr-only">Approval window</span><select value={ttl} onChange={(e) => setTtl(Number(e.target.value))} className="rounded-[6px] border border-line-2 bg-bg px-1 py-0.5 text-ink-2">{[[60, "1 min"], [300, "5 min"], [900, "15 min"], [3600, "1 hour"]].map(([v, l]) => <option key={v} value={v}>{l} to answer</option>)}</select></label>}
             </span>}
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
-            <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : API_MODE === "mock" ? "Save in this browser" : "Save draft"}</button>
+            <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
             <button type="button" onClick={paperTrade} title={API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={API_MODE === "mock" || dirty || phase !== "done" || starting || issues.some((i) => i.severity === "error")} className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-40">{API_MODE === "mock" ? "Paper engine not connected" : starting ? "Starting…" : "Paper-trade it →"}</button>
           </div>
         </div>
       </div>
+      {saveNotice && <p role="status" className="mt-3 text-[13px] text-accent">{saveNotice}</p>}
     </div>
   );
 }

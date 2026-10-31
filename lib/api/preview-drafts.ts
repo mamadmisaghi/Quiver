@@ -1,12 +1,10 @@
 import * as C from "@/lib/contracts";
-import { humanize } from "@/services/backend/src/engine/humanize";
-import { strategyNodes } from "@/services/backend/src/engine/nodes";
-import { MOCK_INSTRUMENTS, Registry } from "@/services/backend/src/venues/registry";
+import { previewRecord } from "@/lib/preview/records";
 import { USER_ID } from "./fixtures";
 import { randomHex } from "./live";
 import { ApiErr, type Strategy, type StrategyRecord } from "./types";
 
-const KEY = "quiver.preview.drafts.v1", registry = new Registry(MOCK_INSTRUMENTS);
+const KEY = "quiver.preview.drafts.v1";
 export function previewDrafts(): StrategyRecord[] {
   if (typeof window === "undefined") return [];
   try {
@@ -15,12 +13,16 @@ export function previewDrafts(): StrategyRecord[] {
   } catch { return []; }
 }
 
-export function savePreviewDraft(raw: Strategy, forkedFrom: string | null = null): StrategyRecord {
-  const strategy = C.Strategy.parse(raw), now = new Date().toISOString(), h = humanize(strategy, registry);
-  const record = C.StrategyRecord.parse({ id: `stg_${randomHex(20)}`, ownerId: USER_ID, name: strategy.name, version: 1,
-    status: "draft", strategy, humanized: h, nodes: strategyNodes(strategy, registry, h),
-    issues: [], venues: [...new Set(strategy.actions.map((a) => registry.get(a.instrument)!.venue))], createdAt: now, updatedAt: now, activeRunId: null, forkedFrom });
-  try { localStorage.setItem(KEY, JSON.stringify([record, ...previewDrafts()].slice(0, 50))); }
+export function cachePreviewDraft(record: StrategyRecord): StrategyRecord {
+  const current = previewDrafts().filter((r) => r.id !== record.id);
+  if (current.length >= 50) throw new ApiErr("conflict", "This browser has 50 drafts. Export a backup and remove an old draft before saving another.", 409);
+  try { localStorage.setItem(KEY, JSON.stringify([record, ...current])); }
   catch { throw new ApiErr("internal", "This browser could not save the draft. Free some browser storage and try again.", 500); }
   return record;
+}
+export function savePreviewDraft(raw: Strategy, forkedFrom: string | null = null): StrategyRecord {
+  return cachePreviewDraft(previewRecord(raw, `stg_${randomHex(20)}`, USER_ID, undefined, forkedFrom));
+}
+export function removePreviewDraft(id: string) {
+  localStorage.setItem(KEY, JSON.stringify(previewDrafts().filter((r) => r.id !== id)));
 }

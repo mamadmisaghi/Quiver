@@ -35,7 +35,7 @@ export interface QuiverApi extends QuiverApiExt, QuiverMarketApi, QuiverAuthApi,
   me(): Promise<Me>;
   venues(): Promise<VenueInfo[]>;
   markets(q?: MarketsQuery): Promise<Page<Market>>;
-  strategies(q?: { status?: StrategySummary["status"] }): Promise<Page<StrategySummary>>;
+  strategies(q?: { status?: StrategySummary["status"]; limit?: number; cursor?: string }): Promise<Page<StrategySummary>>;
   strategy(id: string): Promise<StrategyRecord>;
   /** POST /v1/compile — NDJSON stream of CompileEvent. */
   compile(req: CompileReq, onEvent: (e: C.CompileEvent) => void, signal?: AbortSignal): Promise<void>;

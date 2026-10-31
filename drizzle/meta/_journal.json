@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793449825783,
+      "tag": "0000_careful_susan_delgado",
+      "breakpoints": true
+    }
+  ]
 }

@@ -10,17 +10,17 @@ import { demoCompile } from "./demo";
 import { callOpenRouter, systemPrompt } from "./openrouter";
 
 /** reserve()/settle() (M4.9.1): reserve an estimate before a call (null = would exceed the cap), settle with the real cost. */
-export interface LlmBudget { spentToday(): number; add(usd: number): void; capUsd: number; reserve?(): number | null; settle?(est: number, actual: number): void; checkpoint?(): Promise<void>; /** M4.9.2: why the last reserve() said no */ refusal?(): "cap" | "busy" | null; maxOutputTokens?: number }
+export interface LlmBudget { spentToday(): number; add(usd: number): void; capUsd: number; reserve?(): number | null | Promise<number | null>; settle?(est: number, actual: number): void | Promise<void>; checkpoint?(): Promise<void>; /** M4.9.2: why the last reserve() said no */ refusal?(): "cap" | "busy" | null; maxOutputTokens?: number }
 /** Runs one budgeted call: refuses (returns null) when the reservation doesn't fit; always settles. */
 export async function budgeted<T extends { costUsd: number }>(b: LlmBudget, fn: () => Promise<T>): Promise<T | null> {
   if (!b.reserve) { if (b.spentToday() >= b.capUsd) return null; const r = await fn(); b.add(r.costUsd); return r; }
-  const est = b.reserve(); if (est == null) return null;
+  const est = await b.reserve(); if (est == null) return null;
   let cost = 0;
   try {
     await b.checkpoint?.(); // Record the reservation before a paid provider request.
     cost = est; // A timeout can still be billed; retain the reservation if the cost is unknown.
-    const r = await fn(); cost = Number.isFinite(r.costUsd) && r.costUsd >= 0 ? r.costUsd : est; return r;
-  } finally { b.settle!(est, cost); await b.checkpoint?.(); }
+    const r = await fn(); cost = Number.isFinite(r.costUsd) && r.costUsd >= 0 ? r.costUsd : est; return { ...r, costUsd: cost };
+  } finally { await b.settle!(est, cost); await b.checkpoint?.(); }
 }
 export interface CompileDeps {
   registry: Registry; stockTokensAllowed: boolean;
