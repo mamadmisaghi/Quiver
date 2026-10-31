@@ -62,7 +62,11 @@ export function canonicalizeWorkflow(w: Workflow): Workflow {
   const walk = (e: PlanExpr | null) => {
     if (!e) return; if ("args" in e) { e.args.forEach(walk); return; } if ("arg" in e) { walk(e.arg); return; }
     for (const operand of [e.left, e.right]) if ("ref" in operand) {
-      const [id, field] = operand.ref.split("."), sig = copy.signals.find((s) => s.id === id);
+      let [id, field] = operand.ref.split("."); let sig = copy.signals.find((s) => s.id === id);
+      if (!sig && copy.assets.some((a) => a.id === id)) {
+        const candidates = copy.signals.filter((s) => s.assetId === id && (field === "value" || field === s.kind || s.kind === "indicator" && field === s.indicator?.name || s.kind === "position" && ["qty", "pnl_pct", "value_usd"].includes(field)));
+        if (candidates.length === 1) { sig = candidates[0]; id = sig.id; operand.ref = `${id}.${field}`; }
+      }
       if (sig && sig.kind !== "position" && (field === sig.kind || sig.kind === "indicator" && field === sig.indicator?.name)) operand.ref = `${id}.value`;
     }
   };
