@@ -1,16 +1,16 @@
 import { StrategyRecord, UpdateStrategyReq } from "@/lib/contracts";
 import type { StrategyRecord as RecordData } from "@/lib/api/types";
 import { previewRecord } from "@/lib/preview/records";
-import { previewAiEnabled, previewPublicAiEnabled, previewDatabase, previewJson, previewOwner, readPreviewBody, sameOrigin } from "@/lib/preview/server";
+import { previewAiEnabled, previewPublicAiEnabled, previewDailyAiLimitsEnabled, previewDatabase, previewJson, previewOwner, readPreviewBody, sameOrigin } from "@/lib/preview/server";
 import { readOnlineDrafts, removeOnlineDraft, writeOnlineDraft, replaceOnlineDraft } from "@/lib/preview/storage";
 
 export async function GET(request: Request) {
   const owner = previewOwner(request);
-  if (!owner) return previewJson({ authenticated: false, cloudAvailable: false, aiAvailable: previewPublicAiEnabled(), aiConfigured: previewAiEnabled(), items: [] });
+  if (!owner) return previewJson({ authenticated: false, cloudAvailable: false, aiAvailable: previewPublicAiEnabled(), aiConfigured: previewAiEnabled(), aiDailyLimitsEnabled: previewDailyAiLimitsEnabled(), items: [] });
   try {
     const db = await previewDatabase();
     const items = await readOnlineDrafts(db, owner);
-    return previewJson({ authenticated: true, cloudAvailable: true, aiAvailable: previewAiEnabled(), aiConfigured: previewAiEnabled(), items });
+    return previewJson({ authenticated: true, cloudAvailable: true, aiAvailable: previewAiEnabled(), aiConfigured: previewAiEnabled(), aiDailyLimitsEnabled: previewDailyAiLimitsEnabled(), items });
   } catch { return previewJson({ authenticated: true, cloudAvailable: false, aiAvailable: false, items: [], message: "Online storage is unavailable. Your browser drafts are still available; export a backup and try again." }, 503); }
 }
 

@@ -3,7 +3,7 @@ import { cachePreviewDraft, previewDrafts, removePreviewDraft, savePreviewDraft 
 import { ApiErr, type Strategy, type StrategyRecord } from "./types";
 import { previewRecord } from "@/lib/preview/records";
 
-export type PreviewWorkspace = { authenticated: boolean; cloudAvailable: boolean; aiAvailable: boolean; aiConfigured?: boolean; items: StrategyRecord[]; message?: string };
+export type PreviewWorkspace = { authenticated: boolean; cloudAvailable: boolean; aiAvailable: boolean; aiConfigured?: boolean; aiDailyLimitsEnabled?: boolean; items: StrategyRecord[]; message?: string };
 const empty: PreviewWorkspace = { authenticated: false, cloudAvailable: false, aiAvailable: false, items: [] };
 let cloud: StrategyRecord[] = [], lastLocation: "online" | "browser" = "browser";
 export const previewSaveLocation = () => lastLocation;

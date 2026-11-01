@@ -3,7 +3,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { anonymousBudgetKey } from "../lib/preview/server";
+import { anonymousBudgetKey, previewDailyAiLimitsEnabled } from "../lib/preview/server";
 import { createPreviewBudget } from "../lib/preview/budget";
 import { readOnlineDrafts, writeOnlineDraft, removeOnlineDraft, replaceOnlineDraft } from "../lib/preview/storage";
 import { previewRecord } from "../lib/preview/records";
@@ -90,6 +90,50 @@ try {
   assert.equal(key1, key2); assert(!key1.includes("192.0.2.1"));
   if (oldKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = oldKey; checks++;
 
+  // Development opt-out must unblock already-exhausted spend AND call quotas
+  // for both signed-in and anonymous testers, without discarding accounting.
+  const testingOpts = { capUsd: 0, publicCapUsd: 0, maxOwnerCalls: 0, maxInflight: 1, maxOutputTokens: 6000, enforceDailyLimits: false, now: () => now + 5 * 86_400_000 };
+  let testingCalls = 0;
+  for (const owner of ["testing-owner", "anon:testing-owner"]) {
+    for (let i = 0; i < 2; i++) {
+      const testingBudget = createPreviewBudget(db, owner, testingOpts);
+      assert(testingBudget.capUsd > testingBudget.spentToday());
+      assert.equal((await budgeted(testingBudget, async () => { testingCalls++; return { costUsd: .2 }; }))!.costUsd, .2);
+    }
+  }
+  assert.equal(testingCalls, 4);
+  assert.equal(sqlite.prepare("SELECT SUM(cost_micros) AS total FROM preview_ai_reservations WHERE day = '2026-11-05'").get()!.total, 800000); checks++;
+  const restoredSpend = createPreviewBudget(db, "testing-new", { ...testingOpts, enforceDailyLimits: true, capUsd: .5, maxOwnerCalls: 60 });
+  assert.equal(await restoredSpend.reserve!(), null); assert.equal(restoredSpend.refusal!(), "cap"); checks++;
+  const restoredCalls = createPreviewBudget(db, "testing-owner", { ...testingOpts, enforceDailyLimits: true, capUsd: 5, maxOwnerCalls: 1 });
+  assert.equal(await restoredCalls.reserve!(), null); assert.equal(restoredCalls.refusal!(), "cap"); checks++;
+  const inProgress = createPreviewBudget(db, "testing-owner", testingOpts), overlapping = createPreviewBudget(db, "anon:testing-owner", testingOpts);
+  assert.equal(await inProgress.reserve!(), .1);
+  assert.equal(await overlapping.reserve!(), null); assert.equal(overlapping.refusal!(), "busy");
+  await inProgress.settle!(.1, .01);
+  assert.equal(await overlapping.reserve!(), .1); await overlapping.settle!(.1, .01); checks++;
+  const uncertainTest = createPreviewBudget(db, "testing-timeout", testingOpts);
+  await assert.rejects(() => budgeted(uncertainTest, async () => { throw new Error("provider timeout"); }));
+  assert.equal(sqlite.prepare("SELECT cost_micros FROM preview_ai_reservations WHERE owner_id = 'testing-timeout'").get()!.cost_micros, 100000); checks++;
+  const noAccounting = createPreviewBudget({ prepare: () => { throw new Error("database unavailable"); } } as unknown as D1Database, "testing-owner", testingOpts);
+  await assert.rejects(() => budgeted(noAccounting, async () => { testingCalls++; return { costUsd: .2 }; }));
+  assert.equal(testingCalls, 4); checks++;
+  const previousLimits = process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED;
+  try {
+    delete process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED;
+    assert.equal(previewDailyAiLimitsEnabled(), true);
+    process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED = "false";
+    assert.equal(previewDailyAiLimitsEnabled(), false);
+    const testingWorkspace = await (await GET(new Request("https://quiver.example/api/preview/workspace"))).json() as { aiDailyLimitsEnabled: boolean };
+    assert.equal(testingWorkspace.aiDailyLimitsEnabled, false);
+    process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED = "true";
+    assert.equal(previewDailyAiLimitsEnabled(), true);
+  } finally {
+    if (previousLimits === undefined) delete process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED;
+    else process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED = previousLimits;
+  }
+  checks++;
+
   const backup = draftBackup([a]); const parsed = parseDraftBackup(JSON.stringify(backup));
   assert.equal(draftFingerprint(parsed[0].strategy), draftFingerprint(a.strategy));
   assert(!JSON.stringify(backup).includes("ownerId")); assert(!JSON.stringify(backup).includes("activeRunId")); checks++;
@@ -102,5 +146,5 @@ try {
   assert.equal((await POST(request("POST"))).status, 401); assert.equal((await DELETE(request("DELETE"))).status, 401);
   assert.equal((await POST(request("POST", "https://other.example"))).status, 403);
   assert.equal((await compileImage(request("POST"))).status, 401); checks++;
-  console.log(`PASS: ${checks} Site storage checks (user isolation, restart durability, capacity, atomic AI budget, fail-closed billing, portable backup and authorization).`);
+  console.log(`PASS: ${checks} Site storage checks (user isolation, atomic AI budget, daily-limit opt-out and restoration, concurrency, retained billing, portable backup and authorization).`);
 } finally { sqlite.close(); rmSync(dir, { recursive: true, force: true }); }

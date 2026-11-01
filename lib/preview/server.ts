@@ -30,6 +30,9 @@ export function previewAiEnabled() {
   return process.env.QUIVER_PREVIEW_AI_ENABLED === "true" && !!process.env.OPENROUTER_API_KEY;
 }
 export const previewPublicAiEnabled = () => previewAiEnabled() && process.env.QUIVER_PREVIEW_PUBLIC_AI === "true";
+// Explicit test setting: disable daily spend/call quotas without dropping
+// accounting, concurrent-request bounds or per-call limits.
+export const previewDailyAiLimitsEnabled = () => process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED !== "false";
 // Anonymous callers get only compiler access. This key never authorizes records or connected accounts.
 export async function anonymousBudgetKey(request: Request) {
   const day = new Date().toISOString().slice(0, 10);
@@ -49,5 +52,5 @@ export async function previewAi(request: Request, vision = false): Promise<Compi
   const db = await previewDatabase();
   const model = (vision ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL) || (vision ? "openai/gpt-4.1-mini" : "openai/gpt-5.6-sol");
   return { apiKey: process.env.OPENROUTER_API_KEY!, totalBudgetMs: 120_000, callTimeoutMs: 60_000, model,
-    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 6000, 256, 6000), reservationUsd: model.startsWith("openai/gpt-5") ? .60 : .10, maxOwnerCalls: authenticated ? 60 : 30, publicCapUsd: 1 }) };
+    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 6000, 256, 6000), reservationUsd: model.startsWith("openai/gpt-5") ? .60 : .10, maxOwnerCalls: authenticated ? 60 : 30, publicCapUsd: 1, enforceDailyLimits: previewDailyAiLimitsEnabled() }) };
 }
