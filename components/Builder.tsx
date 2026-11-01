@@ -12,7 +12,8 @@ import { HUMANIZED } from "@/lib/api/fixtures";
 import { API_MODE, api, ApiErr, reasonOf, errCopy, errOf, strategyEdges, demoNodes, DEMO_LABEL, type GNode, type Humanized, type Strategy, type ValidationIssue } from "@/lib/api";
 import { onSession } from "@/lib/api/session";
 // QA P2 LCP: the backtest panel only renders after a draft, so keep it out of the initial chunk
-const WorkflowLab = dynamic(() => import("./WorkflowLab"), { ssr: false });
+import { createPaperSession } from "@/lib/paper/sessions";
+import { paperProblems } from "@/services/backend/src/workflows/paper";
 const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
 import SignInButton from "./SignInButton";
 import { SAMPLE_PROMPT, SUGGESTIONS } from "@/lib/copy";
@@ -81,10 +82,20 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [starting, setStarting] = useState(false);
   const [confirmEach, setConfirmEach] = useState(false); // M4.2 approvalMode
   const [ttl, setTtl] = useState(300);
-  const paperTrade = async () => {
-    if (!strategy || dirty) return; setStarting(true); setErr(null);
-    try { const rec = await api.createStrategy(strategy); const r = await api.startRun({ strategyId: rec.id, mode: "paper", ...(confirmEach ? { approvalMode: "confirm_each" as const, approvalTtlSec: ttl } : {}) }); router.push(`/app/run/${r.id}`); }
-    catch (x) { setErr(errOf(x, "Couldn't start the paper run.")); setStarting(false); }
+  const startingRef = useRef(false);
+  const paperTrade = async (mode: "quotes" | "scenario" = "quotes") => {
+    if (!strategy || dirty || startingRef.current || saving) return;
+    startingRef.current = true; setStarting(true); setErr(null);
+    try {
+      const rec = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy);
+      setEditingRecord({ id: rec.id, version: rec.version }); setSavedId(rec.id);
+      if (strategy.workflow) {
+        const session = createPaperSession(rec, mode);
+        window.location.assign(`/app/run/${session.id}`);
+      } else {
+        const r = await api.startRun({ strategyId: rec.id, mode: "paper", ...(confirmEach ? { approvalMode: "confirm_each" as const, approvalTtlSec: ttl } : {}) }); router.push(`/app/run/${r.id}`);
+      }
+    } catch (x) { setErr(x instanceof Error ? x.message : "Couldn't start the paper run."); setStarting(false); startingRef.current = false; }
   };
 
   const run = async (instruction?: string, thesis = text) => {
@@ -120,7 +131,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       setEditingRecord({ id: rec.id, version: rec.version });
       setHumanized(rec.humanized); setNodes(deriveNodes(rec.strategy, Object.fromEntries(rec.nodes.map((node) => [node.id, node])))); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
       setDemo(null);
-      if (API_MODE === "mock") setSaveNotice("Saved preview draft. Continuous paper runs are pending activation.");
+      if (API_MODE === "mock") setSaveNotice("Saved preview draft. Start a test to open its own Paper Trades session.");
     }).catch((e) => on && setErr(errOf(e, "Could not open this draft.")));
     return () => { on = false; ctl.current?.abort(); };
   }, [initialPrompt]);
@@ -231,7 +242,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
       }} />}
 
-      {strategy?.workflow && phase === "done" && !dirty && <WorkflowLab key={JSON.stringify(strategy)} strategy={strategy} />}
+
 
       {/* 3 — Readable rules */}
       <section className={`mt-6 grid gap-px overflow-hidden rounded-[14px] border border-line bg-line md:grid-cols-4`} data-motion="rules">
@@ -256,7 +267,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {/* Action bar pinned to the viewport bottom; Paper-trade it is the only amber primary on the page once drafted */}
       <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 -mx-5 border-t border-line bg-bg/90 px-5 py-3 backdrop-blur-md lg:bottom-0 sm:-mx-8 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1 truncate">{phase === "done" ? strategy?.workflow ? "Workflow draft · execution pending" : API_MODE === "mock" ? "Preview draft" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
+          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1 truncate">{phase === "done" ? strategy?.workflow ? "Configure, then test in Paper trades" : API_MODE === "mock" ? "Preview draft" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {err && phase === "done" && <span role="status" className="text-[12.5px] text-short">{err}</span>}
             {phase === "done" && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
@@ -264,9 +275,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
               {confirmEach && <label className="flex items-center gap-1 text-muted"><span className="sr-only">Approval window</span><select value={ttl} onChange={(e) => setTtl(Number(e.target.value))} className="rounded-[6px] border border-line-2 bg-bg px-1 py-0.5 text-ink-2">{[[60, "1 min"], [300, "5 min"], [900, "15 min"], [3600, "1 hour"]].map(([v, l]) => <option key={v} value={v}>{l} to answer</option>)}</select></label>}
             </span>}
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
-            <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
+            <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
-            <button type="button" onClick={() => strategy?.workflow ? document.getElementById("workflow-lab")?.scrollIntoView({ behavior: "smooth", block: "start" }) : paperTrade()} title={strategy?.workflow ? "Open the workflow test lab" : API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={(!strategy?.workflow && API_MODE === "mock") || dirty || phase !== "done" || starting || issues.some((i) => i.severity === "error")} className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-40">{strategy?.workflow ? "Test workflow →" : API_MODE === "mock" ? "Paper engine not connected" : starting ? "Starting…" : "Paper-trade it →"}</button>
+            {strategy?.workflow && <button type="button" onClick={() => paperTrade("scenario")} disabled={dirty || phase !== "done" || starting || saving || paperProblems(strategy.workflow).length > 0} title={paperProblems(strategy.workflow)[0] ?? "Test with synthetic prices on a dedicated session page"} className="q-action">Test workflow</button>}
+            <button type="button" onClick={() => paperTrade()} title={strategy?.workflow ? paperProblems(strategy.workflow, true)[0] ?? "Open this strategy’s paper session" : API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={(!strategy?.workflow && API_MODE === "mock") || dirty || phase !== "done" || starting || saving || issues.some((i) => i.severity === "error") || !!(strategy?.workflow && paperProblems(strategy.workflow, true).length)} className="q-action q-primary">{starting ? "Opening session…" : !strategy?.workflow && API_MODE === "mock" ? "Paper engine not connected" : "Run paper trade →"}</button>
           </div>
         </div>
       </div>

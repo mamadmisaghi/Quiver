@@ -1,7 +1,7 @@
 import Link from "@/components/Link";
 import Logo from "./Logo";
 const COLS: [string, [string, string][]][] = [
-  ["Product", [["Builder", "/app/new"], ["Paper trading", "/app/run/demo"], ["Skills", "/app/skills"], ["Markets", "/app/markets"], ["Docs", "/docs"]]],
+  ["Product", [["Builder", "/app/new"], ["Paper trading", "/app/run"], ["Skills", "/app/skills"], ["Markets", "/app/markets"], ["Docs", "/docs"]]],
   ["Community", [["Leaderboard", "/leaderboard"], ["Strategies", "/app/strategies"], ["Traders", "/app/traders"], ["Rewards", "/app/rewards"], ["X", "#"]]],
   ["Safety", [["Risk limits", "/app/risk"], ["Wallets", "/app/wallets"], ["How keys work", "/#safety"], ["Revenue", "/app/revenue"]]],
   ["Legal", [["Terms", "/terms"], ["Privacy", "/terms#privacy"], ["Eligibility", "/terms#eligibility"], ["Brand", "/brand"]]],

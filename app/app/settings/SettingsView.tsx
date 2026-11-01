@@ -1,6 +1,7 @@
 "use client";
 // M3.8: GET /v1/settings + POST /v1/runs/stop-all. M3.9: Alerts card (webhook, rules, deliveries) replaces "Coming soon".
 import { useEffect, useRef, useState } from "react";
+import SettingsDisclosure from "@/components/SettingsDisclosure";
 import PageHeader from "@/components/PageHeader";
 import Wrap from "@/components/Wrap";
 import Loading from "@/components/Loading";
@@ -36,7 +37,8 @@ export default function SettingsView() {
   return (
     <Wrap>
       <PageHeader title="Settings" sub={`As of ${new Date(s.asOf).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`} />
-      <div className="mt-8 grid gap-4 lg:grid-cols-2">
+      <div className="q-settings mt-8 space-y-5">
+      <div className="grid gap-5 lg:grid-cols-3">
         <Card className="p-6">
           <h2 className="font-medium">Usage</h2>
           <dl className="mt-3 divide-y divide-line">
@@ -65,12 +67,10 @@ export default function SettingsView() {
             <Row k="Kill switch" v={s.trading.killSwitch ? <span className="text-short">On — new runs blocked</span> : "Off"} />
           </dl>
         </Card>
-        <AlertsCard />
-        <ChannelsCard />
-        <SecretsCard />
-        <ProfileCard />
-        <FollowingCard />
-        <div className="lg:col-span-2"><CopiesCard /></div>
+      </div>
+        <SettingsDisclosure title="Notifications" description="Webhook rules, delivery history and chat destinations."><AlertsCard /><div className="lg:col-span-2"><ChannelsCard /></div></SettingsDisclosure>
+        <SettingsDisclosure title="Connections & API keys" description="Manage your own endpoints and provider credentials."><div className="lg:col-span-2"><SecretsCard /></div></SettingsDisclosure>
+        <SettingsDisclosure title="Profile & activity" description="Your public profile, following and strategy copies."><ProfileCard /><FollowingCard /><div className="lg:col-span-2"><CopiesCard /></div></SettingsDisclosure>
       </div>
 
       <Card className="mt-6 border-short/30 p-6">
@@ -81,13 +81,13 @@ export default function SettingsView() {
         {res && <p role="status" className="mt-4 text-[13.5px] text-ink-2">Stopped {res.stopped.length} {res.stopped.length === 1 ? "run" : "runs"}{res.alreadyStopped ? `, ${res.alreadyStopped} already stopped` : ""}.</p>}
       </Card>
 
-      <dialog ref={dlg} aria-labelledby="sa-h" aria-describedby="sa-d" data-motion="dialog" className="m-auto w-[min(28rem,calc(100vw-2.5rem))] rounded-[14px] border border-line-2 bg-bg-2 p-6 text-ink backdrop:bg-black/60">
+      <dialog onCancel={(e) => { if (busy) e.preventDefault(); }} ref={dlg} aria-labelledby="sa-h" aria-describedby="sa-d" data-motion="dialog" className="m-auto w-[min(28rem,calc(100vw-2.5rem))] rounded-[14px] border border-line-2 bg-bg-2 p-6 text-ink backdrop:bg-black/60">
         <h2 id="sa-h" className="text-[17px] font-medium">Stop {s.usage.activeRuns} {s.usage.activeRuns === 1 ? "run" : "runs"}?</h2>
         <p id="sa-d" className="mt-2 text-[13.5px] text-muted">They stop immediately. You can start them again later, but you can’t undo closed positions.</p>
         <label className="mt-4 flex items-center gap-2.5 text-[13.5px]"><input type="checkbox" checked={flatten} onChange={(e) => setFlatten(e.target.checked)} className="h-4 w-4 accent-[var(--q-amber)]" />Also close open positions at market</label>
         {err && <p role="alert" className="mt-3 text-[13px] text-short">{err}</p>}
         <div className="mt-6 flex justify-end gap-2">
-          <button ref={cancel} type="button" onClick={() => dlg.current?.close()} className="btn min-h-11 rounded-full border border-line-2 px-4 text-[13px] hover:bg-white/5">Cancel</button>
+          <button ref={cancel} disabled={busy} type="button" onClick={() => dlg.current?.close()} className="btn min-h-11 rounded-full border border-line-2 px-4 text-[13px] hover:bg-white/5">Cancel</button>
           <button type="button" data-testid="stop-all-confirm" disabled={busy} onClick={stop} className="btn min-h-11 rounded-full bg-short px-4 text-[13px] font-medium text-bg disabled:opacity-50">{busy ? "Stopping…" : "Stop all"}</button>
         </div>
       </dialog>

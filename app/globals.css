@@ -48,7 +48,7 @@
   --color-faint: var(--faint);
   --color-short: var(--short);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Consolas, monospace;
   --font-serif: var(--font-instrument-serif);
 }
 
@@ -100,3 +100,30 @@ html, body { overflow-x: clip; }
 
 /* M3.7 mobile menu: subtle entrance; motion-safe: in the class keeps it off under reduced motion. */
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* Shared interaction vocabulary; the Quiver palette and type remain authoritative. */
+@layer base {
+  :where(button, [role="button"], select, summary, input[type="checkbox"], input[type="radio"], a[href]):not(:disabled):not([aria-disabled="true"]) { cursor: pointer; }
+  :where(button, input, select, textarea):disabled, [aria-disabled="true"] { cursor: not-allowed; }
+  :where(button, a, input, textarea, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  :where(input, textarea) { caret-color: var(--accent); }
+  :where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--accent); }
+  :where(input, select, textarea) { transition: border-color .18s var(--ease), background-color .18s var(--ease); }
+  :where(input, select, textarea):not(:disabled):hover { border-color: color-mix(in srgb, var(--muted) 48%, var(--line)); }
+  :where(dialog) { max-height: calc(100dvh - 40px); overflow-y: auto; box-shadow: 0 24px 80px #0008; }
+  :where(dialog)::backdrop { background: #0009; }
+}
+.btn:disabled:active, .btn[aria-disabled="true"]:active { transform: none; }
+.q-control { width: 100%; min-height: 44px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg); padding: 10px 12px; font-size: 14px; color: var(--ink); }
+.q-control:focus { border-color: var(--accent); }
+.q-control[aria-invalid="true"] { border-color: var(--short); }
+.q-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border: 1px solid var(--line-2); border-radius: 999px; padding: 8px 16px; font-size: 13px; color: var(--ink-2); transition: background-color .18s, border-color .18s, color .18s; }
+.q-action:not(:disabled):hover { background: #ffffff08; border-color: var(--muted); color: var(--ink); }
+.q-action:disabled { opacity: .4; }
+.q-primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+.q-primary:not(:disabled):hover { background: var(--accent-press); border-color: var(--accent-press); color: var(--bg); }
+.q-edit-panel { background: var(--bg); border-top: 1px solid var(--line); }
+.q-settings :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { border-radius: 10px; min-height: 44px; }
+.q-settings :where(details > summary) { min-height: 40px; padding-block: 10px; }
+.q-settings :where(details[open] > summary) { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .q-action, .q-control { transition: none; } }

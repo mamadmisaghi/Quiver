@@ -12,55 +12,7 @@ import VenueMark from "./VenueMark";
 
 const KIND_LABEL = { watch: "Signal", when: "Trigger", do: "Action", exit: "Exit" } as const;
 const STATE_LABEL: Record<NodeState, string> = { idle: "", met: "Met", waiting: "Waiting", armed: "Armed", holding: "Holding", fired: "Fired", active: "Open", error: "Failed" } as Record<NodeState, string>;
-const TIERS = ["watch", "when", "do", "exit"] as const;
-const COMPACT = 560, MIN_WIDE = 720; // px: below COMPACT the graph stacks tiers; wide layout never squeezes under MIN_WIDE
-type Box = { x: number; y: number; w: number; h: number };
-
-function layout(nodes: GNode[], W: number, vertical: boolean, edges: GEdge[] = []) {
-  const boxes: Record<string, Box> = {};
-  let tiers = TIERS.map((k) => nodes.filter((n) => n.kind === k)).filter((t) => t.length);
-  if (nodes.some((n) => n.id.startsWith("wf_"))) {
-    const depth = new Map<string, number>();
-    const rank = (id: string, path = new Set<string>()): number => {
-      if (depth.has(id)) return depth.get(id)!;
-      if (path.has(id)) return 0;
-      const previous = edges.filter((e) => e.to === id).map((e) => rank(e.from, new Set(path).add(id)) + 1);
-      const d = Math.max(0, ...previous); depth.set(id, d); return d;
-    };
-    nodes.forEach((n) => rank(n.id));
-    tiers = Array.from({ length: Math.max(0, ...depth.values()) + 1 }, (_, d) => nodes.filter((n) => depth.get(n.id) === d)).filter((g) => g.length);
-  }
-  const hasVal = (n: GNode) => n.value !== undefined;
-  if (!vertical) {
-    const cols = tiers.length, nw = Math.min(212, (W - (cols - 1) * 56) / cols), gapY = 16;
-    const nh = (n: GNode) => (hasVal(n) ? 118 : 84) + (n.kind === "when" ? 14 : 0) + (n.title.length * 7.4 > nw - 70 ? 20 : 0); // 2-line title
-    const colH = tiers.map((t) => t.reduce((a, n) => a + nh(n), 0) + (t.length - 1) * gapY);
-    const H = Math.max(0, ...colH) + 8;
-    tiers.forEach((t, i) => {
-      let y = (H - colH[i]) / 2;
-      t.forEach((n) => { boxes[n.id] = { x: i * ((W - nw) / Math.max(1, cols - 1)), y, w: nw, h: nh(n) }; y += nh(n) + gapY; });
-    });
-    return { boxes, H };
-  }
-  const gapY = 44, gapX = 14; let y = 0;
-  tiers.forEach((t) => {
-    const per = t.length > 2 ? 2 : t.length, rows = Math.ceil(t.length / per);
-    const nw = per === 1 ? Math.min(W, 260) : (W - gapX) / 2;
-    // compact: each row is as tall as its tallest node (value line, trigger detail, 2-line titles)
-    const vh = (n: GNode) => (hasVal(n) ? 112 : 86) + (n.kind === "when" ? 14 : 0) + (n.title.length * 7.4 > nw - 64 ? 20 : 0);
-    const rowH = Array.from({ length: rows }, (_, r) => Math.max(...t.slice(r * per, r * per + per).map(vh)));
-    let ry = y;
-    rowH.forEach((h, r) => {
-      t.slice(r * per, r * per + per).forEach((n, c, row) => {
-        const rowW = row.length * nw + (row.length - 1) * gapX;
-        boxes[n.id] = { x: (W - rowW) / 2 + c * (nw + gapX), y: ry, w: nw, h };
-      });
-      ry += h + gapX;
-    });
-    y = ry - gapX + gapY;
-  });
-  return { boxes, H: Math.max(0, y - gapY) };
-}
+import { graphLayout, type NodeBox as Box } from "@/lib/graph-layout";
 
 /** Orthogonal route with rounded elbows (graph.js), horizontal or vertical. */
 function route(a: Box, b: Box, vertical: boolean) {
@@ -89,29 +41,29 @@ export default function StrategyGraph({ nodes, edges, revealed, ghosts, label, r
     const ro = new ResizeObserver(set); ro.observe(el); return () => ro.disconnect();
   }, []);
   const measured = W > 0;
-  const flow = nodes.some((n) => n.id.startsWith("wf_"));
-  const vertical = flow || (measured ? W < COMPACT : false);
-  const LW = vertical ? Math.max(W, 296) : Math.max(W, MIN_WIDE); // layout width: narrower screens scroll/pan instead of squashing
+  const vertical = false;
   const shownN = revealed ?? nodes.length;
   const list = nodes.slice(0, shownN);
-  const { boxes, H } = useMemo(() => layout(nodes, measured ? LW : 900, vertical, edges), [nodes, LW, measured, vertical, edges]);
-  // Heights don't depend on width within a mode, so both are known before paint → no layout shift (CLS fix for Ellis).
-  const hWide = useMemo(() => Math.max(layout(nodes, MIN_WIDE, flow, edges).H, reserve ? layout(reserve, MIN_WIDE, false).H : 0), [nodes, reserve, flow, edges]);
-  const hNarrow = useMemo(() => Math.max(layout(nodes, 342, true, edges).H, reserve ? layout(reserve, 342, true).H : 0), [nodes, reserve, flow, edges]);
+  const { boxes, H, W: LW, skips } = useMemo(() => graphLayout(nodes, edges, W), [nodes, edges, W]);
+  const reservedHeight = reserve ? graphLayout(reserve, [], W).H : 0;
   const minH = ghosts ? 240 : 0;
   const visible = (id: string) => list.some((n) => n.id === id);
   const linked = (e: GEdge) => !hover || e.from === hover || e.to === hover;
 
   return (
-    <div ref={wrap} className="@container w-full"><div className="-mx-1 max-h-[640px] overflow-auto overscroll-contain px-1 [scrollbar-width:thin] [touch-action:pan-x_pan-y]" tabIndex={0} role="region" aria-label="Strategy graph, scroll sideways to pan"><div className="relative h-[var(--h-wide)] @max-[559px]:h-[var(--h-narrow)]"
-      style={{ width: measured ? LW : "100%", ["--h-wide" as string]: `${Math.max(flow ? H : hWide, minH)}px`, ["--h-narrow" as string]: `${Math.max(flow ? H : hNarrow, minH)}px`, visibility: measured ? undefined : "hidden" }} data-motion="graph" role="group"
+    <div ref={wrap} className="@container w-full" dir="ltr"><div className="-mx-1 max-h-[640px] overflow-auto overscroll-contain px-1 [scrollbar-width:thin] [touch-action:pan-x_pan-y]" tabIndex={0} role="region" aria-label="Strategy graph, scroll sideways to pan"><div className="relative"
+      style={{ width: LW, height: Math.max(H, ghosts ? reservedHeight : 0, minH), visibility: measured ? undefined : "hidden" }} data-motion="graph" role="group"
       aria-label={label ?? `Strategy graph with ${nodes.length} nodes: signals feed triggers, triggers run actions, actions carry exits.`}>
-      <div aria-hidden className="pointer-events-none absolute -inset-4 rounded-[12px] bg-[radial-gradient(var(--q-line2)_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[12px] bg-[radial-gradient(var(--q-line2)_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
       <svg className="absolute inset-0 overflow-visible" width={LW} height={H} aria-hidden>
         {edges.map((e, i) => {
           const a = boxes[e.from], b = boxes[e.to];
           if (!a || !b || !visible(e.from) || !visible(e.to)) return null;
-          const { d, p1, p2, deg } = route(a, b, vertical);
+          const routed = route(a, b, vertical);
+          const skip = skips.indexOf(e);
+          const lane = 12 + skip * 8;
+          const d = skip < 0 ? routed.d : `M${a.x + a.w} ${a.y + a.h / 2}H${a.x + a.w + 18}V${lane}H${b.x - 18}V${b.y + b.h / 2}H${b.x}`;
+          const { p1, p2, deg } = routed;
           const id = `qe-${i}`, dim = !linked(e);
           return (
             <g key={id} data-motion="graph-edge" data-hot={e.hot ? "true" : undefined} style={{ opacity: dim ? 0.25 : 1, transition: "opacity .25s var(--ease)" }}>
@@ -132,7 +84,7 @@ export default function StrategyGraph({ nodes, edges, revealed, ghosts, label, r
         return (
           <Popover.Root key={n.id}><Popover.Trigger asChild><button type="button" aria-label={`Details: ${n.title}`} data-motion="node-in" onMouseEnter={() => setHover(n.id)} onMouseLeave={() => setHover(null)}
             className={`absolute text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[12px] border px-3.5 pb-3 pt-3 shadow-[var(--q-shadow-card)] transition-colors duration-200 ${lit ? "border-accent/55" : n.state === "error" ? "border-short/60" : "border-line hover:border-line-2"}`}
-            style={{ left: b.x, top: b.y, width: b.w, minHeight: b.h, background: "linear-gradient(180deg,#151517,#111113)" }}>
+            style={{ left: b.x, top: b.y, width: b.w, height: b.h, animationDelay: `${b.depth * 100}ms`, background: "linear-gradient(180deg,#151517,#111113)" }}>
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-[7px] font-mono text-[12px] uppercase leading-none tracking-[.06em] text-muted">
                 <i className={`h-1.5 w-1.5 shrink-0 rounded-full ${n.kind === "when" ? "bg-cream" : n.state === "active" ? "bg-paper" : "bg-faint"} ${lit ? "shadow-[0_0_0_4px_color-mix(in_srgb,var(--q-amber)_18%,transparent)]" : ""}`} />
