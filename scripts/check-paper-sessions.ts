@@ -3,7 +3,7 @@ import { Strategy, Workflow, Risk } from "../lib/contracts";
 import { recurringDraft } from "../services/backend/src/compile/recurring";
 import { previewRecord } from "../lib/preview/records";
 import { createPaperSession, readPaperSession, listPaperSessions, checkpointPaperSession } from "../lib/paper/sessions";
-import { createPaper, stepPaper } from "../services/backend/src/workflows/paper";
+import { createPaper, stepPaper, paperProblems } from "../services/backend/src/workflows/paper";
 import { workflowView } from "../services/backend/src/engine/workflow-view";
 import { graphLayout, GRAPH_GAP, NODE_WIDTH } from "../lib/graph-layout";
 class Memory implements Storage {
@@ -46,4 +46,37 @@ const v2 = workflowView(multi), g2 = graphLayout(v2.nodes, v2.edges, 1000);
 for (const e of v2.edges) assert(g2.boxes[e.to].x > g2.boxes[e.from].x);
 for (const a of Object.values(g2.boxes)) for (const b of Object.values(g2.boxes)) if (a !== b) assert(a.x + NODE_WIDTH <= b.x || b.x + NODE_WIDTH <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
 checks++;
-console.log(`PASS: ${checks} checks — isolated session IDs and snapshots, checkpoint recovery, no duplicate fills, incomplete-market gating, storage failures and horizontal graph topology.`);
+// Regression: a saved, one-off Hyperliquid draft used to look ready without a
+// budget while both launch buttons stayed disabled. Setup and launch must use
+// the same preflight, and adding a budget must be enough to open a quote session.
+const hl = structuredClone(w); hl.name = "BTC paper launch check"; hl.signals = []; hl.questions = [];
+hl.stages[0] = { ...hl.stages[0], side: "long", leverage: 5, when: null, repeat: null };
+hl.assets[0] = { ...hl.assets[0], query: "BTC", sourceText: "BTC on Hyperliquid", venue: "hyperliquid", kind: "perp", resolution: {
+  status: "matched", selectedId: "hl:perp:BTC", checkedAt: new Date(t).toISOString(), message: "Matched BTC perpetual.",
+  candidates: [{ id: "hl:perp:BTC", symbol: "BTC", name: "BTC perpetual", venue: "hyperliquid", kind: "perp", source: "hyperliquid", address: null, url: null, maxLeverage: 10, endDate: null, outcome: null }],
+} };
+hl.budgetUsd = null;
+assert.deepEqual(paperProblems(hl, true), ["Enter a starting budget for paper trading."]);
+assert.throws(() => createPaperSession({ ...record, strategy: { ...strategy, workflow: hl } }, "quotes", storage), /budget/); checks++;
+hl.budgetUsd = 5000;
+assert.deepEqual(paperProblems(hl, true), []);
+const quoteSession = createPaperSession({ ...record, strategy: { ...strategy, workflow: hl } }, "quotes", storage);
+assert.equal(quoteSession.status, "ready"); assert.equal(quoteSession.mode, "quotes");
+const quoteState = stepPaper(hl, createPaper(hl, t), [{ assetId: "asset", price: 50000, observedAt: t, synthetic: false, source: "test fixture" }], t, strategy.risk);
+assert.equal(quoteState.events.length, 1); assert.equal(quoteState.positions.buy.leverage, 5); checks++;
+const invalidMarket = structuredClone(hl); invalidMarket.assets[0].resolution!.selectedId = "hl:perp:UNKNOWN";
+assert.match(paperProblems(invalidMarket, true).join(" "), /exact market for BTC/);
+assert.throws(() => createPaperSession({ ...record, strategy: { ...strategy, workflow: invalidMarket } }, "quotes", storage), /market/); checks++;
+const unresolved = structuredClone(hl); unresolved.assets[0].resolution!.selectedId = null;
+unresolved.assets[0].resolution!.message = "Choose a market.";
+unresolved.assets.push({ ...structuredClone(unresolved.assets[0]), id: "second_asset", query: "ETH" });
+assert.deepEqual(paperProblems(unresolved, true), ["Choose the exact market for BTC to use live quotes.", "Choose the exact market for ETH to use live quotes."]);
+assert.deepEqual(paperProblems(unresolved), []);
+assert.equal(createPaperSession({ ...record, strategy: { ...strategy, workflow: unresolved } }, "scenario", storage).mode, "scenario"); checks++;
+unresolved.stages[0].amount.value = null;
+assert.throws(() => createPaperSession({ ...record, strategy: { ...strategy, workflow: unresolved } }, "scenario", storage), /amount/); checks++;
+unresolved.stages[0].amount.value = 100; unresolved.questions = ["Which exit condition should apply?"];
+assert.throws(() => createPaperSession({ ...record, strategy: { ...strategy, workflow: unresolved } }, "scenario", storage), /exit condition/); checks++;
+const repeatedNoBudget = structuredClone(w); repeatedNoBudget.budgetUsd = null;
+assert.equal(paperProblems(repeatedNoBudget).filter((p) => /budget/.test(p)).length, 1); checks++;
+console.log(`PASS: ${checks} checks — saved one-off paper launch, shared preflight, explicit price modes, isolated snapshots, checkpoint recovery, storage failures and horizontal graph topology.`);

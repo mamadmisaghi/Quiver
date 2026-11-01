@@ -84,17 +84,35 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   };
   const router = useRouter();
   const [starting, setStarting] = useState(false);
+  const [paperMode, setPaperMode] = useState<"quotes" | "scenario">("quotes");
+  const [paperAttempted, setPaperAttempted] = useState(false);
+  const reviewRef = useRef<HTMLDivElement | null>(null);
   const [confirmEach, setConfirmEach] = useState(false); // M4.2 approvalMode
   const [ttl, setTtl] = useState(300);
   const startingRef = useRef(false);
-  const paperTrade = async (mode: "quotes" | "scenario" = "quotes") => {
+  const launchProblems = [...new Set([
+    ...(strategy?.workflow ? paperProblems(strategy.workflow, paperMode === "quotes") : []),
+    ...issues.filter((i) => i.severity === "error").map((i) => i.message),
+  ])];
+  const reviewSetup = () => {
+    setPaperAttempted(true);
+    requestAnimationFrame(() => {
+      const target = reviewRef.current?.querySelector<HTMLElement>('[data-paper-required="true"]') ?? reviewRef.current;
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    });
+  };
+  const paperTrade = async () => {
     if (!strategy || dirty || phase !== "done" || startingRef.current || saving) return;
+    // Configuration is actionable from the primary button. Validate before
+    // saving or creating a session, using the same checks as the setup panel.
+    if (launchProblems.length) { setErr(null); reviewSetup(); return; }
     startingRef.current = true; setStarting(true); setErr(null);
     try {
       const rec = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy);
       setEditingRecord({ id: rec.id, version: rec.version }); setSavedId(rec.id);
       if (strategy.workflow) {
-        const session = createPaperSession(rec, mode);
+        const session = createPaperSession(rec, paperMode);
         window.location.assign(`/app/run/${session.id}`);
       } else {
         const r = await api.startRun({ strategyId: rec.id, mode: "paper", ...(confirmEach ? { approvalMode: "confirm_each" as const, approvalTtlSec: ttl } : {}) }); router.push(`/app/run/${r.id}`);
@@ -109,7 +127,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     if (!continuation) pendingEdit.current = effectiveInstruction && baseForRefine ? { baseStrategy: baseForRefine, instruction: effectiveInstruction } : null;
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
     if (!continuation) setClarification(null);
-    setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
+    setPaperAttempted(false); setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
     const fresh: GNode[] = [];
     try {
       const useImg = img && !effectiveInstruction && !pendingEdit.current?.instruction;
@@ -227,12 +245,12 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         </div>
       </section>
 
-      {strategy?.workflow && phase === "done" && <WorkflowReview workflow={strategy.workflow} onClarify={() => {
+      {strategy?.workflow && phase === "done" && <div ref={reviewRef} tabIndex={-1} className="rounded-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><WorkflowReview workflow={strategy.workflow} paperMode={paperMode} onPaperModeChange={setPaperMode} problems={launchProblems} showProblems={paperAttempted} onClarify={() => {
         pendingEdit.current = { baseStrategy: strategy };
         void run(undefined, text, { workflow: strategy.workflow!, history: [], answers: {} });
       }} onChange={(workflow) => {
         const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
-      }} />}
+      }} /></div>}
 
 
 
@@ -259,19 +277,23 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {/* Action bar pinned to the viewport bottom; Paper-trade it is the only amber primary on the page once drafted */}
       <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 -mx-5 border-t border-line bg-bg/90 px-5 py-3 backdrop-blur-md lg:bottom-0 sm:-mx-8 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1 truncate">{phase === "done" ? strategy?.workflow ? "Configure, then test in Paper trades" : API_MODE === "mock" ? "Preview draft" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
+          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1">{phase === "done" ? dirty ? "Redraft to apply your changes" : strategy?.workflow ? launchProblems.length ? `${launchProblems.length} ${launchProblems.length === 1 ? "detail" : "details"} to complete` : paperMode === "quotes" ? "Ready · live quotes, virtual funds" : "Ready · simulated prices, virtual funds" : API_MODE === "mock" ? "Redraft this strategy to create a paper session" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {err && phase === "done" && <span role="status" className="text-[12.5px] text-short">{err}</span>}
-            {phase === "done" && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
+            {phase === "done" && !strategy?.workflow && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
               <label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={confirmEach} onChange={(e) => setConfirmEach(e.target.checked)} className="accent-[var(--color-accent)]" data-testid="confirm-each" />Ask before each trade</label>
               {confirmEach && <label className="flex items-center gap-1 text-muted"><span className="sr-only">Approval window</span><select value={ttl} onChange={(e) => setTtl(Number(e.target.value))} className="rounded-[6px] border border-line-2 bg-bg px-1 py-0.5 text-ink-2">{[[60, "1 min"], [300, "5 min"], [900, "15 min"], [3600, "1 hour"]].map(([v, l]) => <option key={v} value={v}>{l} to answer</option>)}</select></label>}
             </span>}
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
             <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
-            {strategy?.workflow && <button type="button" onClick={() => paperTrade("scenario")} disabled={dirty || phase !== "done" || starting || saving || paperProblems(strategy.workflow).length > 0} title={paperProblems(strategy.workflow)[0] ?? "Test with synthetic prices on a dedicated session page"} className="q-action">Test workflow</button>}
-            <button type="button" onClick={() => paperTrade()} title={strategy?.workflow ? paperProblems(strategy.workflow, true)[0] ?? "Open this strategy’s paper session" : API_MODE === "mock" ? "Connect the paper engine to run your own rules" : undefined} disabled={(!strategy?.workflow && API_MODE === "mock") || dirty || phase !== "done" || starting || saving || issues.some((i) => i.severity === "error") || !!(strategy?.workflow && paperProblems(strategy.workflow, true).length)} className="q-action q-primary">{starting ? "Opening session…" : !strategy?.workflow && API_MODE === "mock" ? "Paper engine not connected" : "Run paper trade →"}</button>
+            <button type="button" disabled aria-describedby="live-trade-status" className="q-action">Live trade</button>
+            <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={(!strategy?.workflow && API_MODE === "mock") || dirty || phase !== "done" || starting || saving} className="q-action q-primary">{starting ? "Opening session…" : "Run paper trade →"}</button>
           </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-x-6 gap-y-1 text-[12px] leading-relaxed text-muted">
+          {phase === "done" && !dirty && launchProblems.length > 0 && <p id="paper-setup-status" className="max-w-[65ch]">{launchProblems[0]}{strategy?.workflow && <> <button type="button" onClick={reviewSetup} className="text-accent underline underline-offset-4">Complete setup</button></>}</p>}
+          <p id="live-trade-status" className="ml-auto">Live trading is not connected yet.</p>
         </div>
       </div>
       {saveNotice && <p role="status" className="mt-3 text-[13px] text-accent">{saveNotice}</p>}

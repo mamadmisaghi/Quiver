@@ -13,8 +13,14 @@ export type PaperState = { version: 1; startedAt: number; lastAt: number; budget
 const EPS = 1e-8, feeRate = .001;
 export function paperProblems(w: Workflow, live = false) {
   w = canonicalizeWorkflow(w);
-  const errors = [...workflowProblems(w), ...workflowBlockers(w).filter((x) => live || !w.assets.some((a) => x === a.resolution?.message || x === `Choose the exact market for ${a.query}.`))];
-  if (!w.budgetUsd) errors.push("Set a strategy budget to test.");
+  // Market identity is required for live quotes, but not for an explicitly
+  // selected synthetic scenario. Name each missing market instead of hiding
+  // multiple assets behind the resolver's identical generic message.
+  const errors = [...workflowProblems(w), ...workflowBlockers(w).filter((x) => x !== "Set a dedicated strategy budget before repeated purchases." && !w.assets.some((a) => !a.resolution?.selectedId && (x === a.resolution?.message || x === `Choose the exact market for ${a.query}.`)))];
+  if (!w.budgetUsd) errors.push("Enter a starting budget for paper trading.");
+  if (live) for (const a of w.assets) {
+    if (!a.resolution?.candidates.some((c) => c.id === a.resolution?.selectedId)) errors.push(`Choose the exact market for ${a.query} to use live quotes.`);
+  }
   for (const s of w.signals) {
     if (s.kind === "custom") errors.push(`Refine the unsupported condition: ${s.description}`);
     if (s.indicator?.name === "atr") errors.push("ATR needs OHLC bars; quote-only paper tests cannot evaluate it.");
