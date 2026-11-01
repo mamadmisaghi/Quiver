@@ -90,7 +90,7 @@ describe("intent and market identity", () => {
   });
   it("streams NEET consistently through the request, contract and graph", async () => {
     const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(pairs));
-    try { const ev = await collect(planCompile({ thesis }, deps)), last = ev.at(-1); expect(last?.type).toBe("result"); if (last?.type === "result") { expect(last.strategy.workflow?.assets[0].query).toBe("NEET"); expect(JSON.stringify(last.humanized)).not.toContain("NVDA"); } } finally { mock.mockRestore(); }
+    try { const ev = await collect(planCompile({ thesis }, deps)), last = ev.at(-1); expect(last?.type).toBe("clarification"); if (last?.type === "clarification") { expect(last.draft.workflow.assets[0].query).toBe("NEET"); expect(JSON.stringify(last.draft)).not.toContain("NVDA"); expect(last.questions.map((q) => q.id)).toContain("budget"); } } finally { mock.mockRestore(); }
   });
   it("requires an independent meaning check before lowering a supported plan", async () => {
     const text = "Buy $100 of Nvidia if price is below $120", w = base();

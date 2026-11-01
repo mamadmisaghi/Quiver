@@ -12,7 +12,7 @@ async function stream(path: string, body: unknown, onEvent: Parameters<QuiverApi
   const consume = (line: string) => {
     if (!line.trim() || signal?.aborted) return;
     const event = CompileEvent.parse(JSON.parse(line));
-    if (event.type === "result" || event.type === "error") terminal = true;
+    if (event.type === "result" || event.type === "error" || event.type === "clarification") terminal = true;
     onEvent(event);
   };
   try {

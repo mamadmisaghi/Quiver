@@ -1,11 +1,11 @@
 import type { LlmBudget } from "@/services/backend/src/compile";
 
-export type BudgetOptions = { capUsd: number; maxInflight: number; maxOutputTokens: number; maxOwnerCalls?: number; publicCapUsd?: number; now?: () => number };
+export type BudgetOptions = { capUsd: number; maxInflight: number; maxOutputTokens: number; reservationUsd?: number; maxOwnerCalls?: number; publicCapUsd?: number; now?: () => number };
 /** A single INSERT/SELECT atomically checks spend and concurrency across Worker isolates. */
 export function createPreviewBudget(db: D1Database, owner: string, options: BudgetOptions): LlmBudget {
   const now = options.now ?? Date.now;
   let reservation: string | null = null, refused: "cap" | "busy" | null = null;
-  const estimate = 0.10; // Conservative allowance for the bounded prompt/image and selected mini model.
+  const estimate = options.reservationUsd ?? 0.10; // Reserve for the selected model; settle against reported cost.
   return {
     capUsd: options.capUsd, maxOutputTokens: options.maxOutputTokens,
     spentToday: () => 0, add: () => {}, refusal: () => refused,

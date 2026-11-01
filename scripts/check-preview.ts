@@ -35,7 +35,7 @@ assert(!unknown.result); assert(unknown.frames.some((x) => x.type === "error" &&
 
 const invalid = await POST(new Request("https://quiver.example/api/preview/compile", { method: "POST", body: "{}" }));
 assert.equal(invalid.status, 422); checks++;
-const oversize = await POST(new Request("https://quiver.example/api/preview/compile", { method: "POST", body: "x".repeat(25_000) }));
+const oversize = await POST(new Request("https://quiver.example/api/preview/compile", { method: "POST", body: "x".repeat(97_000) }));
 assert.equal(oversize.status, 413); checks++;
 const refine = await POST(new Request("https://quiver.example/api/preview/compile", { method: "POST", body: JSON.stringify({ thesis: "change stop loss", baseStrategy: eth.result.strategy, instruction: "stop loss 2%" }) }));
 assert.equal(refine.status, 200); assert((await refine.text()).includes("ai_required")); checks++;

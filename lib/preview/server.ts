@@ -47,6 +47,7 @@ export async function previewAi(request: Request, vision = false): Promise<Compi
   if (!authenticated && !previewPublicAiEnabled()) return undefined;
   const owner = authenticated ?? await anonymousBudgetKey(request);
   const db = await previewDatabase();
-  return { apiKey: process.env.OPENROUTER_API_KEY!, totalBudgetMs: 90_000, callTimeoutMs: 35_000, model: (vision ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL) || "openai/gpt-4.1-mini",
-    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 4000, 256, 6000), maxOwnerCalls: authenticated ? 60 : 30, publicCapUsd: 1 }) };
+  const model = (vision ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL) || (vision ? "openai/gpt-4.1-mini" : "openai/gpt-5.6-sol");
+  return { apiKey: process.env.OPENROUTER_API_KEY!, totalBudgetMs: 120_000, callTimeoutMs: 60_000, model,
+    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 6000, 256, 6000), reservationUsd: model.startsWith("openai/gpt-5") ? .60 : .10, maxOwnerCalls: authenticated ? 60 : 30, publicCapUsd: 1 }) };
 }

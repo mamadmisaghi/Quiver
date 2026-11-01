@@ -38,7 +38,9 @@ export default function StrategyGraph({ nodes, edges, revealed, ghosts, label, r
   const [hover, setHover] = useState<string | null>(null);
   useLayoutEffect(() => {
     const el = wrap.current!; const set = () => setW(el.clientWidth); set();
-    const ro = new ResizeObserver(set); ro.observe(el); return () => ro.disconnect();
+    let frame = 0;
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(set); });
+    ro.observe(el); return () => { cancelAnimationFrame(frame); ro.disconnect(); };
   }, []);
   const measured = W > 0;
   const vertical = false;

@@ -1,5 +1,6 @@
 // Live run event stream. Transport: SSE (canonical GET /v1/runs/:runId/events/stream?ticket=…; alias GET /v1/runs/:runId/events?ticket=…). Every frame: `id: <seq>`, `event: <type>`, `data: <JSON RunEvent>`.
 import { z } from "zod";
+import { DraftContext, DraftQuestion } from "./clarification";
 import { Decimal, FillId, SignalSource, IsoTime, OrderId, RunId, RunMode, TxHash, Venue } from "./common";
 import { Humanized, InstrumentId, Strategy, ValidationIssue } from "./strategy";
 
@@ -70,6 +71,7 @@ export type RunEventType = RunEvent["type"];
 
 /** Compile stream (POST /v1/compile, NDJSON). One JSON object per line. */
 export const CompileEvent = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("clarification"), draft: DraftContext, questions: z.array(DraftQuestion).min(1).max(80) }),
   z.object({ type: z.literal("progress"), step: z.enum(["reading", "resolving_markets", "choosing_feeds", "writing_rules", "checking_risk", "repairing"]), label: z.string(), attempt: z.number().int().min(1) }),
   z.object({ type: z.literal("partial"), node: z.object({ id: z.string(), kind: z.enum(["watch", "when", "do", "exit"]), title: z.string(), detail: z.string(), venue: Venue.optional() }) }),
   z.object({ type: z.literal("result"), compileId: z.string(), strategy: Strategy, humanized: Humanized, issues: z.array(ValidationIssue), usage: z.object({ attempts: z.number().int(), inputTokens: z.number().int(), outputTokens: z.number().int(), costUsd: Decimal }),

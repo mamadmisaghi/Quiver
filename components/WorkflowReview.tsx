@@ -8,7 +8,7 @@ const unitName: Record<string, string> = { usd: "USD", pct_equity: "% of equity"
 function Group({ title, help, children }: { title: string; help: string; children: React.ReactNode }) {
   return <div className="grid gap-5 border-t border-line py-6 md:grid-cols-[168px_minmax(0,1fr)] md:gap-8"><div><h3 className="text-[14px] font-medium">{title}</h3><p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{help}</p></div><div className="min-w-0">{children}</div></div>;
 }
-export default function WorkflowReview({ workflow: w, onChange }: { workflow: Workflow; onChange: (w: Workflow) => void }) {
+export default function WorkflowReview({ workflow: w, onChange, onClarify }: { workflow: Workflow; onChange: (w: Workflow) => void; onClarify?: () => void }) {
   const [busy, setBusy] = useState<string | null>(null), [message, setMessage] = useState<{ id: string; text: string } | null>(null);
   const [queries, setQueries] = useState<Record<string, string>>({}), [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const latest = useRef(w); useEffect(() => { latest.current = w; }, [w]);
@@ -68,7 +68,7 @@ export default function WorkflowReview({ workflow: w, onChange }: { workflow: Wo
         {s.funding.kind === "profits" && <p className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-accent"><ArrowUpRight size={15} className="shrink-0" />Uses realized, available profit from earlier steps. Waits if there is not enough.</p>}
       </div>)}</div>
     </Group>
-    {w.questions.length > 0 && <Group title="A few details" help="Resolve these points before starting a test."><div className="space-y-3">{w.questions.map((q, i) => <label key={q} className="flex min-h-11 cursor-pointer items-start gap-3 text-[13px] leading-relaxed text-ink-2"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={false} onChange={() => onChange({ ...w, questions: w.questions.filter((_, n) => n !== i) })} /><span>{q}<span className="mt-1 block text-[12px] text-muted">Mark resolved after updating the fields or refining your draft.</span></span></label>)}</div></Group>}
+    {w.questions.length > 0 && <Group title="A few details" help="Answer these points before starting a test."><ul className="space-y-3 text-[13px] leading-relaxed text-ink-2">{w.questions.map((q) => <li key={q}>{q}</li>)}</ul>{onClarify ? <button type="button" onClick={onClarify} className="q-action q-primary mt-4">Complete these details →</button> : <p className="mt-3 text-[12px] text-muted">Open this draft in the strategy builder to answer these questions.</p>}</Group>}
     {(blockers.length > 0 || w.assumptions.length > 0) && <details className="group border-t border-line py-3 text-[12.5px] text-muted"><summary className="flex list-none items-center gap-2"><CircleHelp size={15} />{blockers.length ? `${blockers.length} remaining ${blockers.length === 1 ? "detail" : "details"}` : "Review defaults"}<ChevronDown size={14} className="ml-auto transition-transform group-open:rotate-180" /></summary><div className="pb-3 pt-2 leading-relaxed">{blockers.length > 0 && <ul className="ml-4 list-disc space-y-2">{blockers.map((q) => <li key={q}>{q}</li>)}</ul>}{w.assumptions.length > 0 && <p className="mt-3">Defaults: {w.assumptions.join(" ")}</p>}</div></details>}
   </section>;
 }

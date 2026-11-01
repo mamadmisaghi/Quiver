@@ -17,5 +17,5 @@ export async function POST(request: Request) {
   try { ai = await previewAi(request, true); }
   catch { return previewJson({ message: "AI accounting is unavailable. Try again shortly." }, 503); }
   if (!ai) return previewJson({ message: "Chart AI is not configured yet. Describe the rules in text for now." }, 503);
-  return streamPreviewCompile(request, { thesis: input.data.note || "Read the visible trading setup", note: input.data.note, image: { mime: image.mime, base64: input.data.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, ai);
+  return streamPreviewCompile(request, { clarification: input.data.clarification, thesis: input.data.note || "Read the visible trading setup", note: input.data.note, image: { mime: image.mime, base64: input.data.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, ai);
 }

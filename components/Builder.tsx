@@ -1,5 +1,7 @@
 "use client";
 import { canonicalizeWorkflow } from "@/lib/contracts";
+import DraftProgress, { type DraftPhase, type DraftStep, type Clarification } from "./DraftProgress";
+import type { DraftContinuation } from "@/lib/contracts";
 import WorkflowReview from "./WorkflowReview";
 import { workflowView } from "@/services/backend/src/engine/workflow-view";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +11,7 @@ import dynamic from "next/dynamic";
 import VenueMark from "./VenueMark";
 import { useRouter } from "next/navigation";
 import { HUMANIZED } from "@/lib/api/fixtures";
-import { API_MODE, api, ApiErr, reasonOf, errCopy, errOf, strategyEdges, demoNodes, DEMO_LABEL, type GNode, type Humanized, type Strategy, type ValidationIssue } from "@/lib/api";
+import { API_MODE, api, ApiErr, reasonOf, errOf, strategyEdges, demoNodes, DEMO_LABEL, type GNode, type Humanized, type Strategy, type ValidationIssue } from "@/lib/api";
 import { onSession } from "@/lib/api/session";
 // QA P2 LCP: the backtest panel only renders after a draft, so keep it out of the initial chunk
 import { createPaperSession } from "@/lib/paper/sessions";
@@ -21,8 +23,8 @@ import PreviewWorkspaceNotice from "./PreviewWorkspaceNotice";
 import { previewSaveLocation } from "@/lib/api/preview-workspace";
 import { strategyNodes as deriveNodes } from "@/lib/api/graph";
 
-type Phase = "idle" | "drafting" | "done" | "error";
-type Step = { step: string; label: string };
+type Phase = DraftPhase;
+type Step = DraftStep;
 
 const sugg = (d: unknown): string[] => { const s = (d as { suggestions?: unknown } | null)?.suggestions; return Array.isArray(s) ? s.filter((x): x is string => typeof x === "string") : []; };
 
@@ -42,12 +44,13 @@ const PREVIEW_PROMPTS = [
   "Long $400 of ETH at 3x when RSI is below 30, stop loss 5%",
   "Buy $100 of BTC every Monday at 9am",
 ];
-const STEP_SLOTS = 6;
+
 // Reserve the sample graph's height (values on, so the tallest variant) before the draft streams in.
 const RESERVE: GNode[] = demoNodes.map((n) => ({ ...n, value: n.kind === "watch" ? "0" : n.value }));
 export default function Builder({ initialPrompt }: { initialPrompt?: string } = {}) {
   const [text, setText] = useState(initialPrompt || SAMPLE_PROMPT);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [clarification, setClarification] = useState<Clarification | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [nodes, setNodes] = useState<GNode[]>([]);
   const [strategy, setStrategy] = useState<Strategy | null>(null);
@@ -65,6 +68,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [demo, setDemo] = useState<string | null>(null); // compiler === "demo" → notice text
   const [suggest, setSuggest] = useState<string[]>([]); // unsupported_prompt suggestions
   const ctl = useRef<AbortController | null>(null);
+  const pendingEdit = useRef<{ baseStrategy: Strategy; instruction?: string } | null>(null);
   const [img, setImg] = useState<Img | null>(null); // held in memory only; never stored
   const dirty = compiledText !== null && (compiledText !== text || compiledImage !== (img?.url ?? null));
   const [imgMsg, setImgMsg] = useState<string | null>(null);
@@ -84,7 +88,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [ttl, setTtl] = useState(300);
   const startingRef = useRef(false);
   const paperTrade = async (mode: "quotes" | "scenario" = "quotes") => {
-    if (!strategy || dirty || startingRef.current || saving) return;
+    if (!strategy || dirty || phase !== "done" || startingRef.current || saving) return;
     startingRef.current = true; setStarting(true); setErr(null);
     try {
       const rec = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy);
@@ -98,30 +102,35 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     } catch (x) { setErr(x instanceof Error ? x.message : "Couldn't start the paper run."); setStarting(false); startingRef.current = false; }
   };
 
-  const run = async (instruction?: string, thesis = text) => {
+  const run = async (instruction?: string, thesis = text, continuation?: DraftContinuation) => {
     const baseForRefine = strategy;
     const old = { strategy, humanized, nodes, issues, demo, savedId };
-    const effectiveInstruction = instruction ?? (strategy && /^\s*(add|change|edit|tighten|remove|adjust|increase|decrease|set|only trade|اضافه|تغییر|حذف|ویرایش)(?:\s|$)/i.test(thesis) ? thesis : undefined);
+    const effectiveInstruction = continuation ? undefined : instruction ?? (strategy && /^\s*(add|change|edit|tighten|remove|adjust|increase|decrease|set|only trade|اضافه|تغییر|حذف|ویرایش)(?:\s|$)/i.test(thesis) ? thesis : undefined);
+    if (!continuation) pendingEdit.current = effectiveInstruction && baseForRefine ? { baseStrategy: baseForRefine, instruction: effectiveInstruction } : null;
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
+    if (!continuation) setClarification(null);
     setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
     const fresh: GNode[] = [];
     try {
-      const useImg = img && !effectiveInstruction;
+      const useImg = img && !effectiveInstruction && !pendingEdit.current?.instruction;
       const onEv = (e: Parameters<Parameters<typeof api.compile>[1]>[0]) => {
         if (c.signal.aborted) return;
-        if (e.type === "progress") setSteps((s) => [...s.filter((x) => x.step !== e.step), { step: e.step, label: e.label }]);
+        if (e.type === "progress") setSteps((s) => s.at(-1)?.step === e.step ? [...s.slice(0, -1), { step: e.step, label: e.label }] : [...s, { step: e.step, label: e.label }]);
+        else if (e.type === "clarification") { setClarification({ draft: e.draft, questions: e.questions }); setPhase("clarifying"); setTook(performance.now() - t0); }
         else if (e.type === "partial") { fresh.push(e.node); setNodes([...fresh]); }
-        else if (e.type === "result") { if (effectiveInstruction) setText(e.strategy.thesis); setCompiledText(effectiveInstruction ? e.strategy.thesis : thesis); setCompiledImage(img?.url ?? null); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
-        else if (e.type === "error") { if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setErr(e.message.replace(/^Demo compile:\s*/, "")); setSuggest(e.suggestions ?? []); setPhase(old.strategy ? "done" : "error"); }
+        else if (e.type === "result") { setClarification(null); const edited = effectiveInstruction || continuation && pendingEdit.current?.instruction; if (edited) setText(e.strategy.thesis); setCompiledText(edited ? e.strategy.thesis : thesis); setCompiledImage(img?.url ?? null); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
+        else if (e.type === "error") { if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setErr(e.message.replace(/^Demo compile:\s*/, "")); setSuggest(e.suggestions ?? []); setPhase(continuation ? "clarifying" : old.strategy ? "done" : "error"); }
       };
-      if (useImg) await api.compileImage({ mimeType: img.mime, imageBase64: img.b64, ...(thesis.trim() ? { note: thesis.trim().slice(0, 500) } : {}) }, onEv, c.signal);
-      else await api.compile({ thesis, ...(effectiveInstruction && baseForRefine ? { baseStrategy: baseForRefine, instruction: effectiveInstruction } : {}) }, onEv, c.signal);
-    } catch (x) { if ((x as Error).name !== "AbortError") { setErr(imgErr(x) ?? errOf(x, "Compile failed")); setSuggest(x instanceof ApiErr ? sugg(x.details) : []); if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setPhase(old.strategy ? "done" : "error"); } }
+      if (useImg) await api.compileImage({ mimeType: img.mime, imageBase64: img.b64, ...(continuation ? { clarification: continuation } : {}), ...(thesis.trim() ? { note: thesis.trim().slice(0, 500) } : {}) }, onEv, c.signal);
+      else await api.compile({ thesis, ...(continuation ? { clarification: continuation } : {}), ...(pendingEdit.current ?? {}) }, onEv, c.signal);
+    } catch (x) { if (!c.signal.aborted && (x as Error).name !== "AbortError") { setErr(imgErr(x) ?? errOf(x, "Compile failed")); setSuggest(x instanceof ApiErr ? sugg(x.details) : []); if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setPhase(continuation ? "clarifying" : old.strategy ? "done" : "error"); } }
   };
   const [guest, setGuest] = useState(API_MODE !== "mock");
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const prompt = initialPrompt ?? sp.get("idea") ?? sp.get("q");
+    // Hydrate the externally supplied browser URL after SSR; subsequent typing stays local.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (prompt) setText(prompt.slice(0, 2000));
     const id = sp.get("strategy"); let on = true;
     if (id) api.strategy(id).then((rec) => {
@@ -136,7 +145,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     return () => { on = false; ctl.current?.abort(); };
   }, [initialPrompt]);
   const saveDraft = async () => {
-    if (!strategy || dirty) return;
+    if (!strategy || dirty || phase !== "done") return;
     setSaving(true); setErr(null);
     try { const record = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy); setEditingRecord({ id: record.id, version: record.version }); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
     catch (e) { setErr(errOf(e, "Could not save this draft.")); }
@@ -160,7 +169,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       <form className="mt-8 rounded-[14px] border border-line-2 bg-card p-1.5 transition-colors focus-within:border-accent/50" data-motion="prompt"
         onSubmit={(e) => { e.preventDefault(); if (text.trim() || img) run(); }}>
         <label htmlFor="thesis" className="sr-only">Your strategy</label>
-        <textarea id="thesis" value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} rows={3}
+        <textarea id="thesis" value={text} onChange={(e) => { setText(e.target.value); if (clarification || phase === "drafting") { ctl.current?.abort(); setClarification(null); setPhase("idle"); setErr(null); } }} maxLength={2000} rows={3}
           onKeyDown={(e) => { if (!drafting && text.trim().length >= 8 && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); } }}
           placeholder="e.g. Buy $200 of AAPL on Robinhood Chain when it opens 2% red."
           className="block max-h-[45vh] min-h-[96px] w-full resize-none bg-transparent px-3.5 pb-2 pt-3 text-[15px] [field-sizing:content] leading-relaxed text-ink placeholder:text-muted focus:outline-none" />
@@ -191,38 +200,18 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         </div>)}
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" tabIndex={0} role="region" aria-label="Example prompts">
         {(API_MODE === "mock" ? PREVIEW_PROMPTS : SUGGESTIONS).map((s) => (
-          <button key={s} type="button" onClick={() => setText(s)}
+          <button key={s} type="button" onClick={() => { ctl.current?.abort(); setText(s); setClarification(null); setPhase("idle"); setErr(null); }}
             className="btn shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] text-muted hover:border-line-2 hover:text-ink">{s}</button>
         ))}
       </div>
 
       {dirty && <p role="status" className="mt-4 text-[13px] text-accent">The description changed. Press Draft strategy to update the graph before saving or running.</p>}
       {/* 2 — AI draft */}
-      <section aria-live="polite" className="mt-10 grid gap-4" data-motion="draft">
-        <ol className="grid grid-cols-1 items-center gap-x-6 gap-y-2.5 md:grid-cols-2 rounded-[14px] border border-line bg-bg-2 px-5 py-4">
-          <li className="col-span-full font-mono text-[12px] uppercase tracking-[.14em] text-muted">Strategy draft</li>
-          {steps.length === 0 && <li className="flex h-5 min-w-0 items-start gap-2.5 text-[13px] leading-5 text-muted"><span className="mt-[3px] h-3.5 w-3.5 shrink-0 rounded-full border border-line-2" />{phase === "idle" ? "Waiting for your thesis" : phase === "done" ? "Saved draft loaded" : "Starting…"}</li>}
-          {steps.map((s, i) => {
-            const done = phase === "done" || (phase === "drafting" && i < steps.length - 1), now = phase === "drafting" && !done;
-            return (
-              <li key={s.step} className="flex h-5 min-w-0 items-start gap-2.5 text-[13px] leading-5">
-                <span className={`mt-[3px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border ${done ? "border-accent bg-accent-soft" : "border-line-2"}`}>
-                  {done && <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden><path d="M1.5 4.2 3.2 5.8 6.5 2.2" fill="none" stroke="var(--q-amber)" strokeWidth="1.4" /></svg>}
-                </span>
-                <span className={`truncate ${done ? "text-ink-2" : ""}`} title={s.label} data-motion={now ? "shimmer" : undefined}>{s.label}</span>
-              </li>
-            );
-          })}
-          {/* fixed slot count: the box keeps its height while steps stream in and after the draft lands (CLS) */}
-          {Array.from({ length: Math.max(0, STEP_SLOTS - Math.max(1, steps.length)) }, (_, i) => (
-            <li key={`slot${i}`} aria-hidden className="invisible flex h-5 min-w-0 items-start gap-2.5 text-[13px] leading-5"><span className="mt-[3px] h-3.5 w-3.5 rounded-full" />Resolving markets on 3 venues</li>))}
-          <li className="col-span-full flex min-h-[26px] min-w-0 flex-wrap items-center justify-end gap-2 font-mono text-[12px] text-muted">
-            {phase === "error" ? <span role="alert" className="text-short">{err}</span>
-              : phase === "done" ? <><span className="min-w-0 truncate text-ink-2">Drafted · {nodes.length} nodes · {venues.length} venues · {(took / 1000).toFixed(1)}s</span>{demo && <span className="shrink-0 rounded-full border border-line-2 px-2.5 py-0.5 font-sans text-[12px]" title={demo}>Demo compile</span>}</>
-              : phase === "idle" ? "" : "Working…"}
-          </li>
-        </ol>
-        <p className="-mt-2 min-h-[54px] px-1 text-[12px] text-muted sm:min-h-[36px]">{phase === "done" ? demo : null}</p>
+      <DraftProgress phase={phase} steps={steps} clarification={clarification} error={err} persian={/[\u0600-\u06ff]/.test(text)}
+        summary={`Drafted · ${nodes.length} nodes · ${venues.length} venues · ${(took / 1000).toFixed(1)}s`}
+        onContinue={(answers) => { if (clarification) void run(undefined, text, { ...clarification.draft, answers }); }} />
+      <section className="mt-6 grid gap-4">
+        {demo && phase === "done" && <p className="px-1 text-[12px] text-muted">{demo}</p>}
         {phase === "error" && suggest.length > 0 && (
           <div className="-mt-1 flex flex-wrap items-center gap-2 px-1">
             <span className="text-[12.5px] text-muted">Try one of these:</span>
@@ -238,7 +227,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         </div>
       </section>
 
-      {strategy?.workflow && phase !== "drafting" && <WorkflowReview workflow={strategy.workflow} onChange={(workflow) => {
+      {strategy?.workflow && phase === "done" && <WorkflowReview workflow={strategy.workflow} onClarify={() => {
+        pendingEdit.current = { baseStrategy: strategy };
+        void run(undefined, text, { workflow: strategy.workflow!, history: [], answers: {} });
+      }} onChange={(workflow) => {
         const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
       }} />}
 
@@ -257,7 +249,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       </section>
 
       {/* M5 fix (Robin gate 4ab4ad6): refine is CompileReq {baseStrategy, instruction} on the same compile stream. */}
-      {strategy && phase !== "drafting" && !dirty && <RefineBar onRefine={(t) => run(t)} />}
+      {strategy && phase === "done" && !dirty && <RefineBar onRefine={(t) => run(t)} />}
       <div data-reserve="after" className="min-h-[160px] md:min-h-[96px]">
       {issues.length > 0 && <ul className="mt-4 space-y-1 text-[13px]">{issues.map((i) => <li key={i.path + i.code} className={i.severity === "error" ? "text-short" : "text-muted"}>{i.severity === "error" ? "" : "Note: "}{i.message}</li>)}</ul>}
       {phase === "done" && strategy && !strategy.workflow && <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>}

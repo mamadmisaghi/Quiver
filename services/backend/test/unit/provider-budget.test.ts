@@ -29,7 +29,7 @@ describe("provider setup and spending", () => {
     const original = globalThis.fetch; const bodies: any[] = [];
     globalThis.fetch = (async (_url: unknown, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return Response.json({ choices: [{ message: { content: "{}" } }], usage: { cost: .001 } }); }) as typeof fetch;
     try {
-      for (const model of ["openai/gpt-4.1-mini", "openai/gpt-5-mini"]) await callOpenRouter({ apiKey: "test-placeholder", model, maxTokens: 4000, system: "rules", user: "idea" });
+      for (const model of ["openai/gpt-4.1-mini", "openai/gpt-5.6-sol"]) await callOpenRouter({ apiKey: "test-placeholder", model, maxTokens: 6000, system: "rules", user: "idea" });
       expect(bodies[0].temperature).toBe(0); expect(bodies[0].provider.require_parameters).toBe(true);
       expect(bodies[1].temperature).toBeUndefined(); expect(bodies[1].reasoning).toEqual({ effort: "low", exclude: true });
     } finally { globalThis.fetch = original; }

@@ -127,3 +127,7 @@ html, body { overflow-x: clip; }
 .q-settings :where(details > summary) { min-height: 40px; padding-block: 10px; }
 .q-settings :where(details[open] > summary) { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .q-action, .q-control { transition: none; } }
+
+@keyframes q-draft-spin { to { transform: rotate(360deg); } }
+.q-draft-spin { animation: q-draft-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .q-draft-spin { animation: none; } }

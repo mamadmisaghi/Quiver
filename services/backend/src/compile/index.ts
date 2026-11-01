@@ -1,5 +1,6 @@
 import { strategyNodes } from "../engine/nodes";
 import type { CompileEvent } from "../../contracts/src/events";
+import type { DraftContinuation } from "../../contracts/src/clarification";
 import type { Strategy } from "../../contracts/src/strategy";
 import { humanize } from "../engine/humanize";
 import { hasErrors, validateStrategy } from "../engine/validate";
@@ -34,7 +35,7 @@ const MAX_REPAIRS = 2;
 export const LLM_CALL_TIMEOUT_MS = 20_000; export const LLM_TOTAL_BUDGET_MS = 45_000;
 const DEMO_NOTICE = "Demo compile: rules were built by a keyword parser, not AI. Check every value before running.";
 
-export async function* compile(req: { thesis: string; baseStrategy?: Strategy; instruction?: string; image?: { mime: string; base64: string }; note?: string }, d: CompileDeps): AsyncGenerator<CompileEvent> {
+export async function* compile(req: { thesis: string; clarification?: DraftContinuation; baseStrategy?: Strategy; instruction?: string; image?: { mime: string; base64: string }; note?: string }, d: CompileDeps): AsyncGenerator<CompileEvent> {
   const wait = () => (d.delayMs ? new Promise((r) => setTimeout(r, d.delayMs)) : Promise.resolve());
   const prog = (step: keyof typeof LABELS, attempt = 1): CompileEvent => ({ type: "progress", step, label: LABELS[step], attempt });
   yield prog("reading"); await wait();

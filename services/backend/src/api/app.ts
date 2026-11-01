@@ -449,7 +449,7 @@ export function createApp(o: AppOptions) {
     chargeCompile(u);
     store.audit.push({ at: clock.now(), userId: u.id, action: "compile.image", target: `${chk.mime}:${chk.width}x${chk.height}:${chk.bytes}:${chk.sha256.slice(0, 16)}` });
     const note = b.note?.replace(/\p{Cc}/gu, " ").trim() || undefined;
-    const gen = planCompile({ thesis: note ?? "Strategy from a chart screenshot", note, image: { mime: chk.mime, base64: b.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
+    const gen = planCompile({ clarification: b.clarification, thesis: note ?? "Strategy from a chart screenshot", note, image: { mime: chk.mime, base64: b.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
       openrouter: { apiKey: key, model: cfg.LLM_VISION_MODEL ?? cfg.LLM_MODEL ?? "openai/gpt-4.1-mini", budget: llmBudget } });
     c.header("content-type", "application/x-ndjson"); c.header("cache-control", "no-store");
     return stream(c, async (s) => { let failed = false; for await (const ev of gen) { if (ev.type === "error") failed = true; await s.write(JSON.stringify(ev) + "\n"); }
