@@ -17,9 +17,12 @@ export default function WorkflowRun({ runId }: { runId: string }) {
   const current = useRef<PaperSession | null>(null), release = useRef<(() => void) | null>(null), generation = useRef(0), alive = useRef(false), inFlight = useRef(false), acquiring = useRef(false);
   const save = (state: PaperState | null, status: PaperSession["status"]) => { const s = checkpointPaperSession(runId, state, status); current.current = s; if (alive.current) setSession(s); return s; };
   const pause = () => {
-    generation.current++; release.current?.(); release.current = null;
+    const ownsSession = release.current !== null;
+    generation.current++;
     if (alive.current) { setRunning(false); setBusy(false); }
-    if (current.current?.status === "running") { try { save(current.current.state, "paused"); } catch (e) { if (alive.current) setError((e as Error).message); } }
+    // A second tab can observe this session, but must never overwrite its driver's checkpoint.
+    if (ownsSession && current.current?.status === "running") { try { save(current.current.state, "paused"); } catch (e) { if (alive.current) setError((e as Error).message); } }
+    release.current?.(); release.current = null;
   };
   const refresh = async (execute = false) => {
     const s = current.current; if (!s || inFlight.current) return; inFlight.current = true; setBusy(true); const gen = generation.current;
