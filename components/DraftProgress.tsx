@@ -37,38 +37,27 @@ function Questions({ data, busy, persian: fa, onContinue }: { data: Clarificatio
   const [index, setIndex] = useState(0), [answers, setAnswers] = useState<Record<string, string>>({}), [invalid, setInvalid] = useState("");
   const focus = useRef<HTMLDivElement>(null), q = data.questions[index], value = answers[q.id] ?? "", last = index === data.questions.length - 1;
   const shell = useRef<HTMLDivElement>(null), content = useRef<HTMLFormElement>(null);
-  const leaving = useRef<Animation | null>(null), previousHeight = useRef(0);
-  const [moving, setMoving] = useState(false);
+  const previousHeight = useRef(0), switching = useRef(false);
   const go = (target: number) => {
-    if (busy || leaving.current || target === index || !content.current) return;
-    setInvalid("");
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !content.current.animate) {
-      setIndex(target);
-      return;
-    }
-    const form = content.current;
+    if (busy || switching.current || target === index) return;
+    switching.current = true;
     previousHeight.current = shell.current?.getBoundingClientRect().height ?? 0;
-    setMoving(true);
-    const fade = form.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 85, easing: "ease-out", fill: "forwards" });
-    leaving.current = fade;
-    fade.finished.then(() => { if (leaving.current === fade) setIndex(target); }, () => {});
+    setInvalid("");
+    setIndex(target);
   };
   useLayoutEffect(() => {
-    const form = content.current, panel = shell.current;
-    leaving.current?.cancel();
-    leaving.current = null;
-    setMoving(false);
-    const from = previousHeight.current;
+    switching.current = false;
+    const form = content.current, panel = shell.current, from = previousHeight.current;
     previousHeight.current = 0;
     const animations: Animation[] = [];
-    if (from && form && panel && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      animations.push(form.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 155, easing: "ease-out" }));
+    if (from && form?.animate && panel && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      animations.push(form.animate([{ opacity: 0, transform: "translateY(3px)" }, { opacity: 1, transform: "none" }], { duration: 180, easing: "ease-out" }));
       const to = form.getBoundingClientRect().height;
       if (Math.abs(from - to) > 1) animations.push(panel.animate([{ height: from + "px" }, { height: to + "px" }], { duration: 180, easing: "cubic-bezier(.22,.8,.3,1)" }));
     }
     const control = focus.current?.querySelector<HTMLElement>("input:checked") ?? focus.current?.querySelector<HTMLElement>("input, textarea");
     control?.focus({ preventScroll: true });
-    return () => { animations.forEach((a) => a.cancel()); leaving.current?.cancel(); leaving.current = null; };
+    return () => { animations.forEach((a) => a.cancel()); };
   }, [index]);
   const next = () => {
     const n = Number(value.trim().replace(/[۰-۹]/g, (x) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(x))).replace(/[٠-٩]/g, (x) => String("٠١٢٣٤٥٦٧٨٩".indexOf(x))).replace(/[,٬]/g, "").replace(/٫/g, "."));
@@ -77,7 +66,7 @@ function Questions({ data, busy, persian: fa, onContinue }: { data: Clarificatio
   };
   return <div className="border-t border-line p-5 sm:p-6 md:border-t-0" dir={fa ? "rtl" : "ltr"}>
     <div className="mb-4 flex items-center justify-between text-[12px] text-muted"><span>{fa ? "تکمیل جزئیات" : "Complete the details"}</span><span aria-live="polite" aria-atomic="true" className="font-mono tabular-nums">{index + 1} / {data.questions.length}</span></div>
-    <div ref={shell} className="q-question-shell"><form ref={content} onSubmit={(e) => { e.preventDefault(); if (!busy && !moving && !leaving.current) next(); }}>
+    <div ref={shell} className="q-question-shell"><form ref={content} onSubmit={(e) => { e.preventDefault(); if (!busy && !switching.current) next(); }}>
       <label id="draft-question-label" htmlFor={`answer-${q.id}`} className="block text-[16px] font-medium leading-relaxed">{q.label}</label>
       <p id="draft-question-help" className="mt-2 text-[12.5px] leading-relaxed text-muted">{q.help}</p>
       <fieldset disabled={busy} className="mt-5" aria-labelledby="draft-question-label">
@@ -88,8 +77,8 @@ function Questions({ data, busy, persian: fa, onContinue }: { data: Clarificatio
         </div>
         {invalid && <p role="alert" className="mt-2 text-[12px] text-short">{invalid}</p>}
         <div className="mt-5 flex items-center justify-between gap-3">
-          {index > 0 ? <button type="button" onClick={() => go(index - 1)} disabled={moving} className="q-action"><ArrowLeft size={14} />{fa ? "قبلی" : "Back"}</button> : <span className="text-[12px] text-muted">{fa ? "قوانین قبلی حفظ می‌شوند" : "Your other rules are kept"}</span>}
-          <button type="submit" className="q-action q-primary" disabled={busy || moving || !value.trim()}>{busy ? <LoaderCircle size={14} className="q-draft-spin" /> : null}{busy ? (fa ? "در حال تکمیل…" : "Finishing…") : last ? (fa ? "تکمیل پیش‌نویس" : "Finish draft") : (fa ? "ادامه" : "Continue")}{!busy && <ArrowRight size={14} />}</button>
+          {index > 0 ? <button type="button" onClick={() => go(index - 1)} className="q-action"><ArrowLeft size={14} />{fa ? "قبلی" : "Back"}</button> : <span className="text-[12px] text-muted">{fa ? "قوانین قبلی حفظ می‌شوند" : "Your other rules are kept"}</span>}
+          <button type="submit" className="q-action q-primary" disabled={busy || !value.trim()}>{busy ? <LoaderCircle size={14} className="q-draft-spin" /> : null}{busy ? (fa ? "در حال تکمیل…" : "Finishing…") : last ? (fa ? "تکمیل پیش‌نویس" : "Finish draft") : (fa ? "ادامه" : "Continue")}{!busy && <ArrowRight size={14} />}</button>
         </div>
       </fieldset>
     </form></div>

@@ -87,6 +87,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   };
   const router = useRouter();
   const [starting, setStarting] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
   const [paperAttempted, setPaperAttempted] = useState(false);
   const reviewRef = useRef<HTMLDivElement | null>(null);
   const [confirmEach, setConfirmEach] = useState(false); // M4.2 approvalMode
@@ -98,9 +99,9 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   ])];
   const reviewSetup = () => {
     setPaperAttempted(true);
+    const fix = reviewRef.current?.querySelector<HTMLButtonElement>(".q-setup-issues button");
+    if (fix) { fix.click(); return; }
     requestAnimationFrame(() => {
-      const fix = reviewRef.current?.querySelector<HTMLButtonElement>(".q-setup-issues button");
-      if (fix) { fix.click(); return; }
       const target = reviewRef.current?.querySelector<HTMLElement>('[data-paper-required="true"]') ?? reviewRef.current;
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
@@ -111,7 +112,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     return api.updateStrategy(editingRecord.id, value, editingRecord.version);
   };
   const paperTrade = async () => {
-    if (!strategy || dirty || phase !== "done" || startingRef.current || saving) return;
+    if (!strategy || dirty || phase !== "done" || startingRef.current || saving || lookingUp) return;
     // Configuration is actionable from the primary button. Validate before
     // saving or creating a session, using the same checks as the setup panel.
     if (!strategy.workflow && API_MODE === "mock") {
@@ -272,7 +273,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         </div>
       </section>
 
-      {strategy?.workflow && phase === "done" && <div ref={reviewRef} tabIndex={-1} className="rounded-[14px]"><WorkflowReview workflow={strategy.workflow} problems={launchProblems} showProblems={paperAttempted} onClarify={() => {
+      {strategy?.workflow && phase === "done" && <div ref={reviewRef} tabIndex={-1} className="rounded-[14px]"><WorkflowReview workflow={strategy.workflow} onLookupChange={setLookingUp} problems={launchProblems} showProblems={paperAttempted} onClarify={() => {
         pendingEdit.current = { baseStrategy: strategy };
         void run(undefined, text, { workflow: strategy.workflow!, history: [], answers: {} });
       }} onChange={(workflow) => {
@@ -312,10 +313,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
               {confirmEach && <label className="flex items-center gap-1 text-muted"><span className="sr-only">Approval window</span><select value={ttl} onChange={(e) => setTtl(Number(e.target.value))} className="rounded-[6px] border border-line-2 bg-bg px-1 py-0.5 text-ink-2">{[[60, "1 min"], [300, "5 min"], [900, "15 min"], [3600, "1 hour"]].map(([v, l]) => <option key={v} value={v}>{l} to answer</option>)}</select></label>}
             </span>}
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
-            <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
+            <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || lookingUp || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
             <button type="button" disabled title="Live trading is not connected yet" aria-label="Live trade, not connected" className="q-action">Live trade</button>
-            <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={dirty || phase !== "done" || starting || saving} className="q-action q-primary">{starting ? "Opening session…" : phase === "done" && !strategy?.workflow && API_MODE === "mock" ? "Prepare live-quote draft →" : "Run paper trade →"}</button>
+            <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={dirty || phase !== "done" || starting || saving || lookingUp} className="q-action q-primary">{lookingUp ? "Checking market…" : starting ? "Opening session…" : phase === "done" && !strategy?.workflow && API_MODE === "mock" ? "Prepare live-quote draft →" : "Run paper trade →"}</button>
           </div>
         </div>
         {phase === "done" && !dirty && launchProblems.length > 0 && <p id="paper-setup-status" className="mt-2 text-[12px] leading-relaxed text-muted">{launchProblems[0]}{strategy?.workflow && <> <button type="button" onClick={reviewSetup} className="text-accent underline underline-offset-4">Review detail</button></>}</p>}

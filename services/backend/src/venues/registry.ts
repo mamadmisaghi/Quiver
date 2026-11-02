@@ -30,6 +30,10 @@ export const MOCK_INSTRUMENTS: InstrumentMeta[] = [
   { id: "pm:outcome:fed-cut-december:YES", venue: "polymarket", kind: "outcome", symbol: "FEDCUT", assetClass: "outcome", name: "Fed cuts in December? — YES", base: 0.66, vol: 0.08, depthUsd: 100_000, mock: true },
 ];
 
+export function isEquitySymbol(symbol: string) {
+  return MOCK_INSTRUMENTS.some((m) => m.symbol === symbol && (m.assetClass === "equity" || m.assetClass === "etf"));
+}
+
 export class Registry {
   private byId = new Map<string, InstrumentMeta>();
   constructor(items: InstrumentMeta[]) { for (const i of items) this.byId.set(i.id, i); }

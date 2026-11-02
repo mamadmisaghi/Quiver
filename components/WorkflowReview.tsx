@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Search, CircleHelp, ArrowUpRight } from "lucide-react";
+import { isEquitySymbol } from "@/services/backend/src/venues/registry";
 import { MarketResolution, stageMarketProblem, type Workflow } from "@/lib/contracts";
 
 const sideName: Record<string, string> = { buy: "Buy", sell: "Sell", long: "Long", short: "Short", close: "Close" };
@@ -8,21 +9,34 @@ const unitName: Record<string, string> = { usd: "USD", pct_equity: "% of equity"
 function Group({ title, help, children }: { title: string; help: string; children: React.ReactNode }) {
   return <div className="grid gap-5 border-t border-line py-6 md:grid-cols-[168px_minmax(0,1fr)] md:gap-8"><div><h3 className="text-[14px] font-medium">{title}</h3><p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{help}</p></div><div className="min-w-0">{children}</div></div>;
 }
-export default function WorkflowReview({ workflow: w, onChange, onClarify, problems: blockers, showProblems }: {
+export default function WorkflowReview({ workflow: w, onChange, onClarify, onLookupChange, problems: blockers, showProblems }: {
   workflow: Workflow; onChange: (w: Workflow) => void; onClarify?: () => void;
-  problems: string[]; showProblems: boolean;
+  onLookupChange: (busy: boolean) => void; problems: string[]; showProblems: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null), [message, setMessage] = useState<{ id: string; text: string } | null>(null);
   const [queries, setQueries] = useState<Record<string, string>>({}), [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const latest = useRef(w); useEffect(() => { latest.current = w; }, [w]);
   const setAsset = (id: string, update: Partial<Workflow["assets"][number]>) => onChange({ ...latest.current, assets: latest.current.assets.map((a) => a.id === id ? { ...a, ...update } : a) });
-  const search = async (id: string, route?: "perp") => {
-    const a = latest.current.assets.find((v) => v.id === id)!; setBusy(id); setMessage(null);
+  const lookup = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    lookup.current?.abort();
+    lookup.current = null;
+    onLookupChange(false);
+  }, [onLookupChange]);
+  const search = async (id: string, route?: "perp" | "equity") => {
+    lookup.current?.abort();
+    const controller = new AbortController();
+    lookup.current = controller;
+    const a = latest.current.assets.find((v) => v.id === id)!; setBusy(id); onLookupChange(true); setMessage(null);
     try {
       const { resolution: _, ...input } = a;
-      const query = (route ? a.query : queries[id] ?? a.query).trim(); if (!query) throw new Error("Enter a ticker, mint or event title.");
-      const r = await fetch("/api/preview/resolve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...input, query, sourceText: query, ...(route === "perp" ? { venue: "hyperliquid", kind: "perp" } : {}) }) });
-      const data = await r.json() as { message?: string }; if (!r.ok) throw new Error(data.message ?? "Lookup failed. Retry shortly.");
+      const selected = a.resolution?.candidates.find((c) => c.id === a.resolution?.selectedId);
+      const ticker = route === "equity" ? selected?.symbol.split(":").pop() : undefined;
+      const query = (ticker ?? (route ? a.query : queries[id] ?? a.query)).trim(); if (!query) throw new Error("Enter a ticker, mint or event title.");
+      const r = await fetch("/api/preview/resolve", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ ...input, query, sourceText: query, ...(route === "perp" ? { venue: "hyperliquid", kind: "perp" } : route === "equity" ? { venue: "robinhood", kind: "token" } : {}) }) });
+      const data = await r.json() as { message?: string };
+      if (controller.signal.aborted) return;
+      if (!r.ok) throw new Error(data.message ?? "Lookup failed. Retry shortly.");
       const resolution = MarketResolution.parse(data);
       if (route && !resolution.candidates.length) throw new Error(resolution.message);
       const chosen = resolution.candidates.find((c) => c.id === resolution.selectedId);
@@ -30,8 +44,8 @@ export default function WorkflowReview({ workflow: w, onChange, onClarify, probl
         ...(chosen ? { venue: chosen.venue, kind: chosen.kind, outcome: chosen.outcome } : {}) });
       setExpanded((v) => ({ ...v, [id]: !chosen }));
       if (route && chosen) setMessage({ id, text: "Selected " + chosen.name + " for this paper strategy." });
-    } catch (e) { setMessage({ id, text: e instanceof Error ? e.message : "Could not look up this market." }); }
-    finally { setBusy(null); }
+    } catch (e) { if (!controller.signal.aborted) setMessage({ id, text: e instanceof Error ? e.message : "Could not look up this market." }); }
+    finally { if (lookup.current === controller) { lookup.current = null; setBusy(null); onLookupChange(false); } }
   };
   const fixes = new Map<string, string>();
   for (const a of w.assets) {
@@ -90,6 +104,7 @@ export default function WorkflowReview({ workflow: w, onChange, onClarify, probl
           </button>
           {open && <div id={`market-options-${a.id}`} className="mt-4 space-y-3">
             {(requiresPerp || stockReference || a.venue === "robinhood") && selected?.kind !== "perp" && <div className="q-market-route"><span>{requiresPerp ? "This order needs a perpetual contract." : "Look up a perpetual if you want to use its mark price."}</span><button type="button" disabled={!!busy} className="q-action" onClick={() => void search(a.id, "perp")}>{busy === a.id ? "Checking market…" : "Find Hyperliquid perpetual"}</button></div>}
+            {selected?.kind === "perp" && !requiresPerp && isEquitySymbol(selected.symbol.split(":").pop()!) && <div className="q-market-route"><span>A 1× stock position can use the underlying US equity price.</span><button type="button" disabled={!!busy} className="q-action" onClick={() => void search(a.id, "equity")}>{busy === a.id ? "Checking market…" : "Use stock price reference"}</button></div>}
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void search(a.id); }}><input aria-label={`Search market for ${a.query}`} value={queries[a.id] ?? a.query} maxLength={200} placeholder="Ticker, contract or event" onChange={(e) => setQueries({ ...queries, [a.id]: e.target.value })} className="q-control min-w-0 flex-1" /><button disabled={!!busy} className="q-action shrink-0"><Search size={14} />{busy === a.id ? "Searching…" : "Search"}</button></form>
             <div className="max-h-80 overflow-y-auto rounded-xl border border-line-2 empty:hidden">{a.resolution?.candidates.map((c) => <label key={c.id} className={`flex cursor-pointer items-start gap-3 border-b border-line p-3.5 last:border-b-0 transition-colors hover:bg-white/[.025] ${selected?.id === c.id ? "bg-accent/[.04]" : ""}`}>
               <input type="radio" name={`market-${a.id}`} checked={selected?.id === c.id} onChange={() => { setAsset(a.id, { venue: c.venue, kind: c.kind, outcome: c.outcome, resolution: { ...a.resolution!, selectedId: c.id, status: "matched" } }); setExpanded((v) => ({ ...v, [a.id]: false })); }} className="mt-1 h-4 w-4 shrink-0" />

@@ -1,5 +1,5 @@
 import type { Workflow, MarketCandidate } from "../../contracts/src/workflow";
-import { MOCK_INSTRUMENTS } from "../venues/registry";
+import { MOCK_INSTRUMENTS, isEquitySymbol } from "../venues/registry";
 
 type Asset = Workflow["assets"][number];
 const ALIASES: Record<string, string> = { "نیت": "NEET", "نییت": "NEET", "بیتکوین": "BTC", "سولانا": "SOL", "نویدیا": "NVDA", nvidia: "NVDA", "انویدیا": "NVDA", "انودیا": "NVDA", bitcoin: "BTC", "بیت کوین": "BTC", "بیت‌کوین": "BTC", ethereum: "ETH", ether: "ETH", "اتریوم": "ETH", tesla: "TSLA", apple: "AAPL", microsoft: "MSFT", "pump.fun": "PUMP", pumpfun: "PUMP", "pump fun": "PUMP", "پامپ فان": "PUMP", "neet": "NEET" };
@@ -28,9 +28,6 @@ export async function marketJson(url: string, init?: RequestInit, ttlMs = 120_00
 const nullable = (v: unknown, max = 100): string | null => typeof v === "string" ? v.slice(0, max) : null;
 const list = (v: unknown): any[] => Array.isArray(v) ? v : typeof v === "string" ? (() => { try { const r = JSON.parse(v); return Array.isArray(r) ? r : []; } catch { return []; } })() : [];
 
-const equitySymbol = (symbol: string) => MOCK_INSTRUMENTS.some((m) =>
-  m.symbol === symbol && (m.assetClass === "equity" || m.assetClass === "etf"));
-
 /** HIP-3 uses a case-sensitive "dex:COIN" identity. The main DEX has no prefix. */
 export function perpetualInfo(type: "meta" | "metaAndAssetCtxs", dex?: string): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" },
@@ -58,7 +55,7 @@ export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Prom
     }
     if (a.venue === "hyperliquid" || a.kind === "perp") {
       const named = /^([a-z0-9]{1,16}):([a-z0-9._-]{1,20})$/i.exec(a.query.trim());
-      const dex = named ? named[1].toLowerCase() : equitySymbol(sym) ? "xyz" : undefined;
+      const dex = named ? named[1].toLowerCase() : isEquitySymbol(sym) ? "xyz" : undefined;
       const symbol = named ? named[2].toUpperCase() : sym;
       const identity = dex ? dex + ":" + symbol : symbol;
       const raw: any = await get("https://api.hyperliquid.xyz/info", perpetualInfo("meta", dex));
