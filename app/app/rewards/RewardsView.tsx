@@ -14,6 +14,11 @@ export default function RewardsView() {
   const q = useQ(() => api.rewards());
   if (!q.data) return <Wrap><PageHeader title="Rewards" sub={SUB} /><Loading h={360} q={q} /></Wrap>;
   const r = q.data;
+  if (r.example) return <Wrap>
+    <PageHeader title="Rewards" sub="Your points and reward activity." />
+    <Stats n={3}><Stat k="Points" v="0" /><Stat k="Season" v="—" /><Stat k="Rank" v="—" /></Stats>
+    <Card className="mt-6 p-6"><h2 className="font-medium">Reward history</h2><p className="mt-3 text-[14px] text-muted">No rewards yet. Points will appear here when a season opens.</p></Card>
+  </Wrap>;
   const open = r.quests.filter((x) => !x.done).reduce((a, x) => a + x.points, 0);
   const pct = r.totalParticipants > 0 ? Math.max(1, Math.round((r.rank / r.totalParticipants) * 100)) : null;
   return (

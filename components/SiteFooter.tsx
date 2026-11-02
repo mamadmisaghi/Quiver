@@ -24,7 +24,7 @@ export default function SiteFooter() {
         ))}
       </div>
       <div className="mx-auto max-w-[1320px] border-t border-line px-5 py-6 text-[12px] leading-relaxed text-muted sm:px-8">
-        Preview build with demo data. Trading can lose money; paper results don&apos;t predict live results. Stock tokens are not available to US persons and in some other regions. Quiver is not affiliated with Robinhood, Solana, Hyperliquid or Polymarket.
+        Trading can lose money; paper results don&apos;t predict live results. Stock tokens are not available to US persons and in some other regions. Quiver is not affiliated with Robinhood, Solana, Hyperliquid or Polymarket.
       </div>
     </footer>
   );

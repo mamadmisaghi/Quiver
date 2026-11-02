@@ -6,10 +6,9 @@ import VenueMark from "@/components/VenueMark";
 import { Th } from "@/components/Wrap";
 import { Card, Pill, Spark } from "@/components/ui";
 import Loading from "@/components/Loading";
-import { api, API_MODE, fmtPct, fmtUsd, fmtAgo, tone, RUN_STATUS, DEMO_LABEL } from "@/lib/api";
+import { api, API_MODE, fmtPct, fmtUsd, fmtAgo, tone, RUN_STATUS } from "@/lib/api";
 import DraftTransfer from "@/components/DraftTransfer";
 import { deletePreviewDraft } from "@/lib/api/preview-workspace";
-import { STRATEGIES as EXAMPLES } from "@/lib/api/fixtures";
 import { useQ } from "@/lib/api/useQ";
 import HandleLink from "@/components/social/Handle";
 import CopyDialog from "@/components/social/CopyDialog";
@@ -20,7 +19,7 @@ export default function StrategiesView() {
   const [remove, setRemove] = useState<string | null>(null), [removing, setRemoving] = useState(false), [removeError, setRemoveError] = useState<string | null>(null);
   const [copying, setCopying] = useState<{ id: string; name: string; handle: string } | null>(null);
   const q = useQ(async () => { const [s, runs, pub] = await Promise.all([api.strategies(), api.runs(), api.publicStrategies({ sort: "return_30d" })]); return { s, runs, pub, now: Date.now() }; });
-  const header = <PageHeader title="Strategies" sub={`Everything you've drafted or are paper-trading · ${DEMO_LABEL}`}
+  const header = <PageHeader title="Strategies" sub="Your saved drafts and paper strategies."
     right={<Link href="/app/new" className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5">+ New strategy</Link>} />;
   if (!q.data) return <div className="mx-auto max-w-[1180px] px-5 py-10 sm:px-8 sm:py-12">{header}<Loading h={420} q={q} /></div>;
   const { s, runs, pub, now } = q.data;
@@ -51,7 +50,7 @@ export default function StrategiesView() {
                 <td data-label="PnL" className={`tnum px-5 font-mono ${tone(r?.pnlPct)}`}>{r ? fmtPct(r.pnlPct, { sign: true }) : "—"}</td>
                 <td data-label="Updated" className="tnum px-5 font-mono text-muted">{fmtAgo(x.updatedAt, now)}</td>
                 <td className="px-5 text-right"><Link href={r ? `/app/run/${r.id}` : `/app/new?strategy=${encodeURIComponent(x.id)}`} className="inline-flex min-h-11 items-center text-[13px] text-muted group-hover:text-ink">{r ? "Open run →" : "Edit →"}</Link>
-                  {API_MODE === "mock" && !EXAMPLES.some((v) => v.id === x.id) && <div className="mt-1 flex justify-end gap-3 text-[12px]">{remove === x.id
+                  {API_MODE === "mock" && <div className="mt-1 flex justify-end gap-3 text-[12px]">{remove === x.id
                     ? <><span className="self-center text-muted">Remove draft?</span><button disabled={removing} className="min-h-11 text-short disabled:opacity-40" onClick={async () => { setRemoving(true); setRemoveError(null); try { await deletePreviewDraft(x.id); setRemove(null); q.reload(); } catch (e) { setRemoveError(e instanceof Error ? e.message : "Could not remove draft."); } finally { setRemoving(false); } }}>Remove</button><button className="min-h-11 text-muted" onClick={() => setRemove(null)}>Keep</button></>
                     : <button className="min-h-11 text-muted hover:text-short" aria-label={`Remove ${x.name}`} onClick={() => setRemove(x.id)}>Remove</button>}</div>}
                 </td>
@@ -62,7 +61,7 @@ export default function StrategiesView() {
       </Card>
 
       <h2 className="mt-12 text-[15px] font-medium">Public strategies</h2>
-      <p className="mt-1 text-[13.5px] text-muted">Shared by other traders. Fork one to paper-trade your own copy.</p>
+      <p className="mt-1 text-[13.5px] text-muted">{pub.items.length ? "Shared by other traders. Fork one to paper-trade your own copy." : "No public strategies have been shared yet."}</p>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
         {pub.items.slice(0, 6).map((p) => (
           <Card key={p.id} className="flex flex-col p-5">

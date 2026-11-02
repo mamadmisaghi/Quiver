@@ -1,3 +1,4 @@
+import { classifyDraftPrompt } from "./prompt-guidance";
 import { continueDraft, draftQuestions, clarifiedRequest } from "./clarifications";
 import type { DraftContext, DraftContinuation } from "../../contracts/src/clarification";
 import { z } from "zod";
@@ -136,6 +137,14 @@ function matchesExactDraft(template: Workflow, input: DraftContinuation, thesis:
 export function isEditRequest(text: string) { return /^\s*(add|change|edit|tighten|remove|adjust|increase|decrease|set|only trade|اضافه|تغییر|حذف|ویرایش)(?:\s|$)/i.test(text); }
 
 export async function* planCompile(req: Parameters<typeof compile>[0], d: CompileDeps): AsyncGenerator<CompileEvent> {
+  const freshText = !req.image && !req.clarification && !req.baseStrategy && !req.instruction;
+  if (freshText) {
+    const guide = classifyDraftPrompt(req.thesis);
+    if (guide) { yield { type: "error", code: "needs_trade_idea", message: guide.message }; return; }
+  }
+  const noRules = /[\u0600-\u06ff]/.test(req.thesis)
+    ? "می‌خواهی چه دارایی‌ای را در چه شرایطی معامله کنی؟ مثلاً اگر بیت‌کوین ۵٪ افت کرد، ۱۰۰ دلار بخر."
+    : "What would you like to trade? Describe the market, the action and what should trigger it.";
   let continued: ReturnType<typeof continueDraft> | null = null;
   try { if (req.clarification) continued = continueDraft(req.clarification, req.thesis); }
   catch (error) { yield { type: "error", code: "invalid_clarification", message: (error as Error).message }; return; }
@@ -185,10 +194,15 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     const left = deadline - Date.now(); if (left < 500) break;
     if (attempt > 1) yield { type: "progress", step: "repairing", label: "Checking the draft against your request", attempt };
     try {
-      const result = await budgeted(o.budget, () => call({ apiKey: o.apiKey, model: o.model, maxTokens: o.budget.maxOutputTokens ?? 6000, system: PLANNER_PROMPT, user, image: req.image, schema: { name: "QuiverWorkflow", schema: z.toJSONSchema(WorkflowInput, { io: "input" }) }, signal: AbortSignal.timeout(Math.min(o.callTimeoutMs ?? 60_000, left)), ...((attempt > 1 || d.plannerRepair) ? { repair: { previous, issues: problems.map((message) => ({ path: "/", code: "schema" as const, severity: "error" as const, message })) } } : {}) }));
+      const result = await budgeted(o.budget, () => call({ apiKey: o.apiKey, model: o.model, maxTokens: o.budget.maxOutputTokens ?? 6000, system: PLANNER_PROMPT + (freshText ? " If the text expresses no trading intent, return empty assets and stages. Never invent a trade to fill that request." : ""), user, image: req.image, schema: { name: "QuiverWorkflow", schema: z.toJSONSchema(freshText ? WorkflowInput.extend({ assets: z.array(WorkflowInput.shape.assets.element).max(16), stages: z.array(WorkflowInput.shape.stages.element).max(24) }) : WorkflowInput, { io: "input" }) }, signal: AbortSignal.timeout(Math.min(o.callTimeoutMs ?? 60_000, left)), ...((attempt > 1 || d.plannerRepair) ? { repair: { previous, issues: problems.map((message) => ({ path: "/", code: "schema" as const, severity: "error" as const, message })) } } : {}) }));
       if (!result) { yield { type: "error", code: o.budget.refusal?.() === "busy" ? "compile_busy" : "compile_cost_cap", message: o.budget.refusal?.() === "busy" ? "The AI compiler is busy. Please retry shortly." : "The AI budget has been reached. Your existing draft is unchanged." }; return; }
       usage.attempts++; usage.inputTokens += result.inputTokens; usage.outputTokens += result.outputTokens; cost += result.costUsd;
-      previous = result.json; const parsed = WorkflowInput.safeParse(prepareWorkflowInput(result.json));
+      previous = result.json;
+      if (freshText && previous && typeof previous === "object" && "assets" in previous && "stages" in previous
+        && Array.isArray(previous.assets) && !previous.assets.length && Array.isArray(previous.stages) && !previous.stages.length) {
+        yield { type: "error", code: "needs_trade_idea", message: noRules }; return;
+      }
+      const parsed = WorkflowInput.safeParse(prepareWorkflowInput(result.json));
       if (!parsed.success) { problems = parsed.error.issues.slice(0, 15).map((i) => `${i.path.join(".")}: ${i.message}`); continue; }
       workflow = canonicalizeWorkflow(parsed.data);
       // Remove only unused declarations; never add imaginary graph edges to hide an orphan.
@@ -199,7 +213,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
       if (!problems.length) break; workflow = null;
     } catch (error) { console.warn("ai_compile_unavailable", { reason: error instanceof Error ? error.message.slice(0, 100) : "unknown" }); yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not finish a verified draft. Please retry; no substitute strategy was generated." }; return; }
   }
-  if (!workflow || problems.length) { yield { type: "error", code: "intent_not_verified", message: "The draft did not faithfully match your request. Try separating the steps or clarifying the highlighted detail. " + (problems[0] ?? "Please retry.") }; return; }
+  if (!workflow || problems.length) { yield { type: "error", code: "intent_not_verified", message: "I couldn’t turn this description into clear rules. Start with one condition and the order it should trigger." }; return; }
   const questions = draftQuestions(workflow, req.thesis);
   if (questions.length) {
     yield { type: "clarification", draft: { workflow, history }, questions }; return;
@@ -229,7 +243,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
         workflow.questions = [verdict.clarification];
         yield { type: "clarification", draft: { workflow, history }, questions: draftQuestions(workflow, req.thesis) };
       } else {
-        yield { type: "error", code: "intent_not_verified", message: "The proposed rules did not match your request. " + (verdict.issues[0] ?? "Retry the draft.") };
+        yield { type: "error", code: "intent_not_verified", message: "Which condition should trigger which order? Add that detail and draft again." };
       }
       return;
     }
@@ -242,7 +256,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
   const strategy = lowerWorkflow(workflow, thesis, d, req.baseStrategy?.risk);
   yield { type: "progress", step: "checking_risk", label: "Checking dependencies and risk limits", attempt: 1 };
   const validated = validateStrategy(strategy, { registry: d.registry, stockTokensAllowed: d.stockTokensAllowed, purpose: "draft" });
-  if (hasErrors(validated.issues)) { yield { type: "error", code: "intent_not_verified", message: validated.issues[0].message }; return; }
+  if (hasErrors(validated.issues)) { yield { type: "error", code: "intent_not_verified", message: "Check the order sizes, risk limits and which condition starts each order." }; return; }
   const h = humanize(strategy, d.registry);
   for (const node of strategyNodes(strategy, d.registry, h)) yield { type: "partial", node };
   usage.costUsd = cost.toFixed(6);

@@ -37,7 +37,7 @@ const SOURCE: Record<string, string> = {
   uniswap_quote: "Uniswap", uniswap: "Uniswap", pool_twap: "Pool TWAP", venue_mid: "Venue mid", hyperliquid: "Hyperliquid", mock_hyperliquid: "Simulated",
   polymarket: "Polymarket", mock_polymarket: "Simulated", jupiter: "Jupiter", mock_jupiter: "Simulated", synthetic: "Simulated", mock_synthetic: "Simulated",
   modeled_eod_tiingo: "Modeled", jupiter_readonly: "Jupiter", none: "—", vendor: "Data vendor",
-  mock: "Simulated", mock_pool: "Simulated", calendar: "Calendar", timer: "Timer", portfolio: "Portfolio",
+  tiingo_underlying: "Tiingo · underlying equity", dexscreener: "Dexscreener", mock: "Simulated", mock_pool: "Simulated", calendar: "Calendar", timer: "Timer", portfolio: "Portfolio",
 };
 export const humanize = (s: string) => s.replace(/^mock_/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 /** QA P0: never throws. Known sources get their label; mock_* is Simulated; anything else is a generic label. */
@@ -63,7 +63,7 @@ export const HALT_RULE: Record<string, string> = {
 };
 export const fmtDur = (sec: number) => sec >= 3600 ? `${Math.round(sec / 360) / 10} h` : sec >= 60 ? `${Math.round(sec / 60)} min` : `${Math.max(0, Math.round(sec))}s`;
 export const localTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "UTC"; } };
-export const DEMO_LABEL = process.env.NEXT_PUBLIC_API_MODE === "live" ? "Paper mode · live prices" : "Paper mode · demo data";
+export const DEMO_LABEL = process.env.NEXT_PUBLIC_API_MODE === "live" ? "Paper mode · live prices" : "Paper mode";
 
 /** Human copy for API error / rejection codes (server message is the fallback). */
 export const ERROR_COPY: Record<string, string> = {

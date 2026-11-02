@@ -1,23 +1,18 @@
 // MOCK M5.5/M5.10 profiles, follow and paper-only copy (in-memory, deterministic). Mirrors the server's rules:
 // copy needs a follow first (403 details.handle), one copy per source (409), unfollow detaches copies, sync 403 detached|not_following.
+import { MOCK_INSTRUMENTS } from "@/services/backend/src/venues/registry";
 import { z } from "zod";
 import { readSetting, writeSetting } from "./browser-settings";
 import * as C from "@/lib/contracts";
 import { ApiErr, type QuiverSocialApi, type CopyView } from "./types";
 const ME = "@you";
-const PEOPLE: Record<string, { displayName: string | null; bio: string | null; strategies: { id: string; name: string; venues: string[]; forks: number; paperReturn30dPct: string | null }[] }> = {
-  "@demo_marco": { displayName: "Marco", bio: "Macro-event trader. Paper only.", strategies: [{ id: "stg_demo0000000000000000000003", name: "Fed cut + NVDA dip", venues: ["robinhood", "hyperliquid", "polymarket"], forks: 0, paperReturn30dPct: "0.81" }] },
-  // Ids, names and numbers match ext.public-strategies.json / Sage's seed, so profile → /app/strategies/:id resolves.
-  "@demo_lena": { displayName: "Lena", bio: null, strategies: [{ id: "stg_demo0000000000000000000001", name: "BTC oversold bounce", venues: ["hyperliquid"], forks: 0, paperReturn30dPct: "0.06" }] },
-  "@demo_okafor": { displayName: "Okafor", bio: null, strategies: [{ id: "stg_demo0000000000000000000002", name: "ETH trend follow", venues: ["hyperliquid"], forks: 0, paperReturn30dPct: "0.01" }] },
-  "@trader_3f9a0c1d": { displayName: null, bio: null, strategies: [] }, // limited profile (no public strategies)
-};
+const PEOPLE: Record<string, { displayName: string | null; bio: string | null; strategies: { id: string; name: string; venues: string[]; forks: number; paperReturn30dPct: string | null }[] }> = {};
 /** Handles the mock profile endpoint knows (used by proxy.ts to 404 unknown /u/<handle> in mock mode). */
 export const MOCK_PROFILE_HANDLES: readonly string[] = [ME, ...Object.keys(PEOPLE)];
 const profileSchema = z.object({ displayName: z.string().max(60).nullable(), bio: z.string().max(300).nullable() });
 const profile = () => readSetting("profile", profileSchema, { displayName: null, bio: null });
 const followsSchema = z.array(z.string().max(80)).max(200);
-const getFollowing = () => new Set(readSetting("following", followsSchema, ["@demo_lena"]));
+const getFollowing = () => new Set(readSetting("following", followsSchema, []).filter(handle => !handle.startsWith("@demo_")));
 const copiesSchema = z.array(C.CopyView);
 const getCopies = () => readSetting("copies", copiesSchema, []);
 const T0 = "2026-10-27T15:46:00.000Z";
@@ -35,7 +30,7 @@ export const mockSocial: QuiverSocialApi = {
   async search(q, limit = 6) {
     const t = q.trim().toLowerCase(); if (!t || t.length > 80) throw new ApiErr("validation_failed", "Search needs 1–80 characters.", 422);
     const hit = (x: string) => x.toLowerCase().includes(t);
-    const mk = [{ id: "hl:BTC-PERP", symbol: "BTC-PERP", name: "Bitcoin perpetual", venue: "hyperliquid", assetClass: "crypto" }, { id: "hl:ETH-PERP", symbol: "ETH-PERP", name: "Ether perpetual", venue: "hyperliquid", assetClass: "crypto" }, { id: "rh:TSLA", symbol: "TSLA", name: "Tesla stock token", venue: "robinhood", assetClass: "stock" }];
+    const mk = MOCK_INSTRUMENTS.filter(m => m.venue !== "polymarket" && !(m.venue === "robinhood" && m.assetClass === "crypto"));
     const ppl = Object.entries(PEOPLE).filter(([, p]) => p.strategies.length);
     return C.SearchRes.parse({ // M5.20: q is not echoed
       markets: mk.filter((m) => hit(m.symbol) || hit(m.name)).slice(0, limit),
@@ -46,6 +41,7 @@ export const mockSocial: QuiverSocialApi = {
   async activity({ scope = "all", handle, cursor, limit = 20 }) {
     const following = getFollowing(), copies = getCopies();
     if (handle) { // MOCK M5.16 public trader activity
+      if (handle === ME) return { items: [], nextCursor: null };
       const p = PEOPLE[handle]; if (!p) throw new ApiErr("not_found", "Trader not found.", 404);
       const items = p.strategies.map((st, k) => ({ id: `pub.${st.id}.1`, kind: "strategy_published" as const, at: new Date(Date.parse(T0) - (90 + k * 600) * 60_000).toISOString(), actor: { handle, isYou: handle === ME }, strategy: { publicStrategyId: st.id, name: st.name, version: 1 }, run: null }));
       return C.ActivityRes.parse({ items, nextCursor: null, limited: items.length === 0 && handle !== ME });
@@ -54,8 +50,6 @@ export const mockSocial: QuiverSocialApi = {
     const pub = [...following].flatMap((h) => (PEOPLE[h]?.strategies ?? []).map((st, k) => ({ id: `act_pub_${h}_${k}`, kind: "strategy_published" as const, at: at(90 + k * 600), actor: { handle: h, isYou: false }, strategy: { publicStrategyId: st.id, name: st.name, version: 1 }, run: null })));
     const mine = [
       ...copies.flatMap((cp, k) => [{ id: `act_cp_${k}`, kind: "copy_started" as const, at: cp.copiedAt, actor: { handle: ME, isYou: true }, strategy: { publicStrategyId: cp.publicStrategyId, name: cp.sourceName, version: cp.sourceVersion }, run: null }]),
-      { id: "act_run_1", kind: "run_started" as const, at: at(30), actor: { handle: ME, isYou: true }, strategy: { publicStrategyId: null, name: "My NVDA dip test", version: 2 }, run: { runId: "run_01M5Z0VQ20DV23P9NYMM", mode: "paper" as const, status: "running" } },
-      { id: "act_run_0", kind: "run_stopped" as const, at: at(1500), actor: { handle: ME, isYou: true }, strategy: { publicStrategyId: null, name: "SOL funding flip (fork)", version: 1 }, run: { runId: "run_01M5Z0VQ20DV23P9NYMM", mode: "paper" as const, status: "stopped" } },
     ];
     const all = (scope === "following" ? pub : scope === "mine" ? mine : [...pub, ...mine]).sort((a, b) => b.at.localeCompare(a.at));
     const from = cursor ? Number(cursor) || all.length : 0; const items = all.slice(from, from + limit);

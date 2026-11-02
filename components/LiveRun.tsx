@@ -249,7 +249,7 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
       <p className="mt-2 text-[14px] text-muted">There’s no paper run with this link. It may have been removed, or it belongs to another account.</p>
       <div className="mt-5 flex flex-wrap gap-3">
         <Link href="/app/strategies" className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30">Your strategies</Link>
-        <Link href="/app/run/demo" className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110">Open the demo run</Link>
+        <Link href="/app/run" className="btn rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-bg hover:brightness-110">View paper sessions</Link>
       </div>
     </Card></div>);
   if (fatal) return <div className="mx-auto max-w-[1240px] px-5 py-10 sm:px-8"><Card className="flex flex-col items-start gap-4 p-6 text-[14px] text-muted"><p role="alert">{fatal}</p>{needAuth ? <SignInButton onDone={() => { setFatal(null); setAttempt((n) => n + 1); }} /> : <button type="button" onClick={() => { setFatal(null); setAttempt((n) => n + 1); }} className="btn rounded-full border border-line-2 px-4 py-1.5 text-[13px] hover:border-white/30">Try again</button>}</Card></div>;

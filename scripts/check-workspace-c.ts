@@ -15,6 +15,7 @@ import {
   readPaperDefaults,
   writePaperDefaults,
 } from "../lib/api/browser-settings";
+import { cachePreviewDraft } from "../lib/api/preview-drafts";
 import { previewRecord } from "../lib/preview/records";
 import {
   saveConnection,
@@ -48,7 +49,13 @@ globalThis.fetch = async (_u, opts) =>
   opts?.method === "POST"
     ? Response.json({ message: "guest" }, { status: 401 })
     : Response.json({ authenticated: false, items: [] });
-const initial = await mockApi.strategy(STRATEGY_ID);
+assert.deepEqual((await mockApi.strategies()).items, []);
+assert.deepEqual((await mockApi.runs()).items, []);
+await assert.rejects(mockApi.strategy(STRATEGY_ID), /not found/);
+const initial = cachePreviewDraft({
+  ...previewRecord(exampleStrategy(STRATEGY_ID, STRATEGIES[0].name, Strategy.parse(STRATEGY_RAW).risk), STRATEGY_ID, USER_ID),
+  activeRunId: "run_existingpaper00001",
+});
 assert(initial.activeRunId);
 assert(initial.strategy.workflow);
 await assert.rejects(
@@ -78,15 +85,17 @@ await assert.rejects(
   mockApi.updateStrategy(copy.id, copy.strategy, 1),
   /changed/i,
 );
-await mockApi.control(initial.activeRunId, "stop_and_flatten");
-assert.equal((await mockApi.strategy(initial.id)).activeRunId, null);
-for (const [index, symbol] of ["", "AAPL", "ETH", "JUP", "SPY"].entries())
-  if (index)
-    assert.equal(
-      (await mockApi.strategy(STRATEGIES[index].id)).strategy.workflow
-        ?.assets[0].query,
-      symbol,
-    );
+assert.equal((await mockApi.strategy(initial.id)).version, 1);
+for (const hidden of STRATEGIES.slice(1)) await assert.rejects(mockApi.strategy(hidden.id), /not found/);
+assert.deepEqual((await mockApi.publicStrategies()).items, []);
+assert.deepEqual((await mockApi.approvals()).items, []);
+assert.deepEqual((await mockApi.autopilotLog()).items, []);
+assert.equal((await mockApi.autopilot()).enabled, false);
+assert.deepEqual((await mockApi.traders()).items, []);
+assert.deepEqual((await mockApi.activity({ scope: "all" })).items, []);
+assert.deepEqual((await mockApi.landing()).featured, []);
+assert.equal((await mockApi.landing()).preview, null);
+assert.equal((await mockApi.rewards()).points, 0);
 storage.setItem("quiver.studio.settings.v1.paper", JSON.stringify({ mode: "scenario", budgetUsd: 7000 }));
 assert.deepEqual(readPaperDefaults(), { budgetUsd: 7000 });
 writePaperDefaults({ budgetUsd: 7500 });
@@ -213,7 +222,7 @@ assert.throws(() =>
 assert.throws(() => approvedRpc("https://x@rpc.testnet.chain.robinhood.com"));
 sqlite.close();
 console.log(
-  "PASS: active-version isolation, all example identities, saved preferences, alert rules, legacy sessions, exact linked entries, preserved exit conditions, cross-tab pause and encrypted owner-only connections.",
+  "PASS: active-version isolation, empty workspace, hidden fixtures, saved preferences, alert rules, legacy sessions, exact linked entries, preserved exit conditions, cross-tab pause and encrypted owner-only connections.",
 );
 
 // An actual joint drop must buy both coins on one tick before the 5× BTC long.

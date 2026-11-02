@@ -31,7 +31,7 @@ export default function PreviewWorkflow({ probability = false, crossVenue = fals
   ];
   const paths = ["M170 68H181Q190 68 190 77V124Q190 133 199 133H205", "M170 198H181Q190 198 190 189V142Q190 133 199 133H205", "M365 133H400", "M560 133H595"];
   if (crossVenue) paths.push("M755 133H790");
-  return <div ref={graph} data-playing={playing} className={`q-preview-graph${crossVenue ? " q-preview-cross" : ""}`} style={{ aspectRatio: `${width} / 270` }} role="group" aria-label={`Example workflow: two signals feed one trigger, then ${crossVenue ? "NVDA and SOL orders" : "a buy"} and stop-loss exit`}>
+  return <div ref={graph} data-playing={playing} className={`q-preview-graph${crossVenue ? " q-preview-cross" : ""}`} style={{ aspectRatio: `${width} / 270` }} role="group" aria-label={`Strategy workflow: two signals feed one trigger, then ${crossVenue ? "NVDA and SOL orders" : "a buy"} and stop-loss exit`}>
     <svg className="q-preview-wires" viewBox={`0 0 ${width} 270`} preserveAspectRatio="none" aria-hidden="true">
       <defs><marker id={`${uid}-arrow`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="var(--accent)" /></marker></defs>
       {paths.map((d, i) => <g key={d}>
@@ -39,8 +39,8 @@ export default function PreviewWorkflow({ probability = false, crossVenue = fals
         <circle r="2.3" fill="var(--accent)" className="q-demo-pulse" data-leg={i < 2 ? "inputs" : i === 2 ? "order" : i === 3 ? "next" : "risk"} style={{ offsetPath: `path("${d}")` }} />
       </g>)}
     </svg>
-    {nodes.map(({ id, x, y, title, detail, kind, Icon, full }) => <NodeDetails key={id} className="q-node-popover" sideOffset={10} label={`${title} example details`} trigger={<button type="button" className={`q-preview-node q-preview-node-${id}`} style={{ left: `${x / width * 100}%`, top: `${y / 270 * 100}%`, width: `${160 / width * 100}%` }} aria-label={`Example ${kind.toLowerCase()}: ${title}`}><Icon size={21} strokeWidth={1.5} /><span><strong>{title}</strong><small>{detail}</small></span></button>}>
-      <div className="flex items-center justify-between gap-4"><span className="text-[12px] text-muted">{kind} · Example</span><Popover.Close aria-label="Close details" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/5"><X size={14} /></Popover.Close></div><strong className="block text-[15px] font-medium">{title}</strong><p className="mt-2 text-[13px] leading-relaxed text-muted">{full}</p>
+    {nodes.map(({ id, x, y, title, detail, kind, Icon, full }) => <NodeDetails key={id} className="q-node-popover" sideOffset={10} label={`${title} details`} trigger={<button type="button" className={`q-preview-node q-preview-node-${id}`} style={{ left: `${x / width * 100}%`, top: `${y / 270 * 100}%`, width: `${160 / width * 100}%` }} aria-label={`${kind}: ${title}`}><Icon size={21} strokeWidth={1.5} /><span><strong>{title}</strong><small>{detail}</small></span></button>}>
+      <div className="flex items-center justify-between gap-4"><span className="text-[12px] text-muted">{kind}</span><Popover.Close aria-label="Close details" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/5"><X size={14} /></Popover.Close></div><strong className="block text-[15px] font-medium">{title}</strong><p className="mt-2 text-[13px] leading-relaxed text-muted">{full}</p>
     </NodeDetails>)}
   </div>;
 }

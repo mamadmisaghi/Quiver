@@ -20,7 +20,7 @@ export default function RevenueView() {
         <table className="rtable w-full min-w-[640px] text-left text-[13.5px]"><Th cols={["Strategy", "Forks", "Followers' volume", "Earned"]} />
           <tbody>
             {r.rows.map((x) => <tr key={x.strategyId} className="border-b border-line last:border-0"><td data-label="Strategy" className="px-5 py-4">{x.name}</td><td data-label="Forks" className="tnum px-5 font-mono">{x.forks}</td><td data-label="Followers' volume" className="tnum px-5 font-mono">{fmtUsd(x.followersVolumeUsd)}</td><td data-label="Earned" className="tnum px-5 font-mono">{fmtUsd(x.earnedUsd)}</td></tr>)}
-            {!r.rows.length && <tr><td colSpan={4} className="px-5 py-14 text-center text-muted">Publish a strategy to start earning. <Link href="/app/strategies" className="text-ink underline decoration-white/30 underline-offset-2 hover:decoration-current">Your strategies →</Link></td></tr>}
+            {!r.rows.length && <tr><td colSpan={4} className="px-5 py-14 text-center text-muted">No creator revenue recorded. <Link href="/app/strategies" className="text-ink underline decoration-white/30 underline-offset-2 hover:decoration-current">Your strategies →</Link></td></tr>}
           </tbody>
         </table>
       </Card>

@@ -2,7 +2,7 @@
 // M5.4 Plan with AI: streams POST /autopilot/plan/stream (status → candidate cards → plan), falls back to POST /autopilot/plan.
 // The proposal is shown as a diff against current settings and applied only on an explicit click (PUT /autopilot, enabled:false).
 import { useEffect, useRef, useState } from "react";
-import { api, ApiErr, errCopy, fmtNum, type Autopilot, type AutopilotPlan, type AutopilotPlanCandidate, type AutopilotPlanReq } from "@/lib/api";
+import { api, ApiErr, API_MODE, errCopy, fmtNum, type Autopilot, type AutopilotPlan, type AutopilotPlanCandidate, type AutopilotPlanReq } from "@/lib/api";
 import { Card, Pill } from "@/components/ui";
 
 type Goal = NonNullable<AutopilotPlanReq["goal"]>;
@@ -72,7 +72,7 @@ export default function PlanPanel({ cur, names, onApplied }: { cur: Autopilot; n
   return (
     <Card className="mt-4 p-5" data-testid="ap-plan">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="font-medium">Plan with AI</h2><p className="mt-1 text-[13px] text-muted">Backtests your strategies on recent data and proposes settings. Nothing changes until you apply it.</p></div>
+        <div><h2 className="font-medium">{API_MODE === "mock" ? "Plan from paper sessions" : "Plan with AI"}</h2><p className="mt-1 text-[13px] text-muted">{API_MODE === "mock" ? "Compare returns and drawdowns from your recorded paper trades." : "Backtests your strategies on recent data and proposes settings."}</p></div>
         <div className="flex flex-wrap items-center gap-2">
           <div role="radiogroup" aria-label="Goal" className="flex rounded-full border border-line-2 p-0.5">{GOALS.map(([g, l]) => <button key={g} role="radio" aria-checked={goal === g} onClick={() => setGoal(g)} className={`btn rounded-full px-3 py-1 text-[12.5px] ${goal === g ? "bg-white/10 text-ink" : "text-muted"}`}>{l}</button>)}</div>
           <div role="radiogroup" aria-label="Lookback" className="flex rounded-full border border-line-2 p-0.5">{([7, 30] as const).map((d) => <button key={d} role="radio" aria-checked={days === d} onClick={() => setDays(d)} className={`btn rounded-full px-3 py-1 text-[12.5px] tabular-nums ${days === d ? "bg-white/10 text-ink" : "text-muted"}`}>{d}d</button>)}</div>

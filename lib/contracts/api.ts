@@ -44,7 +44,7 @@ export const UpdateStrategyReq = z.object({ strategy: Strategy, expectedVersion:
 // ---------- Compile (NL -> strategy) ----------
 export const CompileReq = z.object({
   clarification: DraftContinuation.optional(),
-  thesis: z.string().min(8).max(2000),
+  thesis: z.string().trim().min(1).max(2000),
   baseStrategy: Strategy.optional(), // present => refine
   instruction: z.string().max(500).optional(), // refine chip text, e.g. "Add a weekend-only filter"
   images: z.array(z.object({ mediaType: z.enum(["image/png", "image/jpeg", "image/webp"]), dataBase64: z.string().max(2_800_000) })).max(2).optional(),

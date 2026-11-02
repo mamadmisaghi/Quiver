@@ -6,7 +6,7 @@ import DisclosurePanel from "./DisclosurePanel";
 export default function SettingsDisclosure({ title, description, children, open = false }: { title: string; description: string; children: React.ReactNode; open?: boolean }) {
   const [expanded, setExpanded] = useState(open);
   const id = useId(), trigger = useRef<HTMLButtonElement>(null);
-  return <section className="rounded-[14px] border border-line bg-card" onKeyDown={event => {
+  return <section className="q-settings-section rounded-[14px] border border-line bg-card" onKeyDown={event => {
     if (event.key !== "Escape" || event.defaultPrevented || !expanded) return;
     event.preventDefault(); trigger.current?.focus({ preventScroll: true }); setExpanded(false);
   }}>

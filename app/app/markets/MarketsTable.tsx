@@ -74,7 +74,7 @@ export default function MarketsTable() {
                   {w && m.venue === "polymarket" && <Link href={`/app/new?q=${encodeURIComponent("When " + m.name + " odds rise, ")}`} className="relative z-10 ml-3 text-[13px] text-accent opacity-70 group-hover:opacity-100">Use as signal →</Link>}
                 </td>
               </tr>); })}
-            {rows && !rows.length && <tr><td colSpan={8} className="px-5 py-10 text-center text-muted">No markets match.</td></tr>}
+            {rows && !rows.length && <tr><td colSpan={8} className="px-5 py-10 text-center text-muted">{tab === "polymarket" && !q ? <a className="text-accent underline-offset-4 hover:underline" href="/app/new?idea=Use%20Polymarket%20odds%20for%20">Choose a prediction market in the builder →</a> : "No markets match."}</td></tr>}
             {!rows && !err && <tr><td colSpan={8} className="px-5 py-10 text-center text-muted" role="status">Loading markets…</td></tr>}
             {err && <tr><td colSpan={8} className="px-5 py-10 text-center">
               <div role="alert" className="text-[14px] text-ink-2">{authErr ? "Sign in to see markets." : err instanceof ApiErr ? errCopy(err.code, err.message) : "Couldn't load markets."}</div>

@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import { cacheLife } from "next/cache";
 import PublicStrategyView from "@/components/strategy/PublicStrategyView";
-import pubs from "@/lib/api/fixtures/ext/ext.public-strategies.json";
-import pub3 from "@/lib/api/fixtures/ext/ext.public-strategy.json";
-import pub1 from "@/lib/api/fixtures/ext/ext.public-strategy.1.json";
-import pub2 from "@/lib/api/fixtures/ext/ext.public-strategy.2.json";
 import { PublicStrategyDetail } from "@/lib/contracts";
 import { serverFetch } from "@/lib/server-api";
 type Detail = ReturnType<typeof PublicStrategyDetail.parse>;
@@ -17,7 +13,7 @@ const BASE_META: Metadata = { title: "Public strategy — Quiver", robots: { ind
 async function load(id: string): Promise<Detail | null> {
   "use cache"; cacheLife({ stale: 30, revalidate: 30, expire: 300 });
   if (!/^stg_[A-Za-z0-9]{6,40}$/.test(id)) return null;
-  if (!LIVE) { const s = [pub1, pub2, pub3].find((x) => x.id === id); return s ? PublicStrategyDetail.parse(s) : null; }
+  if (!LIVE) return null;
   try {
     const r = await serverFetch(`/public/strategies/${encodeURIComponent(id)}`, { signal: AbortSignal.timeout(2500) });
     if (!r.ok) return null;
@@ -31,7 +27,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const desc = d.thesis.slice(0, 160);
   return { ...BASE_META, title: `${d.name} by ${d.author.handle} — Quiver`, description: desc, openGraph: { title: d.name, description: desc }, twitter: { card: "summary" } };
 }
-export function generateStaticParams() { return pubs.items.map((p) => ({ id: p.id })); }
 export default async function PublicStrategyPage({ params }: { params: Promise<{ id: string }> }) {
   const id = decodeURIComponent((await params).id);
   const seed = await load(id);

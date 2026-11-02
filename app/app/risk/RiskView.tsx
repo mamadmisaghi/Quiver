@@ -1,6 +1,7 @@
 "use client";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Pencil, Check, ShieldCheck, Clock3 } from "lucide-react";
+import Link from "@/components/Link";
 import PageHeader from "@/components/PageHeader";
 import Wrap from "@/components/Wrap";
 import { Card } from "@/components/ui";
@@ -81,7 +82,7 @@ export default function RiskView() {
     </label>);
   const closeEditor = () => { if (saving) return; returnFocus.current = editing; setEditing(null); setError(null); };
   const r = rec.data?.strategy.risk;
-  if (list.data && !list.data.items.length) return <Wrap><PageHeader title="Risk limits" sub="Draft a strategy first — its limits show up here." /></Wrap>;
+  if (list.data && !list.data.items.length) return <Wrap><PageHeader title="Risk limits" sub="Risk limits belong to a saved strategy." /><Card className="mt-6 p-6"><h2 className="font-medium">No saved strategies yet</h2><p className="mt-2 text-[14px] text-muted">Save your first draft to set its position size, loss limit and trading hours.</p><Link className="q-action mt-5" href="/app/new">Create a strategy</Link></Card></Wrap>;
   if (!r || !rec.data || rec.data.id !== id) return <Wrap><PageHeader title="Risk limits" sub={DEMO_LABEL} right={sw} /><Loading h={420} q={list.error ? list : rec} /></Wrap>;
   const run = rec.data.activeRunId;
   const L: [keyof Strategy["risk"], string, string, string][] = [

@@ -33,7 +33,7 @@ export interface CompileDeps {
 const LABELS = { reading: "Reading your idea", resolving_markets: "Finding the markets", choosing_feeds: "Choosing price feeds", writing_rules: "Writing the rules", checking_risk: "Checking risk limits", repairing: "Fixing a few details" } as const;
 const MAX_REPAIRS = 2;
 export const LLM_CALL_TIMEOUT_MS = 20_000; export const LLM_TOTAL_BUDGET_MS = 45_000;
-const DEMO_NOTICE = "Demo compile: rules were built by a keyword parser, not AI. Check every value before running.";
+const DEMO_NOTICE = "Rules were matched from your description. Review the conditions and amounts.";
 
 export async function* compile(req: { thesis: string; clarification?: DraftContinuation; baseStrategy?: Strategy; instruction?: string; image?: { mime: string; base64: string }; note?: string }, d: CompileDeps): AsyncGenerator<CompileEvent> {
   const wait = () => (d.delayMs ? new Promise((r) => setTimeout(r, d.delayMs)) : Promise.resolve());
@@ -72,12 +72,12 @@ export async function* compile(req: { thesis: string; clarification?: DraftConti
     yield prog("resolving_markets"); await wait();
     if (req.baseStrategy) {
       usage.attempts = Math.max(usage.attempts, 1); const v = validateStrategy(req.baseStrategy, vctx); strategy = v.strategy; issues = v.issues;
-      if (req.instruction) issues = [...issues, { path: "/", code: "schema", severity: "warning", message: "Refine needs the AI compiler; demo mode returned your strategy unchanged." }];
+      if (req.instruction) issues = [...issues, { path: "/", code: "schema", severity: "warning", message: "The AI compiler is required for this refinement." }];
     } else if (req.image && !req.note) {
       yield { type: "error", code: "compile_failed", message: "Couldn't read rules from that chart. Add a short note (market, condition, amount) and try again." }; return;
     } else {
       const r = demoCompile(req.note ?? req.thesis, d.registry);
-      if (!r.ok) { yield { type: "error", code: "unsupported_prompt", message: `Demo compile: ${r.message}`, suggestions: r.suggestions }; return; }
+      if (!r.ok) { yield { type: "error", code: "unsupported_prompt", message: r.message, suggestions: r.suggestions }; return; }
       yield prog("choosing_feeds"); await wait(); yield prog("writing_rules"); await wait();
       const v = validateStrategy(r.strategy, vctx); strategy = v.strategy;
       issues = [...v.issues, ...r.warnings.map((m) => ({ path: "/", code: "schema" as const, severity: "warning" as const, message: m }))];

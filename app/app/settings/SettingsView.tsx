@@ -62,7 +62,7 @@ export default function SettingsView() {
           <h2 className="font-medium">Usage</h2>
           <dl className="mt-3 divide-y divide-line">
             <Row k="Active runs" v={preview ? s.usage.activeRuns : `${s.usage.activeRuns} / ${s.limits.maxActiveRuns}`} />
-            <Row k={preview ? "Daily AI limits" : "Drafts today"} v={preview ? dailyLimits === null ? "Checking…" : dailyLimits ? "On" : "Off for testing" : `${s.usage.compilesUsedToday} / ${s.limits.compilesPerDay}`} />
+            <Row k={preview ? "Daily AI limits" : "Drafts today"} v={preview ? dailyLimits === null ? "Checking…" : dailyLimits ? "On" : "Off" : `${s.usage.compilesUsedToday} / ${s.limits.compilesPerDay}`} />
             <Row k="Strategies" v={s.usage.strategies} />
             {preview ? <Row k="Trading mode" v="Paper" /> : <Row k="Live event streams" v={`max ${s.limits.maxEventStreams}`} />}
             <Row k="Signals per strategy" v={`max ${s.limits.maxStrategySignals}`} />

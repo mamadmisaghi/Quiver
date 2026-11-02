@@ -5,6 +5,7 @@ import type { DraftContinuation } from "@/lib/contracts";
 import WorkflowReview from "./WorkflowReview";
 import { workflowView } from "@/services/backend/src/engine/workflow-view";
 import { useEffect, useRef, useState } from "react";
+import { addDraftDetail, classifyDraftPrompt, type DraftGuidance } from "@/services/backend/src/compile/prompt-guidance";
 import StrategyGraph from "./StrategyGraph";
 import Link from "./Link";
 import dynamic from "next/dynamic";
@@ -52,6 +53,12 @@ const RESERVE: GNode[] = demoNodes.map((n) => ({ ...n, value: n.kind === "watch"
 export default function Builder({ initialPrompt }: { initialPrompt?: string } = {}) {
   const [text, setText] = useState(initialPrompt ?? "");
   const typed = useRef(false);
+  const guidanceField = useRef<HTMLInputElement>(null);
+  const [guidance, setGuidance] = useState<DraftGuidance | null>(null);
+  const [followUp, setFollowUp] = useState("");
+  useEffect(() => {
+    if (guidance && guidance.kind !== "guide") guidanceField.current?.focus({ preventScroll: true });
+  }, [guidance]);
   const [phase, setPhase] = useState<Phase>("idle");
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
@@ -139,6 +146,13 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     const baseForRefine = strategy;
     const old = { strategy, humanized, nodes, issues, demo, savedId };
     const effectiveInstruction = continuation ? undefined : instruction ?? (strategy && /^\s*(add|change|edit|tighten|remove|adjust|increase|decrease|set|only trade|اضافه|تغییر|حذف|ویرایش)(?:\s|$)/i.test(thesis) ? thesis : undefined);
+    setFollowUp("");
+    const advice = !continuation && !effectiveInstruction && !img ? classifyDraftPrompt(thesis) : null;
+    setGuidance(advice);
+    if (advice) {
+      ctl.current?.abort(); setErr(null); setSuggest([]); setClarification(null); setPhase(strategy ? "done" : "idle");
+      return;
+    }
     if (!continuation) pendingEdit.current = effectiveInstruction && baseForRefine ? { baseStrategy: baseForRefine, instruction: effectiveInstruction } : null;
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
     if (!continuation) setClarification(null);
@@ -165,8 +179,12 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
           setCompiledImage(img?.url ?? null);
           setNodes(deriveNodes(next, Object.fromEntries(fresh.map(node => [node.id, node]))));
           setRevealGraph(true); setStrategy(next); setHumanized(e.humanized); setIssues(e.issues);
-          setDemo(e.compiler === "demo" ? e.notice ?? "Review these demo rules before running." : null);
+          setDemo(e.compiler === "demo" ? e.notice ?? "Review the rules before starting a session." : null);
           setPhase("done"); setTook(performance.now() - t0);
+        }
+        else if (e.type === "error" && (e.code === "needs_trade_idea" || e.code === "unsupported_prompt" || e.code === "intent_not_verified")) {
+          setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId);
+          setGuidance({ kind: "guide", message: e.message, locale: /[\u0600-\u06ff]/.test(thesis) ? "fa" : "en" }); setPhase(old.strategy ? "done" : "idle");
         }
         else if (e.type === "error") { if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setErr(e.message.replace(/^Demo compile:\s*/, "")); setSuggest(e.suggestions ?? []); setPhase(continuation ? "clarifying" : old.strategy ? "done" : "error"); }
       };
@@ -189,7 +207,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       setEditingRecord({ id: rec.id, version: rec.version, activeRunId: rec.activeRunId });
       setHumanized(rec.humanized); setNodes(deriveNodes(rec.strategy, Object.fromEntries(rec.nodes.map((node) => [node.id, node])))); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
       setDemo(null);
-      if (API_MODE === "mock") setSaveNotice("Saved preview draft. Start a test to open its own Paper Trades session.");
+      if (API_MODE === "mock") setSaveNotice("Draft saved. Choose Run paper trade to open a session.");
     }).catch((e) => on && setErr(errOf(e, "Could not open this draft.")));
     return () => { on = false; ctl.current?.abort(); };
   }, [initialPrompt]);
@@ -216,11 +234,11 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {API_MODE === "mock" && <PreviewWorkspaceNotice onReady={setPreviewAiReady} />}
       {/* 1 — Prompt */}
       <form className="q-strategy-composer mt-8 rounded-[14px] border border-line-2 bg-card p-1.5 transition-colors" data-motion="prompt"
-        onSubmit={(e) => { e.preventDefault(); if (!drafting && (text.trim().length >= 8 || img)) run(); }}>
+        onSubmit={(e) => { e.preventDefault(); if (!drafting && (text.trim().length > 0 || img)) run(); }}>
         <label htmlFor="thesis" className="sr-only">Your strategy</label>
-        <textarea id="thesis" value={text} onChange={(e) => { typed.current = true; setText(e.target.value); if (clarification || phase === "drafting") { ctl.current?.abort(); setClarification(null); setPhase("idle"); setErr(null); } }} maxLength={2000} rows={3}
-          onKeyDown={(e) => { if (!drafting && text.trim().length >= 8 && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); } }}
-          placeholder="Describe your strategy here, or choose an example below."
+        <textarea id="thesis" aria-describedby={guidance ? "prompt-guidance" : undefined} value={text} onChange={(e) => { typed.current = true; setGuidance(null); setFollowUp(""); setText(e.target.value); if (clarification || phase === "drafting") { ctl.current?.abort(); setClarification(null); setPhase("idle"); setErr(null); } }} maxLength={2000} rows={3}
+          onKeyDown={(e) => { if (!drafting && (text.trim().length > 0 || img) && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); } }}
+          placeholder="Describe a market, a condition and the order to place…"
           className="block max-h-[45vh] min-h-[96px] w-full resize-none bg-transparent px-3.5 pb-2 pt-3 text-[15px] [field-sizing:content] leading-relaxed text-ink placeholder:text-muted focus:outline-none" />
         <div className="flex items-center justify-between gap-3 px-2 pb-1.5">
           <div className="flex items-center gap-3 text-[12px] text-muted">
@@ -234,12 +252,24 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
               : <button type="button" disabled={API_MODE === "mock" && !previewAiReady} title={API_MODE === "mock" && !previewAiReady ? "Sign in with ChatGPT for configured chart AI" : undefined} onClick={() => fileRef.current?.click()} className="btn min-h-11 rounded-full border border-line-2 px-2.5 py-1 hover:border-white/30 hover:text-ink disabled:opacity-40" data-testid="chart-attach">Attach chart</button>}
             <span className="hidden font-mono sm:inline">Ctrl / ⌘ Enter</span>
           </div>
-          <button type="submit" disabled={drafting || (text.trim().length < 8 && !img)}
+          <button type="submit" disabled={drafting || (!text.trim() && !img)}
             className={`btn rounded-full px-4 py-2 text-[13px] disabled:cursor-not-allowed disabled:opacity-50 ${phase === "done" ? "border border-line-2 text-ink hover:border-white/30 hover:bg-white/5" : "bg-accent font-medium text-bg hover:brightness-110 active:bg-accent-press"}`}>
             {drafting ? "Drafting…" : phase === "done" && !dirty ? "Redraft" : "Draft strategy"}
           </button>
         </div>
       </form>
+      {guidance && <div className="q-draft-guidance" dir={guidance.locale === "fa" ? "rtl" : "ltr"}>
+        <p role="status" id="prompt-guidance">{guidance.message}</p>
+        {guidance.kind !== "guide" && <form onSubmit={event => {
+          event.preventDefault(); if (!followUp.trim()) return;
+          const next = addDraftDetail(text, guidance, followUp);
+          typed.current = true; setText(next); void run(undefined, next);
+        }}>
+          <label htmlFor="prompt-answer" className="sr-only">{guidance.locale === "fa" ? "جزئیات معامله" : "Trade details"}</label>
+          <input ref={guidanceField} id="prompt-answer" className="q-control border px-3 py-2" aria-describedby="prompt-guidance" value={followUp} maxLength={Math.max(0, 1997 - text.trim().length)} onChange={e => setFollowUp(e.target.value)} placeholder={guidance.locale === "fa" ? "مقدار و شرط معامله را بنویس…" : guidance.kind === "detail" ? guidance.field === "size" ? "Amount in USD" : "Now, or a condition…" : "Add your order and condition…"} />
+          <button className="q-action q-primary" disabled={!followUp.trim()}>{guidance.locale === "fa" ? "ادامه" : "Continue"}</button>
+        </form>}
+      </div>}
       {imgMsg && <p role="alert" className="mt-2 px-1 text-[13px] text-short" data-testid="chart-msg">{imgMsg}</p>}
       {img && <p className="mt-2 px-1 text-[12.5px] text-muted" data-testid="chart-note">The chart is sent to the AI provider to draft rules, using your text as a hint. Quiver does not keep the uploaded image.</p>}
       {guest && phase === "idle" && (
@@ -247,9 +277,9 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
           <span>Sign in to save drafts and paper-trade them, or press Draft strategy to try it first.</span>
           <SignInButton onDone={() => { setGuest(false); run(); }} />
         </div>)}
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" tabIndex={0} role="region" aria-label="Example prompts">
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" tabIndex={0} role="region" aria-label="Strategy prompts">
         {(API_MODE === "mock" ? PREVIEW_PROMPTS : SUGGESTIONS).map((s) => (
-          <button key={s} type="button" onClick={() => { ctl.current?.abort(); setText(s); setClarification(null); setPhase("idle"); setErr(null); }}
+          <button key={s} type="button" onClick={() => { ctl.current?.abort(); setGuidance(null); setFollowUp(""); setText(s); setClarification(null); setPhase("idle"); setErr(null); }}
             className="btn shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] text-muted hover:border-line-2 hover:text-ink">{s === SAMPLE_PROMPT ? "Fed odds + NVDA & SOL" : s}</button>
         ))}
       </div>

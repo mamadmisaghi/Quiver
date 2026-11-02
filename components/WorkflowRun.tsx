@@ -86,7 +86,7 @@ export default function WorkflowRun({ runId }: { runId: string }) {
     return () => { pause(); alive.current = false; window.removeEventListener("pagehide", leave); window.removeEventListener("storage", externalChange); };
   }, [runId]);
   useEffect(() => { if (!running) return; void refresh(true); const timer = setInterval(() => void refresh(true), 20_000); return () => clearInterval(timer); }, [running]);
-  if (!session) return <Wrap><PageHeader title="Paper session unavailable" sub="This session is saved in the browser where you created it. Open it there, or start a new test from your strategy." /><Link href="/app/run" className="q-action mt-6">Back to paper trades</Link></Wrap>;
+  if (!session) return <Wrap><PageHeader title="Paper session unavailable" sub="This session is saved in the browser where you created it. Open it there, or start a new session from your strategy." /><Link href="/app/run" className="q-action mt-6">Back to paper trades</Link></Wrap>;
   if (!session.strategy.workflow) return <LegacyPaperRun session={session} />;
   const w = session.strategy.workflow!, state = session.state, scenario = session.mode === "scenario";
   const stageName = (id: string) => { const s = w.stages.find((s) => s.id === id); return s ? `${s.side} ${w.assets.find((a) => a.id === s.assetId)?.query ?? "asset"}` : id; };
@@ -95,7 +95,7 @@ export default function WorkflowRun({ runId }: { runId: string }) {
     <Link href="/app/run" className="mb-5 inline-flex min-h-10 items-center gap-2 text-[13px] text-muted hover:text-ink"><ArrowLeft size={14} />Paper trades</Link>
     <PageHeader title={session.name} sub={`${scenario ? "Archived simulation" : "Live quote paper session"} · Strategy v${session.strategyVersion} · ${new Date(session.createdAt).toLocaleString()}`} right={<span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] ${running ? "border-accent/30 text-accent" : "border-line-2 text-muted"}`}><span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-accent" : "bg-muted"}`} />{status}</span>} />
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-y border-line py-4">
-      <p className="max-w-[58ch] text-[12.5px] leading-relaxed text-muted">{scenario ? "This archived test used generated prices. Open the strategy to start a new paper session with live market prices." : "Virtual trades use indicative prices. Leaving or closing this page pauses observation; resume here to continue."}</p>
+      <p className="max-w-[58ch] text-[12.5px] leading-relaxed text-muted">{scenario ? "This archived session used generated prices. Open the strategy to start a new paper session with live market prices." : "Virtual trades use indicative prices. Leaving or closing this page pauses observation; resume here to continue."}</p>
       <div className="flex flex-wrap gap-2">{!scenario && <><button onClick={() => void refresh()} disabled={busy || running} className="q-action">{busy ? "Reading markets…" : "Refresh quotes"}</button><button onClick={running ? pause : () => void start()} className={`q-action ${running ? "" : "q-primary"}`}>{running ? <Pause size={14} /> : <Play size={14} />}{running ? "Pause session" : "Resume session"}</button></>}<Link href={`/app/new?strategy=${encodeURIComponent(session.strategyId)}`} className="q-action"><ExternalLink size={14} />Open strategy</Link></div>
     </div>
     {error && <p role="alert" className="mt-4 rounded-xl border border-short/30 bg-short/5 p-4 text-[13px] text-short">{error}</p>}

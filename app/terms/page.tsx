@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Terms — Quiver", description: "Dra
 // DRAFT copy pending counsel review (SIGNOFF §4 / §7: TERMS_VERSION must be final before mainnet). Not legal advice.
 const sections: DocSection[] = [
   { id: "beta", title: "This is a beta", body: <>
-    <p>Quiver is a preview. Most of what you see runs on paper and demo data. Features can change or stop without notice, and live trading isn’t open yet.</p>
+    <p>Quiver currently runs strategies with virtual funds. Features can change or stop without notice, and live trading isn’t open yet.</p>
   </> },
   { id: "not-advice", title: "Not financial advice", body: <>
     <p>Quiver is software that runs rules you write. It doesn’t recommend trades, and nothing on the site is investment, legal or tax advice. Trading can lose money. Paper results and backtests don’t predict live results.</p>
