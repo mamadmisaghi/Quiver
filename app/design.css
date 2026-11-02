@@ -109,3 +109,29 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}button:di
 .q-provider-list>div { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 12px; font-size:12px; }
 .q-provider-list>div+div { border-top:1px solid var(--line); }
 .q-provider-list dd { color:var(--muted); }
+
+/* Focus belongs to the complete writing surface. Individual buttons keep their keyboard ring. */
+.q-strategy-composer:focus-within { border-color: var(--muted); }
+.q-strategy-composer textarea:focus,
+.q-strategy-composer textarea:focus-visible { outline: none; box-shadow: none; }
+.q-strategy-composer:has(textarea:focus-visible) { border-color: var(--ink-2); }
+@media (forced-colors: active) {
+  .q-strategy-composer:focus-within { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+.q-question-shell { display: flow-root; overflow: clip; overflow-clip-margin: 5px; }
+.q-quote-heading { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 550; }
+.q-quote-heading > span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.q-setup-issues { margin-bottom: 20px; border-block-start: 1px solid var(--line); padding-block-start: 16px; }
+.q-setup-issues h3 { font-size: 13px; font-weight: 550; }
+.q-setup-issues li, .q-market-route { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 5px; font-size: 12.5px; line-height: 1.6; color: var(--ink-2); }
+.q-setup-issues button { display: inline-flex; align-items: center; gap: 3px; min-height: 34px; color: var(--accent); }
+.q-market-route { justify-content: space-between; padding-block-end: 5px; }
+.q-builder-actions { position: sticky; z-index: 10; bottom: 0; background: var(--q-workspace); padding-block: 13px; border-top: 1px solid var(--line); }
+.q-app-bottom { background: var(--q-workspace); }
+@media (max-width: 1023px) {
+  .q-builder-actions { bottom: calc(64px + env(safe-area-inset-bottom)); padding-block: 10px; }
+}
+@media (max-width: 639px) {
+  .q-builder-actions > div { gap: 6px; }
+  .q-builder-actions .q-action, .q-builder-actions .btn { min-height: 40px; padding-inline: 10px; }
+}

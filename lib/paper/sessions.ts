@@ -34,16 +34,13 @@ function write(session: PaperSession, storage: Storage) {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(PAPER_SESSION_EVENT));
   return session;
 }
-export function createPaperSession(record: StrategyRecord, mode: PaperSession["mode"], storage: Storage = localStorage, startingBalance?: number) {
+export function createPaperSession(record: StrategyRecord, storage: Storage = localStorage) {
   const strategy = Strategy.parse(record.strategy);
-  if (strategy.workflow) {
-    const problems = paperProblems(strategy.workflow, mode === "quotes");
-    if (problems.length) throw new Error(problems[0]);
-  } else if (mode !== "scenario" || !(startingBalance && Number.isFinite(startingBalance) && startingBalance > 0)) {
-    throw new Error("Choose a starting balance for the synthetic paper session.");
-  }
+  if (!strategy.workflow) throw new Error("Prepare this saved draft for live-quote paper trading.");
+  const problems = paperProblems(strategy.workflow, true);
+  if (problems.length) throw new Error(problems[0]);
   const now = Date.now();
-  return write(PaperSessionSchema.parse({ version: 1, id: `paper_${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")}`, strategyId: record.id, strategyVersion: record.version, name: record.name, strategy, mode, startingBalance, status: "ready", createdAt: now, updatedAt: now, state: null }), storage);
+  return write(PaperSessionSchema.parse({ version: 1, id: `paper_${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")}`, strategyId: record.id, strategyVersion: record.version, name: record.name, strategy, mode: "quotes", status: "ready", createdAt: now, updatedAt: now, state: null }), storage);
 }
 export function checkpointPaperSession(id: string, state: PaperState | null, status: PaperSession["status"], storage: Storage = localStorage, resume = false) {
   const session = readPaperSession(id, storage); if (!session) throw new Error("This paper session is no longer available in this browser.");

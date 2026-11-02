@@ -4,7 +4,6 @@ import { Pencil, SlidersHorizontal } from "lucide-react";
 import { Card } from "@/components/ui";
 import {
   KeyDefaults,
-  PaperDefaults,
   readKeyDefaults,
   readPaperDefaults,
   writePaperDefaults,
@@ -21,7 +20,6 @@ export default function WorkspaceDefaults({
   const paper = kind === "paper";
   const title = paper ? "Paper trading defaults" : "Session key defaults";
   const [editing, setEditing] = useState(false);
-  const [mode, setMode] = useState<PaperDefaults["mode"]>("quotes");
   const [budget, setBudget] = useState("");
   const [caps, setCaps] = useState({ trade: "", day: "", slippage: "" });
   const [notice, setNotice] = useState(""),
@@ -30,7 +28,6 @@ export default function WorkspaceDefaults({
   function load() {
     const p = readPaperDefaults(),
       k = readKeyDefaults();
-    setMode(p.mode);
     setBudget(p.budgetUsd === null ? "" : String(p.budgetUsd));
     setCaps({
       trade: String(k.perTradeCapUsd),
@@ -52,7 +49,6 @@ export default function WorkspaceDefaults({
     try {
       if (paper)
         writePaperDefaults({
-          mode,
           budgetUsd: budget.trim() ? Number(budget) : null,
         });
       else {
@@ -85,10 +81,7 @@ export default function WorkspaceDefaults({
     });
   const rows = paper
     ? [
-        [
-          "Price source",
-          mode === "quotes" ? "Live quotes" : "Synthetic scenario",
-        ],
+        ["Price source", "Live market prices"],
         ["Starting budget", budget ? currency(budget) : "Set per strategy"],
       ]
     : [
@@ -139,23 +132,10 @@ export default function WorkspaceDefaults({
           {paper ? (
             <>
               <label>
-                Price source
-                <select
-                  className="q-control"
-                  autoFocus
-                  value={mode}
-                  onChange={(e) =>
-                    setMode(e.target.value as PaperDefaults["mode"])
-                  }
-                >
-                  <option value="quotes">Live quotes</option>
-                  <option value="scenario">Synthetic scenario</option>
-                </select>
-              </label>
-              <label>
                 Default virtual budget (USD)
                 <input
                   className="q-control"
+                  autoFocus
                   type="number"
                   step="any"
                   min="0.01"
@@ -224,7 +204,7 @@ export default function WorkspaceDefaults({
       )}
       <p className="mt-3 text-[12px] text-muted">
         {paper
-          ? "Applied to new drafts when you leave the budget or price source open."
+          ? "Applied when a new draft leaves the virtual budget open. Paper orders use live market prices."
           : "Used when preparing new session keys. Existing keys keep their original limits."}
       </p>
       {notice && (

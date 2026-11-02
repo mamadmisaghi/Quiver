@@ -19,10 +19,23 @@ export async function marketJson(url: string, init?: RequestInit, ttlMs = 120_00
   try { while (true) { const r = await reader.read(); if (r.done) break; size += r.value.byteLength; if (size > 2_000_000) { await reader.cancel(); throw new Error("market_response_too_large"); } chunks.push(r.value); } } finally { reader.releaseLock(); }
   const bytes = new Uint8Array(size); let offset = 0; for (const c of chunks) { bytes.set(c, offset); offset += c.length; }
   const value = JSON.parse(new TextDecoder().decode(bytes));
-  if (cache.size >= 100) cache.delete(cache.keys().next().value!); cache.set(key, { at: Date.now(), value }); return value;
+  if (ttlMs > 0) {
+    if (cache.size >= 100) cache.delete(cache.keys().next().value!);
+    cache.set(key, { at: Date.now(), value });
+  }
+  return value;
 };
 const nullable = (v: unknown, max = 100): string | null => typeof v === "string" ? v.slice(0, max) : null;
 const list = (v: unknown): any[] => Array.isArray(v) ? v : typeof v === "string" ? (() => { try { const r = JSON.parse(v); return Array.isArray(r) ? r : []; } catch { return []; } })() : [];
+
+const equitySymbol = (symbol: string) => MOCK_INSTRUMENTS.some((m) =>
+  m.symbol === symbol && (m.assetClass === "equity" || m.assetClass === "etf"));
+
+/** HIP-3 uses a case-sensitive "dex:COIN" identity. The main DEX has no prefix. */
+export function perpetualInfo(type: "meta" | "metaAndAssetCtxs", dex?: string): RequestInit {
+  return { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(dex ? { type, dex } : { type }) };
+}
 
 export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Promise<NonNullable<Asset["resolution"]>> {
   const checkedAt = new Date().toISOString(), sym = canonicalSymbol(a.query);
@@ -44,13 +57,24 @@ export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Prom
       return result(out, out.length ? "Choose the exact event, deadline and outcome. Similar headlines can settle differently." : `No active matching Polymarket event found for “${a.query}”. Add the event title or link in Refine.`, false);
     }
     if (a.venue === "hyperliquid" || a.kind === "perp") {
-      const raw: any = await get("https://api.hyperliquid.xyz/info", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "meta" }) });
-      const out = list(raw.universe).filter((m) => !m.isDelisted && typeof m.name === "string" && m.name.toUpperCase() === sym).map((m): MarketCandidate => ({ id: `hl:perp:${m.name}`, symbol: m.name, name: `${m.name} perpetual`, venue: "hyperliquid", kind: "perp", source: "hyperliquid", address: null, url: "https://app.hyperliquid.xyz/trade/" + encodeURIComponent(m.name), maxLeverage: Number.isFinite(m.maxLeverage) ? m.maxLeverage : null, endDate: null, outcome: null }));
-      return result(out, out.length ? "Matched Hyperliquid's current perpetual market list. Trading connection is not activated." : `“${a.query}” is not in Hyperliquid's current main perpetual list. Choose another venue or specify the market.`, true);
+      const named = /^([a-z0-9]{1,16}):([a-z0-9._-]{1,20})$/i.exec(a.query.trim());
+      const dex = named ? named[1].toLowerCase() : equitySymbol(sym) ? "xyz" : undefined;
+      const symbol = named ? named[2].toUpperCase() : sym;
+      const identity = dex ? dex + ":" + symbol : symbol;
+      const raw: any = await get("https://api.hyperliquid.xyz/info", perpetualInfo("meta", dex));
+      const out = list(raw?.universe).filter((m) => !m.isDelisted && typeof m.name === "string" &&
+        (dex ? m.name === identity : m.name.toUpperCase() === symbol)).map((m): MarketCandidate => ({
+        id: "hl:perp:" + m.name, symbol: m.name, name: m.name + " perpetual",
+        venue: "hyperliquid", kind: "perp", source: "hyperliquid", address: null,
+        url: "https://app.hyperliquid.xyz/trade/" + encodeURIComponent(m.name),
+        maxLeverage: Number.isFinite(m.maxLeverage) ? m.maxLeverage : null, endDate: null, outcome: null,
+      }));
+      return result(out, out.length ? "Verified perpetual in the current Hyperliquid market list."
+        : "No active Hyperliquid perpetual matched " + identity + ". Search an exact market ticker.", true);
     }
     const known = MOCK_INSTRUMENTS.filter((m) => m.symbol === sym && m.venue !== "polymarket" && m.kind !== "perp" && (!a.venue || a.venue === m.venue));
     if (known.length && known[0].venue === "robinhood") {
-      return result(known.map((m) => ({ id: m.id, name: m.name, symbol: m.symbol, venue: m.venue, kind: m.kind, source: "preview_catalog", address: null, url: null, maxLeverage: 1, endDate: null, outcome: null })), "Asset recognized. Robinhood token routing is a preview placeholder; verify the production instrument before activation.", true);
+      return result(known.map((m) => ({ id: m.id, name: m.name, symbol: m.symbol, venue: m.venue, kind: m.kind, source: "preview_catalog", address: null, url: null, maxLeverage: 1, endDate: null, outcome: null })), "For paper trading, stock instruments use the underlying US equity price. No token order is routed.", true);
     }
     if (a.venue === "robinhood") return result([], `No verified Robinhood instrument is configured for “${a.query}”.`);
     const raw: any = await get(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.query.trim()) ? a.query.trim() : sym)}`);

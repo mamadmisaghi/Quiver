@@ -138,14 +138,25 @@ export function workflowProblems(w: Workflow): string[] {
   return [...new Set(problems)];
 }
 
+export function stageMarketProblem(stage: PlanStage, candidate: MarketCandidate): string | null {
+  const label = candidate.symbol;
+  if (candidate.kind !== "perp" && (stage.side === "short" || stage.leverage > 1))
+    return `Choose a perpetual market for the ${label} ${stage.side} at ${stage.leverage}×.`;
+  if (candidate.maxLeverage !== null && stage.leverage > candidate.maxLeverage)
+    return `The selected ${label} market supports up to ${candidate.maxLeverage}×. Change the leverage or choose another market.`;
+  if (candidate.kind === "outcome" && stage.side === "long")
+    return `Use a buy order for the selected ${label} outcome, or refine this draft to trade a perpetual.`;
+  return null;
+}
+
 export function workflowBlockers(w: Workflow): string[] {
   const out = [...w.questions];
   w.assets.forEach((a) => { if (!a.resolution?.selectedId) out.push(a.resolution?.message ?? `Choose the exact market for ${a.query}.`); });
   w.signals.forEach((s) => { if (s.drawdown?.reference === "needs_choice") out.push(`Choose the price reference for the drop on ${s.id}.`); });
   w.stages.forEach((s) => {
     const a = w.assets.find((a) => a.id === s.assetId), selected = a?.resolution?.candidates.find((c) => c.id === a.resolution?.selectedId);
-    if (selected?.maxLeverage && s.leverage > selected.maxLeverage) out.push(`${s.id}: requested ${s.leverage}× exceeds this market's ${selected.maxLeverage}× maximum. Refine the leverage or market.`);
-    if (selected && selected.kind !== "perp" && (s.side === "long" || s.side === "short" || s.leverage > 1)) out.push(`${s.id}: choose a perpetual market for leveraged long/short orders.`);
+    const marketProblem = selected && stageMarketProblem(s, selected);
+    if (marketProblem) out.push(marketProblem);
     if (s.amount.value === null) out.push(`Set the amount for ${s.id}.`);
     if (s.repeat && !w.budgetUsd && s.funding.kind === "budget") out.push("Set a dedicated strategy budget before repeated purchases.");
     if (s.repeat?.conditionMode === "needs_choice") out.push(`Choose whether ${s.id} checks the condition every time or only to start.`);

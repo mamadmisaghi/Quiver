@@ -108,7 +108,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
           </div>
         )}
         <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" id="main">{children}</main>
-        <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/92 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
+        <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 q-app-bottom grid grid-cols-5 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden">
           {BOTTOM.map(([n, h, d]) => { const on = isOn(h, path); return (
             <Link prefetch={false} key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={on ? "text-accent" : ""}><path d={d} /></svg>{n}

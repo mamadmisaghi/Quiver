@@ -36,12 +36,11 @@ export function writeSetting<T>(
 }
 
 export const PaperDefaults = z.object({
-  mode: z.enum(["scenario", "quotes"]),
   budgetUsd: z.number().finite().positive().max(1e12).nullable(),
 });
 export type PaperDefaults = z.infer<typeof PaperDefaults>;
 export const readPaperDefaults = () =>
-  readSetting("paper", PaperDefaults, { mode: "quotes", budgetUsd: null });
+  readSetting("paper", PaperDefaults, { budgetUsd: null });
 export const writePaperDefaults = (value: PaperDefaults) =>
   writeSetting("paper", PaperDefaults, value);
 

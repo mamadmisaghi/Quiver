@@ -87,7 +87,9 @@ for (const [index, symbol] of ["", "AAPL", "ETH", "JUP", "SPY"].entries())
         ?.assets[0].query,
       symbol,
     );
-writePaperDefaults({ mode: "scenario", budgetUsd: 7500 });
+storage.setItem("quiver.studio.settings.v1.paper", JSON.stringify({ mode: "scenario", budgetUsd: 7000 }));
+assert.deepEqual(readPaperDefaults(), { budgetUsd: 7000 });
+writePaperDefaults({ budgetUsd: 7500 });
 assert.equal(readPaperDefaults().budgetUsd, 7500);
 await mockApi.putMyProfile({ displayName: "Workspace QA" });
 assert.equal((await mockApi.myProfile()).displayName, "Workspace QA");
@@ -106,12 +108,12 @@ const legacy = previewRecord(
   "stg_1234567890",
   USER_ID,
 );
-const legacySession = createPaperSession(legacy, "scenario", storage, 10000);
-assert.equal(
-  readPaperSession(legacySession.id, storage)?.startingBalance,
-  10000,
-);
-assert.throws(() => createPaperSession(legacy, "quotes", storage, 10000));
+const archived = { version: 1, id: "paper_history", strategyId: legacy.id, strategyVersion: 1,
+  name: legacy.name, strategy: legacy.strategy, mode: "scenario", startingBalance: 10000,
+  status: "completed", createdAt: Date.now(), updatedAt: Date.now(), state: null };
+storage.setItem("quiver.paper-session.v1." + archived.id, JSON.stringify(archived));
+assert.equal(readPaperSession(archived.id, storage)?.startingBalance, 10000);
+assert.throws(() => createPaperSession(legacy, storage), /live-quote/);
 const w = linkedEntry(legacy.strategy.thesis)!;
 assert(w);
 assert.equal(w.stages.length, 2);
@@ -130,14 +132,17 @@ assert(paperProblems(w).length > 0);
 w.stages[0].exits.description = "Stop at -9%";
 assert(paperProblems(w).length > 0);
 w.stages[0].exits.description = "";
-const next = createPaperSession(
-  {
-    ...copy,
-    strategy: { ...copy.strategy, workflow: canonicalizeWorkflow(w) },
-  },
-  "scenario",
-  storage,
-);
+const archivedWorkflow = { ...archived, id: "paper_archived", strategy: { ...copy.strategy, workflow: canonicalizeWorkflow(w) } };
+storage.setItem("quiver.paper-session.v1." + archivedWorkflow.id, JSON.stringify(archivedWorkflow));
+assert.equal(readPaperSession(archivedWorkflow.id, storage)?.mode, "scenario");
+const { resolveMarket } = await import("../services/backend/src/compile/markets");
+const equityWorkflow = structuredClone(w);
+const asset = equityWorkflow.assets.find((a) => a.venue === "robinhood")!;
+asset.resolution = await resolveMarket(asset);
+equityWorkflow.assets = [asset];
+equityWorkflow.stages = [{ ...equityWorkflow.stages.find((st) => st.assetId === asset.id)!, when: null }];
+equityWorkflow.signals = [];
+const next = createPaperSession({ ...copy, strategy: { ...copy.strategy, workflow: equityWorkflow } }, storage);
 checkpointPaperSession(next.id, null, "running", storage);
 assert.equal(pauseAllPaperSessions(storage), 1);
 assert.throws(
