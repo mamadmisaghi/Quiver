@@ -34,6 +34,8 @@ export default function StrategyGraph({ nodes, edges, ghosts, label, reserve, re
   const wrap = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const inspected = hover ?? focused;
   useLayoutEffect(() => {
     const el = wrap.current!; const set = () => setW(el.clientWidth); set();
     let frame = 0;
@@ -46,7 +48,6 @@ export default function StrategyGraph({ nodes, edges, ghosts, label, reserve, re
   const reservedHeight = reserve ? graphLayout(reserve, [], W).H : 0;
   const minH = ghosts ? 240 : 0;
   const revealDelay = (depth: number) => Math.min(depth, 7) * 52;
-  const linked = (e: GEdge) => !hover || e.from === hover || e.to === hover;
 
   return (
     <div ref={wrap} className="q-strategy-graph @container w-full" dir="ltr"><div className="-mx-1 max-h-[640px] overflow-auto overscroll-contain px-1 [scrollbar-width:thin] [touch-action:pan-x_pan-y]" tabIndex={0} role="region" aria-label="Strategy graph, scroll sideways to pan"><div className="relative"
@@ -64,11 +65,13 @@ export default function StrategyGraph({ nodes, edges, ghosts, label, reserve, re
           const d = skip < 0 ? routed.d : `M${a.x + a.w} ${a.y + a.h / 2}H${a.x + a.w + 18}V${lane}H${b.x - 18}V${b.y + b.h / 2}H${b.x}`;
           const { p1, p2, deg } = routed;
           const pulse = pulses.find((event) => event.from === e.from && event.to === e.to);
+          const selected = inspected === e.from || inspected === e.to;
+          const wire = selected || e.hot ? "var(--q-amber)" : "color-mix(in srgb, var(--q-text2) 58%, var(--q-bg1))";
           const delay = revealDelay(b.depth);
           return (
-            <g key={`${e.from}/${e.to}`} data-from={e.from} data-to={e.to} className="q-graph-link" style={{ opacity: linked(e) ? 1 : .25 }}>
+            <g key={`${e.from}/${e.to}`} data-from={e.from} data-to={e.to} className="q-graph-link" style={{ opacity: inspected && !selected ? .55 : 1 }}>
               <g data-graph-reveal={reveal ? "link" : undefined} style={reveal ? { animationDelay: `${delay}ms` } : undefined}>
-              <path d={d} fill="none" stroke={e.hot ? "color-mix(in srgb, var(--q-amber) 45%, #2E2E34)" : "#2E2E34"} strokeWidth={1.25} />
+              <path d={d} fill="none" stroke={wire} strokeWidth={1.25} />
               {e.hot && <path d="M-7 -4.5 L1.5 0 L-7 4.5 L-5 0 Z" fill="var(--q-amber)" transform={`translate(${p2[0] - 5} ${p2[1]}) rotate(${deg})`} />}
               {(pulse || reveal) && <circle key={pulse?.id ?? "draft"} className="q-graph-pulse" r="2.4" fill="var(--q-amber)" style={{ offsetPath: `path("${d}")`, animationDelay: `${pulse ? pulse.delay ?? 0 : delay}ms` }} />}
               <circle cx={p1[0]} cy={p1[1]} r={3} fill="var(--q-bg)" stroke="#5A5650" strokeWidth={1.25} />
@@ -82,7 +85,7 @@ export default function StrategyGraph({ nodes, edges, ghosts, label, reserve, re
         const b = boxes[n.id]; if (!b) return null;
         const lit = n.state === "met" || n.state === "holding" || n.state === "fired";
         return (
-          <NodeDetails key={n.id} label={`${KIND_LABEL[n.kind]} details`} className="z-50 w-[min(340px,calc(100vw-32px))] max-h-[60vh] overflow-y-auto rounded-xl border border-line-2 bg-card p-4 text-ink shadow-2xl outline-none" trigger={<button type="button" aria-label={`Details: ${n.title}`} data-graph-reveal={reveal ? "node" : undefined} onMouseEnter={() => setHover(n.id)} onMouseLeave={() => setHover(null)}
+          <NodeDetails key={n.id} label={`${KIND_LABEL[n.kind]} details`} className="z-50 w-[min(340px,calc(100vw-32px))] max-h-[60vh] overflow-y-auto rounded-xl border border-line-2 bg-card p-4 text-ink shadow-2xl outline-none" trigger={<button type="button" aria-label={`Details: ${n.title}`} data-graph-reveal={reveal ? "node" : undefined} onFocus={() => setFocused(n.id)} onBlur={() => setFocused(null)} onMouseEnter={() => setHover(n.id)} onMouseLeave={() => setHover(null)}
             className={`q-strategy-node absolute text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[12px] border px-3.5 pb-3 pt-3 shadow-[var(--q-shadow-card)] transition-colors duration-200 ${lit ? "border-accent/55" : n.state === "error" ? "border-short/60" : "border-line hover:border-line-2"}`}
             style={{ left: b.x, top: b.y, width: b.w, height: b.h, animationDelay: reveal ? `${revealDelay(b.depth)}ms` : undefined, background: "var(--q-node-bg)" }}>
             <div className="flex items-center justify-between gap-2">

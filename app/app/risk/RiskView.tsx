@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Pencil, Check, ShieldCheck, Clock3 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import Wrap from "@/components/Wrap";
@@ -10,13 +10,14 @@ import { api, API_MODE, DEMO_LABEL, errOf } from "@/lib/api";
 import { Risk, type Strategy } from "@/lib/contracts";
 import { useQ } from "@/lib/api/useQ";
 export default function RiskView() {
-  const list = useQ(() => api.strategies());
+  const list = useQ(async () => {
+    const data = await api.strategies();
+    return { ...data, requested: new URLSearchParams(window.location.search).get("strategy") };
+  });
   const [pick, setPick] = useState<string | null>(null);
-  const id = pick ?? list.data?.items[0]?.id ?? null;
-  useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("strategy");
-    if (requested && list.data?.items.some(item => item.id === requested)) setPick(requested);
-  }, [list.data]);
+  const items = list.data?.items;
+  const requested = items?.find(item => item.id === list.data?.requested);
+  const id = pick ?? requested?.id ?? items?.[0]?.id ?? null;
   const selectStrategy = (strategyId: string) => {
     setPick(strategyId);
     const url = new URL(window.location.href);
@@ -30,7 +31,11 @@ export default function RiskView() {
   const [draft, setDraft] = useState<Strategy["risk"] | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { setEditing(null); setConfirm(false); setError(null); }, [id]);
+  const [confirm, setConfirm] = useState(false);
+  const [displayedId, setDisplayedId] = useState(id);
+  if (displayedId !== id) {
+    setDisplayedId(id); setEditing(null); setConfirm(false); setError(null);
+  }
   const save = async () => {
     if (!rec.data || rec.data.id !== id || !draft) return;
     setSaving(true); setError(null);
@@ -67,7 +72,6 @@ export default function RiskView() {
     finally { setSaving(false); }
   };
   useLayoutEffect(() => { if (!saving && !editing && returnFocus.current) { editButtons.current[returnFocus.current]?.focus({ preventScroll: true }); returnFocus.current = null; } }, [saving, editing]);
-  const [confirm, setConfirm] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const sw = list.data && list.data.items.length > 0 && (
     <label className="flex items-center gap-2 text-[13px] text-muted">Strategy
@@ -115,7 +119,7 @@ export default function RiskView() {
             <DisclosurePanel open={expanded} focusFirst id={`risk-edit-${field}`}><form className="q-risk-editor q-edit-panel -mx-5 mt-4 space-y-4 px-5 pb-5 pt-4 sm:-mx-6 sm:px-6" onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeEditor(); } }} onSubmit={(e) => { e.preventDefault(); void save(); }}>
               {run && <div className="q-risk-copy-note">Save a separate draft to use these limits in your next paper session.</div>}
               <fieldset disabled={saving} className="block text-[13px] text-ink-2"><legend className="text-[12px] text-muted">New {k.toLowerCase()}{field === "maxOrdersPerDay" ? "" : field.startsWith("max") ? " (%)" : ""}</legend>
-                {field === "equityWhenFeedStale" ? <select aria-label={k} value={values.equityWhenFeedStale} onChange={(e) => setDraft({ ...values, equityWhenFeedStale: e.target.value as "skip" | "use_pool_twap" })} className="q-control mt-2"><option value="skip">Skip the trade</option><option value="use_pool_twap">Use the pool's average price</option></select>
+                {field === "equityWhenFeedStale" ? <select aria-label={k} value={values.equityWhenFeedStale} onChange={(e) => setDraft({ ...values, equityWhenFeedStale: e.target.value as "skip" | "use_pool_twap" })} className="q-control mt-2"><option value="skip">Skip the trade</option><option value="use_pool_twap">Use the pool&apos;s average price</option></select>
                 : field === "tradingHours" ? <span className="mt-2 block space-y-2">
                   <label className="flex min-h-11 cursor-pointer items-center gap-2.5"><input type="checkbox" checked={!!values.tradingHours} onChange={(e) => setDraft({ ...values, tradingHours: e.target.checked ? { from: "09:30", to: "16:00", tz: "America/New_York", days: ["mon", "tue", "wed", "thu", "fri"] } : undefined })} />Limit trading hours</label>
                   {values.tradingHours && <><span className="flex gap-2">{(["from", "to"] as const).map((f) => <input key={f} aria-label={f === "from" ? "Start time" : "End time"} type="time" value={values.tradingHours![f]} onChange={(e) => setDraft({ ...values, tradingHours: { ...values.tradingHours!, [f]: e.target.value } })} className="min-h-11 min-w-0 w-1/2 rounded-lg border border-line-2 bg-bg px-2" />)}</span>

@@ -88,7 +88,6 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
     ended.current = false; terminal.current = false;
     const orders = new Map<string, string>();
     let lastGraphSeq = -1, clearTimer: ReturnType<typeof setTimeout> | undefined;
-    setPulses([]);
     const stream = api.streamRun(runId, (e) => {
       // M3.6: "stopped" is terminal and always the last event. After the user presses Stop only the status frame
       // gets through; once stopped arrives, every later frame (late ticks, duplicates on reconnect) is dropped.

@@ -14,10 +14,12 @@ import { Spark } from "./ui";
 const dollars = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 type QuoteItem = { assetId: string; quote: PaperQuote | null; message: string };
 export default function WorkflowRun({ runId }: { runId: string }) {
-  const [session, setSession] = useState<PaperSession | null>(null), [loaded, setLoaded] = useState(false), [running, setRunning] = useState(false), [busy, setBusy] = useState(false);
+  // RunView mounts this client-only component with a fresh key for each session.
+  const [session, setSession] = useState<PaperSession | null>(() => typeof window === "undefined" ? null : readPaperSession(runId));
+  const [running, setRunning] = useState(false), [busy, setBusy] = useState(false);
   const [items, setItems] = useState<QuoteItem[]>([]), [error, setError] = useState<string | null>(null);
   const [pulses, setPulses] = useState<EdgePulse[]>([]);
-  const current = useRef<PaperSession | null>(null), release = useRef<(() => void) | null>(null), generation = useRef(0), alive = useRef(false), inFlight = useRef(false), acquiring = useRef(false);
+  const current = useRef<PaperSession | null>(session), release = useRef<(() => void) | null>(null), generation = useRef(0), alive = useRef(false), inFlight = useRef(false), acquiring = useRef(false);
   const save = (state: PaperState | null, status: PaperSession["status"], resume = false) => { const s = checkpointPaperSession(runId, state, status, localStorage, resume); current.current = s; if (alive.current) setSession(s); return s; };
   const pause = () => {
     const ownsSession = release.current !== null;
@@ -65,7 +67,7 @@ export default function WorkflowRun({ runId }: { runId: string }) {
     finally { acquiring.current = false; }
   };
   useEffect(() => {
-    alive.current = true; setPulses([]); const s = readPaperSession(runId); current.current = s; setSession(s); setLoaded(true);
+    alive.current = true; const s = current.current;
     // Only a newly created session starts automatically. Reloading an existing session restores it paused.
     const gen = generation.current;
     if (s?.strategy.workflow && s.mode === "quotes" && s.status === "ready") queueMicrotask(() => { if (alive.current && gen === generation.current) void start(); });
@@ -84,7 +86,6 @@ export default function WorkflowRun({ runId }: { runId: string }) {
     return () => { pause(); alive.current = false; window.removeEventListener("pagehide", leave); window.removeEventListener("storage", externalChange); };
   }, [runId]);
   useEffect(() => { if (!running) return; void refresh(true); const timer = setInterval(() => void refresh(true), 20_000); return () => clearInterval(timer); }, [running]);
-  if (!loaded) return <Wrap><PageHeader title="Opening paper session…" sub="Loading your saved strategy and checkpoint." /><div className="mt-8 h-64 animate-pulse rounded-[14px] border border-line bg-card" /></Wrap>;
   if (!session) return <Wrap><PageHeader title="Paper session unavailable" sub="This session is saved in the browser where you created it. Open it there, or start a new test from your strategy." /><Link href="/app/run" className="q-action mt-6">Back to paper trades</Link></Wrap>;
   if (!session.strategy.workflow) return <LegacyPaperRun session={session} />;
   const w = session.strategy.workflow!, state = session.state, scenario = session.mode === "scenario";

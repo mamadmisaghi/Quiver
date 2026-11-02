@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Pencil, SlidersHorizontal } from "lucide-react";
 import DisclosurePanel from "@/components/DisclosurePanel";
 import { Card } from "@/components/ui";
@@ -11,6 +11,15 @@ import {
   writeSetting,
 } from "@/lib/api/browser-settings";
 
+function currentCaps() {
+  const k = readKeyDefaults();
+  return {
+    trade: String(k.perTradeCapUsd),
+    day: String(k.dailyCapUsd),
+    slippage: String(k.maxSlippagePct),
+  };
+}
+
 export default function WorkspaceDefaults({
   kind,
   onSaved,
@@ -21,29 +30,31 @@ export default function WorkspaceDefaults({
   const paper = kind === "paper";
   const title = paper ? "Paper trading defaults" : "Session key defaults";
   const [editing, setEditing] = useState(false);
-  const [budget, setBudget] = useState("");
-  const [caps, setCaps] = useState({ trade: "", day: "", slippage: "" });
+  const [budget, setBudget] = useState(() => {
+    const value = typeof window === "undefined" ? null : readPaperDefaults().budgetUsd;
+    return value === null ? "" : String(value);
+  });
+  const [caps, setCaps] = useState(() => typeof window === "undefined" ? { trade: "", day: "", slippage: "" } : currentCaps());
   const [notice, setNotice] = useState(""),
     [error, setError] = useState("");
   const editorId = useId();
   const edit = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
   function load() {
-    const p = readPaperDefaults(),
-      k = readKeyDefaults();
-    setBudget(p.budgetUsd === null ? "" : String(p.budgetUsd));
-    setCaps({
-      trade: String(k.perTradeCapUsd),
-      day: String(k.dailyCapUsd),
-      slippage: String(k.maxSlippagePct),
-    });
+    const value = readPaperDefaults().budgetUsd;
+    setBudget(value === null ? "" : String(value));
+    setCaps(currentCaps());
   }
-  useEffect(() => {
-    load();
-  }, []);
+  useLayoutEffect(() => {
+    if (!editing && restoreFocus.current) {
+      restoreFocus.current = false;
+      edit.current?.focus({ preventScroll: true });
+    }
+  }, [editing]);
   function close() {
+    restoreFocus.current = true;
     setEditing(false);
     setError("");
-    requestAnimationFrame(() => edit.current?.focus({ preventScroll: true }));
   }
   function save(event: React.FormEvent) {
     event.preventDefault();
