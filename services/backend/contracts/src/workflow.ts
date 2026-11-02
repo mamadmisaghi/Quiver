@@ -71,6 +71,24 @@ export function prepareWorkflowInput(raw: unknown): unknown {
   };
   copy.stages.forEach((s) => walk(s?.when)); return copy;
 }
+// Only remove a verbal restatement when every clause matches an encoded exit.
+// An additional timing, price or conditional qualifier must still block execution.
+function repeatsStructuredExits(exits: PlanStage["exits"]): boolean {
+  const value = exits.description.trim().toLowerCase().replace(/[−–]/g, "-").replace(/[.!]$/, "");
+  if (!value) return false;
+  const clauses = value.split(/\s*(?:,|;|\band\b|\bwith\b|&)\s*/);
+  return clauses.every((clause) => {
+    const direct = clause.match(/^(stop(?:[- ]?loss)?|sl|take[- ]?profit|tp|trailing stop)(?:\s+(?:at|of|is))?\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)\s*%$/);
+    const reverse = clause.match(/^([+-]?\d+(?:\.\d+)?)\s*%\s+(stop(?:[- ]?loss)?|sl|take[- ]?profit|tp|trailing stop)$/);
+    if (!direct && !reverse) return false;
+    const label = direct ? direct[1] : reverse![2];
+    const amount = Number(direct ? direct[2] : reverse![1]);
+    if (label === "tp" || label.startsWith("take")) return exits.takeProfitPct === amount;
+    if (label === "trailing stop") return exits.trailingStopPct === Math.abs(amount);
+    return exits.stopLossPct === Math.abs(amount);
+  });
+}
+
 /** Normalize unambiguous provider field aliases before semantic validation. */
 export function canonicalizeWorkflow(w: Workflow): Workflow {
   const copy = structuredClone(w);
@@ -86,7 +104,7 @@ export function canonicalizeWorkflow(w: Workflow): Workflow {
       if (sig && sig.kind !== "position" && (field === sig.kind || sig.kind === "indicator" && field === sig.indicator?.name)) operand.ref = `${id}.value`;
     }
   };
-  copy.stages.forEach((s) => { if (s.funding.kind === "budget") s.funding.from = []; walk(s.when); }); return copy;
+  copy.stages.forEach((s) => { if (s.funding.kind === "budget") s.funding.from = []; if (repeatsStructuredExits(s.exits)) s.exits.description = ""; walk(s.when); }); return copy;
 }
 export function workflowProblems(w: Workflow): string[] {
   const problems: string[] = [], assets = new Set(w.assets.map((a) => a.id)), sigs = new Set(w.signals.map((s) => s.id)), stages = new Set(w.stages.map((s) => s.id));

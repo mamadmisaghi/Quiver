@@ -5,7 +5,7 @@
 // only returns hints ("https://host/…", "sk-or-…abcd"). 503 secrets_unavailable → banner; 422 rpc_url_blocked → URL field.
 import { useState } from "react";
 import { Card, Pill } from "@/components/ui";
-import { api, ApiErr, errOf, fmtAgo, type UserSecretView } from "@/lib/api";
+import { api, API_MODE, ApiErr, errOf, fmtAgo, type UserSecretView } from "@/lib/api";
 import { useQ } from "@/lib/api/useQ";
 
 const btn = "btn min-h-10 rounded-full border border-line-2 px-4 text-[13px] hover:bg-white/5 disabled:opacity-40";
@@ -34,7 +34,7 @@ function SecretForm({ kind, onSaved, onUnavailable, disabled }: { kind: "rpc" | 
       <input id={id} type={rpc ? "text" : "password"} inputMode={rpc ? "url" : undefined} value={v} maxLength={rpc ? 512 : 210}
         onChange={(e) => { setV(e.target.value); setErr(null); }} placeholder={rpc ? "https://…" : "sk-or-…"} autoComplete={rpc ? "off" : "new-password"} spellCheck={false} autoCapitalize="off"
         aria-invalid={!!err} aria-describedby={`${id}-hint${err ? ` ${id}-err` : ""}`} className={inp} disabled={disabled} data-testid={`${id}-input`} data-1p-ignore data-lpignore="true" />
-      <p id={`${id}-hint`} className="text-[12.5px] text-muted">{rpc ? "Must be public https. We check it isn’t a private or local address, and keep only the host visible." : "Stored encrypted. You’ll only ever see the last 4 characters."}</p>
+      <p id={`${id}-hint`} className="text-[12.5px] text-muted">{rpc ? "Use the official Robinhood testnet endpoint or an approved Alchemy HTTPS URL. The saved path stays private." : "Stored encrypted. You’ll only ever see the last 4 characters."}</p>
       <div className="flex flex-wrap items-center gap-2">
         <input aria-label={rpc ? "RPC label (optional)" : "Key label (optional)"} value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" className={`${inp} min-w-0 flex-1 basis-[160px]`} disabled={disabled} data-testid={`${id}-label`} />
         <button type="submit" className={btn} disabled={disabled || busy || !v.trim()} data-testid={`${id}-save`}>{busy ? "Saving…" : "Save"}</button>
@@ -75,13 +75,18 @@ export default function SecretsCard() {
   const saved = (v: UserSecretView) => { setExtra((e) => ({ ...e, items: [...items.filter((i) => i.id !== v.id), v] })); setMsg(`${v.label} saved.`); };
   return (
     <Card className="p-6" id="secrets" data-testid="secrets">
-      <h2 className="font-medium">Your own endpoints and keys</h2>
+      <h2 className="font-medium">Private connections</h2>
       <p className="mt-1 text-[13.5px] text-muted">Optional. Use your own testnet RPC or OpenRouter key instead of Quiver’s shared ones. Testnet only.</p>
+      {q.data?.shared && <dl className="q-provider-list">
+        <div><dt>OpenRouter · strategy drafting</dt><dd>{q.data.shared.ai ? "Configured" : "Needs a key"}</dd></div>
+        <div><dt>Tiingo · underlying stock prices</dt><dd>{q.data.shared.stocks ? "Configured" : "Needs a key"}</dd></div>
+      </dl>}
       {!q.data && !extra.unavailable ? <p className="mt-3 text-[13.5px] text-muted">{q.error ?? "Loading…"}</p> : <>
-        {unavailable && <p role="status" className="mt-3 rounded-[8px] border border-line-2 bg-white/[.03] p-3 text-[13px] text-ink-2" data-testid="sec-unavailable">{UNAVAIL}</p>}
+        {unavailable && <p role="status" className="mt-3 rounded-[8px] border border-line-2 bg-white/[.03] p-3 text-[13px] text-ink-2" data-testid="sec-unavailable">{API_MODE === "mock" && !q.data?.authenticated ? <>Shared connections are available for testing. To manage a personal key or RPC, <a className="text-accent underline" href="/signin-with-chatgpt?return_to=%2Fapp%2Fsettings" target="_top">sign in with ChatGPT</a>.</> : UNAVAIL}</p>}
         {items.length > 0 && <ul className="mt-3 divide-y divide-line border-y border-line text-[13.5px]" data-testid="sec-list">{items.map((x) => <Item key={x.id + x.updatedAt} x={x} onGone={() => { setExtra((e) => ({ ...e, items: items.filter((i) => i.id !== x.id) })); setMsg("Removed."); }} />)}</ul>}
-        <SecretForm kind="rpc" onSaved={saved} onUnavailable={() => setExtra((e) => ({ ...e, unavailable: true }))} disabled={unavailable} />
+        {!unavailable && <><SecretForm kind="rpc" onSaved={saved} onUnavailable={() => setExtra((e) => ({ ...e, unavailable: true }))} disabled={unavailable} />
         <SecretForm kind="ai_key" onSaved={saved} onUnavailable={() => setExtra((e) => ({ ...e, unavailable: true }))} disabled={unavailable} />
+        </>}
         {msg && <p role="status" className="mt-3 text-[12.5px] text-ink-2" data-testid="sec-msg">{msg}</p>}
       </>}
     </Card>

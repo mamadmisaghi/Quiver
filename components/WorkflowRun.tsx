@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import LegacyPaperRun from "./LegacyPaperRun";
 import { Play, Pause, ArrowLeft, ExternalLink, Activity } from "lucide-react";
 import { PaperQuote, createPaper, freeCash, paperEquity, stepPaper, syntheticFrames, type PaperState } from "@/services/backend/src/workflows/paper";
 import { checkpointPaperSession, readPaperSession, type PaperSession } from "@/lib/paper/sessions";
@@ -15,7 +16,7 @@ export default function WorkflowRun({ runId }: { runId: string }) {
   const [session, setSession] = useState<PaperSession | null>(null), [loaded, setLoaded] = useState(false), [running, setRunning] = useState(false), [busy, setBusy] = useState(false);
   const [items, setItems] = useState<QuoteItem[]>([]), [error, setError] = useState<string | null>(null);
   const current = useRef<PaperSession | null>(null), release = useRef<(() => void) | null>(null), generation = useRef(0), alive = useRef(false), inFlight = useRef(false), acquiring = useRef(false);
-  const save = (state: PaperState | null, status: PaperSession["status"]) => { const s = checkpointPaperSession(runId, state, status); current.current = s; if (alive.current) setSession(s); return s; };
+  const save = (state: PaperState | null, status: PaperSession["status"], resume = false) => { const s = checkpointPaperSession(runId, state, status, localStorage, resume); current.current = s; if (alive.current) setSession(s); return s; };
   const pause = () => {
     const ownsSession = release.current !== null;
     generation.current++;
@@ -60,7 +61,7 @@ export default function WorkflowRun({ runId }: { runId: string }) {
         save(state, "completed"); return;
       }
       const done = new Promise<void>((resolve) => { release.current = resolve; });
-      try { save(s.state ?? createPaper(s.strategy.workflow!), "running"); setRunning(true); await done; }
+      try { save(s.state ?? createPaper(s.strategy.workflow!), "running", true); setRunning(true); await done; }
       finally { release.current = null; }
     }); } catch (e) { if (alive.current) { setError((e as Error).message); pause(); } }
     finally { acquiring.current = false; }
@@ -69,13 +70,25 @@ export default function WorkflowRun({ runId }: { runId: string }) {
     alive.current = true; const s = readPaperSession(runId); current.current = s; setSession(s); setLoaded(true);
     // Only a newly created session starts automatically. Reloading an existing session restores it paused.
     const gen = generation.current;
-    if (s?.status === "ready") queueMicrotask(() => { if (alive.current && gen === generation.current) void start(); });
+    if (s?.strategy.workflow && s.status === "ready") queueMicrotask(() => { if (alive.current && gen === generation.current) void start(); });
+    function externalChange(event: StorageEvent) {
+      if (event.key !== "quiver.paper-session.v1." + runId) return;
+      const latest = readPaperSession(runId);
+      if (!latest) return;
+      if (latest.status === "paused" && release.current) {
+        current.current = latest;
+        pause();
+      }
+      current.current = latest; setSession(latest);
+    }
+    window.addEventListener("storage", externalChange);
     const leave = () => pause(); window.addEventListener("pagehide", leave);
-    return () => { pause(); alive.current = false; window.removeEventListener("pagehide", leave); };
+    return () => { pause(); alive.current = false; window.removeEventListener("pagehide", leave); window.removeEventListener("storage", externalChange); };
   }, [runId]);
   useEffect(() => { if (!running) return; void refresh(true); const timer = setInterval(() => void refresh(true), 20_000); return () => clearInterval(timer); }, [running]);
   if (!loaded) return <Wrap><PageHeader title="Opening paper session…" sub="Loading your saved strategy and checkpoint." /><div className="mt-8 h-64 animate-pulse rounded-[14px] border border-line bg-card" /></Wrap>;
   if (!session) return <Wrap><PageHeader title="Paper session unavailable" sub="This session is saved in the browser where you created it. Open it there, or start a new test from your strategy." /><Link href="/app/run" className="q-action mt-6">Back to paper trades</Link></Wrap>;
+  if (!session.strategy.workflow) return <LegacyPaperRun session={session} onSave={setSession} />;
   const w = session.strategy.workflow!, state = session.state, scenario = session.mode === "scenario";
   const stageName = (id: string) => { const s = w.stages.find((s) => s.id === id); return s ? `${s.side} ${w.assets.find((a) => a.id === s.assetId)?.query ?? "asset"}` : id; };
   const status = running ? "Running" : scenario && state ? "Completed" : "Paused";

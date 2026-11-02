@@ -1,4 +1,6 @@
 // MOCK M5.8 alert channels (in-memory, mirrors backend/src/alerts/channels.ts validation).
+import { z } from "zod";
+import { readSetting, writeSetting } from "./browser-settings";
 import { ApiErr, type AlertChannel, type QuiverChannelApi } from "./types";
 const ch: AlertChannel[] = [
   { name: "telegram", label: "Telegram", primary: true, status: "not_configured", target: null, maxMessageLength: 4096, targetHint: "numeric chat id (e.g. 123456789 or -1001234567890) or @channelname" },
@@ -10,11 +12,11 @@ export const normTarget = (name: string, raw: string): string | null => {
   const h = t.replace(/^@?/, "@"); return /^@[A-Za-z0-9_]{4,15}$/.test(h) && !/twitter|admin/i.test(h) && !/^@\d+$/.test(h) ? h : null;
 };
 export const mockChannels: QuiverChannelApi = {
-  async alertChannels() { return { items: ch.map((c) => ({ ...c })) }; },
+  async alertChannels() { return { items: ch.map(c => ({ ...c, target: readSetting("channel-" + c.name, z.string().nullable(), null) })) }; },
   async putAlertChannel(name, target) {
     const c = ch.find((x) => x.name === name); if (!c) throw new ApiErr("not_found", "Unknown alert channel.", 404);
     const t = target === null ? null : normTarget(name, target);
     if (target !== null && !t) throw new ApiErr("validation_failed", `Enter a valid ${c.label} destination: ${c.targetHint}.`, 422, { field: "target" });
-    c.target = t; return { ...c };
+    writeSetting("channel-" + name, z.string().nullable(), t); return { ...c, target: t };
   },
 };

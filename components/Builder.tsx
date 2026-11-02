@@ -14,6 +14,7 @@ import { HUMANIZED } from "@/lib/api/fixtures";
 import { API_MODE, api, ApiErr, reasonOf, errOf, strategyEdges, demoNodes, DEMO_LABEL, type GNode, type Humanized, type Strategy, type ValidationIssue } from "@/lib/api";
 import { onSession } from "@/lib/api/session";
 // QA P2 LCP: the backtest panel only renders after a draft, so keep it out of the initial chunk
+import { readPaperDefaults } from "@/lib/api/browser-settings";
 import { createPaperSession } from "@/lib/paper/sessions";
 import { paperProblems } from "@/services/backend/src/workflows/paper";
 const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
@@ -40,6 +41,7 @@ const imgErr = (x: unknown) => x instanceof ApiErr && x.code === "image_invalid"
   : x instanceof ApiErr && x.code === "payload_too_large" ? IMAGE_COPY.too_large : null;
 type Img = { name: string; mime: (typeof IMG_TYPES)[number]; b64: string; bytes: number; url: string };
 const PREVIEW_PROMPTS = [
+  SAMPLE_PROMPT,
   "Buy $250 of NVDA if it drops below $120, stop loss 8%, take profit 15%",
   "Long $400 of ETH at 3x when RSI is below 30, stop loss 5%",
   "Buy $100 of BTC every Monday at 9am",
@@ -48,7 +50,8 @@ const PREVIEW_PROMPTS = [
 // Reserve the sample graph's height (values on, so the tallest variant) before the draft streams in.
 const RESERVE: GNode[] = demoNodes.map((n) => ({ ...n, value: n.kind === "watch" ? "0" : n.value }));
 export default function Builder({ initialPrompt }: { initialPrompt?: string } = {}) {
-  const [text, setText] = useState(initialPrompt || SAMPLE_PROMPT);
+  const [text, setText] = useState(initialPrompt ?? "");
+  const typed = useRef(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
@@ -60,7 +63,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [took, setTook] = useState(0);
   const [compiledText, setCompiledText] = useState<string | null>(null);
   const [compiledImage, setCompiledImage] = useState<string | null>(null);
-  const [editingRecord, setEditingRecord] = useState<{ id: string; version: number } | null>(null);
+  const [editingRecord, setEditingRecord] = useState<{ id: string; version: number; activeRunId?: string | null } | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -85,6 +88,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const router = useRouter();
   const [starting, setStarting] = useState(false);
   const [paperMode, setPaperMode] = useState<"quotes" | "scenario">("quotes");
+  const [legacyBalance, setLegacyBalance] = useState("10000");
   const [paperAttempted, setPaperAttempted] = useState(false);
   const reviewRef = useRef<HTMLDivElement | null>(null);
   const [confirmEach, setConfirmEach] = useState(false); // M4.2 approvalMode
@@ -102,6 +106,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       target?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     });
   };
+  const storeDraft = (value: Strategy) => {
+    if (!editingRecord || editingRecord.activeRunId) return api.createStrategy(value);
+    return api.updateStrategy(editingRecord.id, value, editingRecord.version);
+  };
   const paperTrade = async () => {
     if (!strategy || dirty || phase !== "done" || startingRef.current || saving) return;
     // Configuration is actionable from the primary button. Validate before
@@ -109,10 +117,11 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     if (launchProblems.length) { setErr(null); reviewSetup(); return; }
     startingRef.current = true; setStarting(true); setErr(null);
     try {
-      const rec = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy);
-      setEditingRecord({ id: rec.id, version: rec.version }); setSavedId(rec.id);
-      if (strategy.workflow) {
-        const session = createPaperSession(rec, paperMode);
+      const rec = savedId && editingRecord ? await api.strategy(savedId) : await storeDraft(strategy);
+      if (savedId && editingRecord && rec.version !== editingRecord.version) throw new Error("This draft changed in another tab. Reopen it before starting a session.");
+      setEditingRecord({ id: rec.id, version: rec.version, activeRunId: rec.activeRunId }); setSavedId(rec.id);
+      if (strategy.workflow || API_MODE === "mock") {
+        const session = createPaperSession(rec, strategy.workflow ? paperMode : "scenario", localStorage, strategy.workflow ? undefined : Number(legacyBalance));
         window.location.assign(`/app/run/${session.id}`);
       } else {
         const r = await api.startRun({ strategyId: rec.id, mode: "paper", ...(confirmEach ? { approvalMode: "confirm_each" as const, approvalTtlSec: ttl } : {}) }); router.push(`/app/run/${r.id}`);
@@ -136,7 +145,21 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         if (e.type === "progress") setSteps((s) => s.at(-1)?.step === e.step ? [...s.slice(0, -1), { step: e.step, label: e.label }] : [...s, { step: e.step, label: e.label }]);
         else if (e.type === "clarification") { setClarification({ draft: e.draft, questions: e.questions }); setPhase("clarifying"); setTook(performance.now() - t0); }
         else if (e.type === "partial") { fresh.push(e.node); setNodes([...fresh]); }
-        else if (e.type === "result") { setClarification(null); const edited = effectiveInstruction || continuation && pendingEdit.current?.instruction; if (edited) setText(e.strategy.thesis); setCompiledText(edited ? e.strategy.thesis : thesis); setCompiledImage(img?.url ?? null); setStrategy(e.strategy); setHumanized(e.humanized); setIssues(e.issues); setDemo(e.compiler === "demo" ? e.notice ?? "Rules come from keyword matching, not AI. Check every value." : null); setPhase("done"); setTook(performance.now() - t0); }
+        else if (e.type === "result") {
+          const result = e.strategy;
+          const preference = API_MODE === "mock" && !pendingEdit.current ? readPaperDefaults().budgetUsd : null;
+          const next = result.workflow && result.workflow.budgetUsd === null && preference !== null
+            ? { ...result, workflow: { ...result.workflow, budgetUsd: preference } } : result;
+          setClarification(null);
+          const edited = effectiveInstruction || continuation && pendingEdit.current?.instruction;
+          if (edited) setText(next.thesis);
+          if (!edited && !continuation && compiledText !== thesis && !new URLSearchParams(window.location.search).has("strategy")) setEditingRecord(null);
+          setCompiledText(edited ? next.thesis : thesis);
+          setCompiledImage(img?.url ?? null);
+          setStrategy(next); setHumanized(e.humanized); setIssues(e.issues);
+          setDemo(e.compiler === "demo" ? e.notice ?? "Review these demo rules before running." : null);
+          setPhase("done"); setTook(performance.now() - t0);
+        }
         else if (e.type === "error") { if (old.strategy) { setStrategy(old.strategy); setHumanized(old.humanized); setNodes(old.nodes); setIssues(old.issues); setDemo(old.demo); setSavedId(old.savedId); } setErr(e.message.replace(/^Demo compile:\s*/, "")); setSuggest(e.suggestions ?? []); setPhase(continuation ? "clarifying" : old.strategy ? "done" : "error"); }
       };
       if (useImg) await api.compileImage({ mimeType: img.mime, imageBase64: img.b64, ...(continuation ? { clarification: continuation } : {}), ...(thesis.trim() ? { note: thesis.trim().slice(0, 500) } : {}) }, onEv, c.signal);
@@ -145,17 +168,18 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   };
   const [guest, setGuest] = useState(API_MODE !== "mock");
   useEffect(() => {
+    if (API_MODE === "mock") { const p = readPaperDefaults(); setPaperMode(p.mode); setLegacyBalance(String(p.budgetUsd ?? 10000)); }
     const sp = new URLSearchParams(window.location.search);
     const prompt = initialPrompt ?? sp.get("idea") ?? sp.get("q");
     // Hydrate the externally supplied browser URL after SSR; subsequent typing stays local.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (prompt) setText(prompt.slice(0, 2000));
+    if (prompt && !typed.current) setText(prompt.slice(0, 2000));
     const id = sp.get("strategy"); let on = true;
     if (id) api.strategy(id).then((rec) => {
       if (!on) return;
       if (rec.strategy.workflow) rec.strategy.workflow = canonicalizeWorkflow(rec.strategy.workflow);
       setText(rec.strategy.thesis); setCompiledText(rec.strategy.thesis); setStrategy(rec.strategy);
-      setEditingRecord({ id: rec.id, version: rec.version });
+      setEditingRecord({ id: rec.id, version: rec.version, activeRunId: rec.activeRunId });
       setHumanized(rec.humanized); setNodes(deriveNodes(rec.strategy, Object.fromEntries(rec.nodes.map((node) => [node.id, node])))); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
       setDemo(null);
       if (API_MODE === "mock") setSaveNotice("Saved preview draft. Start a test to open its own Paper Trades session.");
@@ -165,7 +189,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const saveDraft = async () => {
     if (!strategy || dirty || phase !== "done") return;
     setSaving(true); setErr(null);
-    try { const record = editingRecord ? await api.updateStrategy(editingRecord.id, strategy, editingRecord.version) : await api.createStrategy(strategy); setEditingRecord({ id: record.id, version: record.version }); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
+    try { const record = await storeDraft(strategy); setEditingRecord({ id: record.id, version: record.version }); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
     catch (e) { setErr(errOf(e, "Could not save this draft.")); }
     finally { setSaving(false); }
   };
@@ -178,18 +202,18 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const drafting = phase === "drafting";
 
   return (
-    <div className="mx-auto max-w-[1040px] px-5 py-10 sm:px-8 sm:py-14">
-      <h1 className="text-[clamp(1.9rem,3.4vw,2.6rem)] font-medium tracking-[-0.035em]">{editingRecord ? "Edit strategy" : "New strategy"}</h1>
+    <div className="q-page q-builder mx-auto max-w-[1040px] px-5 py-10 sm:px-8 sm:py-14">
+      <h1 className="q-page-title text-[clamp(1.9rem,3.4vw,2.6rem)] font-medium tracking-[-0.035em]">{editingRecord ? "Edit strategy" : "New strategy"}</h1>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">Describe the strategy in your own words. Quiver drafts the rules and the graph. Nothing runs until you press start.</p>
 
       {API_MODE === "mock" && <PreviewWorkspaceNotice onReady={setPreviewAiReady} />}
       {/* 1 — Prompt */}
       <form className="mt-8 rounded-[14px] border border-line-2 bg-card p-1.5 transition-colors focus-within:border-accent/50" data-motion="prompt"
-        onSubmit={(e) => { e.preventDefault(); if (text.trim() || img) run(); }}>
+        onSubmit={(e) => { e.preventDefault(); if (!drafting && (text.trim().length >= 8 || img)) run(); }}>
         <label htmlFor="thesis" className="sr-only">Your strategy</label>
-        <textarea id="thesis" value={text} onChange={(e) => { setText(e.target.value); if (clarification || phase === "drafting") { ctl.current?.abort(); setClarification(null); setPhase("idle"); setErr(null); } }} maxLength={2000} rows={3}
+        <textarea id="thesis" value={text} onChange={(e) => { typed.current = true; setText(e.target.value); if (clarification || phase === "drafting") { ctl.current?.abort(); setClarification(null); setPhase("idle"); setErr(null); } }} maxLength={2000} rows={3}
           onKeyDown={(e) => { if (!drafting && text.trim().length >= 8 && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); } }}
-          placeholder="e.g. Buy $200 of AAPL on Robinhood Chain when it opens 2% red."
+          placeholder="Describe your strategy here, or choose an example below."
           className="block max-h-[45vh] min-h-[96px] w-full resize-none bg-transparent px-3.5 pb-2 pt-3 text-[15px] [field-sizing:content] leading-relaxed text-ink placeholder:text-muted focus:outline-none" />
         <div className="flex items-center justify-between gap-3 px-2 pb-1.5">
           <div className="flex items-center gap-3 text-[12px] text-muted">
@@ -219,7 +243,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" tabIndex={0} role="region" aria-label="Example prompts">
         {(API_MODE === "mock" ? PREVIEW_PROMPTS : SUGGESTIONS).map((s) => (
           <button key={s} type="button" onClick={() => { ctl.current?.abort(); setText(s); setClarification(null); setPhase("idle"); setErr(null); }}
-            className="btn shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] text-muted hover:border-line-2 hover:text-ink">{s}</button>
+            className="btn shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] text-muted hover:border-line-2 hover:text-ink">{s === SAMPLE_PROMPT ? "Fed odds + NVDA & SOL" : s}</button>
         ))}
       </div>
 
@@ -270,14 +294,14 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {strategy && phase === "done" && !dirty && <RefineBar onRefine={(t) => run(t)} />}
       <div data-reserve="after" className="min-h-[160px] md:min-h-[96px]">
       {issues.length > 0 && <ul className="mt-4 space-y-1 text-[13px]">{issues.map((i) => <li key={i.path + i.code} className={i.severity === "error" ? "text-short" : "text-muted"}>{i.severity === "error" ? "" : "Note: "}{i.message}</li>)}</ul>}
-      {phase === "done" && strategy && !strategy.workflow && <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>}
+      {phase === "done" && strategy && !strategy.workflow && (API_MODE === "mock" ? <div className="q-card mt-6 border border-line bg-card p-5"><label className="block max-w-xs text-[13px]">Starting virtual balance (USD)<input className="q-control mt-2" type="number" min="0.01" max="1000000000000" step="any" value={legacyBalance} onChange={e=>setLegacyBalance(e.target.value)}/></label><p className="mt-3 text-[12px] text-muted">This saved rule format uses a seven-day synthetic simulation. Run paper trade opens its own results page.</p></div> : <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>)}
       </div>
       <p className="mt-8 pb-24 text-[12px] text-muted">{DEMO_LABEL}. Stock tokens are not available to US persons. Trading can lose money.</p>
 
       {/* Action bar pinned to the viewport bottom; Paper-trade it is the only amber primary on the page once drafted */}
       <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 -mx-5 border-t border-line bg-bg/90 px-5 py-3 backdrop-blur-md lg:bottom-0 sm:-mx-8 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1">{phase === "done" ? dirty ? "Redraft to apply your changes" : strategy?.workflow ? launchProblems.length ? `${launchProblems.length} ${launchProblems.length === 1 ? "detail" : "details"} to complete` : paperMode === "quotes" ? "Ready · live quotes, virtual funds" : "Ready · simulated prices, virtual funds" : API_MODE === "mock" ? "Redraft this strategy to create a paper session" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
+          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1">{phase === "done" ? dirty ? "Redraft to apply your changes" : strategy?.workflow ? launchProblems.length ? `${launchProblems.length} ${launchProblems.length === 1 ? "detail" : "details"} to complete` : paperMode === "quotes" ? "Ready · live quotes, virtual funds" : "Ready · simulated prices, virtual funds" : API_MODE === "mock" ? "Ready · synthetic price simulation" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {err && phase === "done" && <span role="status" className="text-[12.5px] text-short">{err}</span>}
             {phase === "done" && !strategy?.workflow && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
@@ -288,7 +312,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
             <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
             <button type="button" disabled aria-describedby="live-trade-status" className="q-action">Live trade</button>
-            <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={(!strategy?.workflow && API_MODE === "mock") || dirty || phase !== "done" || starting || saving} className="q-action q-primary">{starting ? "Opening session…" : "Run paper trade →"}</button>
+            <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={(API_MODE === "mock" && !strategy?.workflow && !(Number(legacyBalance) > 0 && Number(legacyBalance) <= 1e12)) || dirty || phase !== "done" || starting || saving} className="q-action q-primary">{starting ? "Opening session…" : "Run paper trade →"}</button>
           </div>
         </div>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-x-6 gap-y-1 text-[12px] leading-relaxed text-muted">

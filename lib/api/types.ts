@@ -273,7 +273,7 @@ export interface QuiverChannelApi {
 
 // M5.9 user secrets (own RPC URL for 46630, own OpenRouter key). Write-only: the server returns hints, never values.
 export type UserSecretView = z.infer<typeof C.UserSecretView>;
-export type UserSecretList = z.infer<typeof C.UserSecretList>;
+export type UserSecretList = z.infer<typeof C.UserSecretList> & { shared?: { ai: boolean; stocks: boolean }; authenticated?: boolean };
 export type PutRpcSecretReq = z.input<typeof C.PutRpcSecretReq>;
 export type PutAiKeySecretReq = z.input<typeof C.PutAiKeySecretReq>;
 export type AccountRead = z.infer<typeof C.AccountReadRes>;

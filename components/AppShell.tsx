@@ -35,7 +35,7 @@ function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; 
   const on = isOn(href, path);
   return (
     <Link prefetch={false} href={href} aria-current={on ? "page" : undefined}
-      className={`btn flex items-center gap-2.5 rounded-[8px] px-2.5 ${tall ? "min-h-11 py-2.5 text-[15px]" : "py-[7px] text-[13.5px]"} ${on ? "bg-white/[.06] text-ink" : "text-muted hover:bg-white/[.03] hover:text-ink"}`}>
+      className={`q-nav-item btn flex items-center gap-2.5 rounded-[8px] px-2.5 ${tall ? "min-h-11 py-2.5 text-[15px]" : "py-[7px] text-[13.5px]"} ${on ? "bg-white/[.06] text-ink" : "text-muted hover:bg-white/[.03] hover:text-ink"}`}>
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={on ? "text-accent" : ""}><path d={d} /></svg>
       {n}
     </Link>
@@ -61,13 +61,13 @@ export default function AppShell({ children }: { active?: string; children: Reac
     return () => { document.removeEventListener("keydown", k); document.body.style.overflow = ""; };
   }, [open]);
   return (
-    <div className="flex min-h-dvh">
+    <div className="q-app-shell flex min-h-dvh">
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center">
         {authRetry != null && <span className="rounded-full border border-line bg-bg-2/95 px-3 py-1.5 text-[12.5px] text-muted">Signing in is busy. Retrying in {authRetry}s…</span>}
       </div>
       {cmdk && <CommandPalette setOpen={setCmdk} pages={[...NAV, ...ACCOUNT].map(([n, h]) => [n, h] as [string, string])} />}
-      <aside className="sticky top-0 hidden h-screen self-start overflow-y-auto w-[240px] shrink-0 flex-col border-r border-line bg-bg-2 px-3 py-5 lg:flex">
-        <Link prefetch={false} href="/" className="px-2"><Logo /></Link>
+      <aside className="q-sidebar sticky top-0 hidden h-screen self-start overflow-y-auto w-[240px] shrink-0 flex-col border-r border-line bg-bg-2 px-3 py-5 lg:flex">
+        <Link prefetch={false} href="/" className="q-sidebar-brand px-2"><Logo /></Link>
         <Link prefetch={false} href="/app/new" className="btn mt-6 flex items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press">
           <span aria-hidden className="text-[15px] leading-none">+</span> New strategy
         </Link>
@@ -77,7 +77,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
         <nav aria-label="App" className="mt-5 flex flex-col gap-0.5">{NAV.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} />)}</nav>
         <div className="mt-6 px-2.5 font-mono text-[12px] uppercase tracking-[.16em] text-muted">Account</div>
         <nav aria-label="Account" className="mt-2 flex flex-col gap-0.5">{ACCOUNT.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} />)}</nav>
-        <div className="mt-auto space-y-3 border-t border-line pt-4">
+        <div className="q-sidebar-foot mt-auto space-y-3 border-t border-line pt-4">
           <AccountMenu />
           <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span data-motion="pulse-dot" className="relative h-1.5 w-1.5 rounded-full bg-long" /> {DEMO_LABEL}</div>
         </div>
@@ -100,14 +100,14 @@ export default function AppShell({ children }: { active?: string; children: Reac
               <nav aria-label="App" className="mt-4 flex flex-col gap-0.5" onClick={() => setOpen(false)}>{NAV.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} tall />)}</nav>
               <div className="mt-5 px-2.5 font-mono text-[12px] uppercase tracking-[.16em] text-muted">Account</div>
               <nav aria-label="Account" className="mt-2 flex flex-col gap-0.5" onClick={() => setOpen(false)}>{ACCOUNT.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} tall />)}</nav>
-              <div className="mt-auto space-y-3 border-t border-line pt-4">
+              <div className="q-sidebar-foot mt-auto space-y-3 border-t border-line pt-4">
                 <AccountMenu tall />
                 <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span className="relative h-1.5 w-1.5 rounded-full bg-long" /> {DEMO_LABEL}</div>
               </div>
             </div>
           </div>
         )}
-        <main id="main" className="pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">{children}</main>
+        <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" id="main">{children}</main>
         <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/92 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
           {BOTTOM.map(([n, h, d]) => { const on = isOn(h, path); return (
             <Link prefetch={false} key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>

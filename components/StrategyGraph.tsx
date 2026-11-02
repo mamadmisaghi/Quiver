@@ -53,7 +53,7 @@ export default function StrategyGraph({ nodes, edges, revealed, ghosts, label, r
   const linked = (e: GEdge) => !hover || e.from === hover || e.to === hover;
 
   return (
-    <div ref={wrap} className="@container w-full" dir="ltr"><div className="-mx-1 max-h-[640px] overflow-auto overscroll-contain px-1 [scrollbar-width:thin] [touch-action:pan-x_pan-y]" tabIndex={0} role="region" aria-label="Strategy graph, scroll sideways to pan"><div className="relative"
+    <div ref={wrap} className="q-strategy-graph @container w-full" dir="ltr"><div className="-mx-1 max-h-[640px] overflow-auto overscroll-contain px-1 [scrollbar-width:thin] [touch-action:pan-x_pan-y]" tabIndex={0} role="region" aria-label="Strategy graph, scroll sideways to pan"><div className="relative"
       style={{ width: LW, height: Math.max(H, ghosts ? reservedHeight : 0, minH), visibility: measured ? undefined : "hidden" }} data-motion="graph" role="group"
       aria-label={label ?? `Strategy graph with ${nodes.length} nodes: signals feed triggers, triggers run actions, actions carry exits.`}>
       <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[12px] bg-[radial-gradient(var(--q-line2)_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
@@ -85,8 +85,8 @@ export default function StrategyGraph({ nodes, edges, revealed, ghosts, label, r
         const lit = n.state === "met" || n.state === "holding" || n.state === "fired";
         return (
           <Popover.Root key={n.id}><Popover.Trigger asChild><button type="button" aria-label={`Details: ${n.title}`} data-motion="node-in" onMouseEnter={() => setHover(n.id)} onMouseLeave={() => setHover(null)}
-            className={`absolute text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[12px] border px-3.5 pb-3 pt-3 shadow-[var(--q-shadow-card)] transition-colors duration-200 ${lit ? "border-accent/55" : n.state === "error" ? "border-short/60" : "border-line hover:border-line-2"}`}
-            style={{ left: b.x, top: b.y, width: b.w, height: b.h, animationDelay: `${b.depth * 100}ms`, background: "linear-gradient(180deg,#151517,#111113)" }}>
+            className={`q-strategy-node absolute text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[12px] border px-3.5 pb-3 pt-3 shadow-[var(--q-shadow-card)] transition-colors duration-200 ${lit ? "border-accent/55" : n.state === "error" ? "border-short/60" : "border-line hover:border-line-2"}`}
+            style={{ left: b.x, top: b.y, width: b.w, height: b.h, animationDelay: `${b.depth * 100}ms`, background: "var(--q-node-bg)" }}>
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-[7px] font-mono text-[12px] uppercase leading-none tracking-[.06em] text-muted">
                 <i className={`h-1.5 w-1.5 shrink-0 rounded-full ${n.kind === "when" ? "bg-cream" : n.state === "active" ? "bg-paper" : "bg-faint"} ${lit ? "shadow-[0_0_0_4px_color-mix(in_srgb,var(--q-amber)_18%,transparent)]" : ""}`} />

@@ -3,7 +3,7 @@ export const Eyebrow = ({ children, accent }: { children: React.ReactNode; accen
   <p className={`font-mono text-[12px] uppercase tracking-[.16em] ${accent ? "text-accent" : "text-muted"}`}>{children}</p>
 );
 export const H2 = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <h2 className={`text-balance text-[clamp(2.1rem,4.2vw,3.5rem)] font-medium leading-[1.03] tracking-[-0.04em] ${className}`}>{children}</h2>
+  <h2 className={`q-display text-balance text-[clamp(2.1rem,4.2vw,3.5rem)] font-medium leading-[1.03] tracking-[-0.04em] ${className}`}>{children}</h2>
 );
 export const Em = ({ children }: { children: React.ReactNode }) => (
   <em className="font-serif font-normal italic tracking-[-0.01em] text-accent">{children}</em>
@@ -18,7 +18,7 @@ export const Section = ({ id, children, className = "" }: { id?: string; childre
 );
 export const Pill = ({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "long" | "short" | "accent" | "paper" | "warn" }) => {
   const c = { muted: "border-line-2 text-muted", long: "border-long/30 text-long bg-long/[.06]", short: "border-short/30 text-short bg-short/[.06]", accent: "border-accent/40 text-accent bg-accent-soft", paper: "border-paper/40 text-paper bg-paper/[.08]", warn: "border-warn/40 text-warn bg-warn/[.08]" }[tone];
-  return <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-[3px] font-mono text-[12px] uppercase tracking-[.12em] ${c}`}>{children}</span>;
+  return <span className={`q-pill inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-[3px] font-mono text-[12px] uppercase tracking-[.12em] ${c}`}>{children}</span>;
 };
 export const BtnPrimary = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <Link prefetch={false} href={href} className="btn inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 text-[14px] font-medium text-bg hover:brightness-110 active:bg-accent-press">{children}</Link>
@@ -27,7 +27,7 @@ export const BtnGhost = ({ href, children }: { href: string; children: React.Rea
   <Link prefetch={false} href={href} className="btn inline-flex items-center gap-2 rounded-full border border-line-2 px-5 py-3 text-[14px] text-ink hover:border-white/30 hover:bg-white/5">{children}</Link>
 );
 export const Card = ({ children, className = "", ...rest }: React.HTMLAttributes<HTMLDivElement> & { "data-testid"?: string; "data-motion"?: string }) => (
-  <div {...rest} className={`rounded-[14px] border border-line bg-card ${className}`}>{children}</div>
+  <div {...rest} className={`q-card rounded-[14px] border border-line bg-card ${className}`}>{children}</div>
 );
 export const usd = (n: number, d = 0) => (n < 0 ? "−" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 export const pct = (n: number, d = 1) => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(d) + "%";

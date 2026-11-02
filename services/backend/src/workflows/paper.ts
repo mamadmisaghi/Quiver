@@ -96,7 +96,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
         if (d.reference === "peak") s.anchors[signal.id] = Math.max(s.anchors[signal.id], q!.price);
         const reference = d.reference === "lookback" ? h.find(([t]) => t >= at - (d.lookbackMinutes ?? 0) * 60_000)?.[1] : s.anchors[signal.id];
         // Lookback signals require the whole requested window; never invent missing history.
-        if (reference && (d.reference !== "lookback" || (h[0]?.[0] ?? at) <= at - (d.lookbackMinutes ?? 0) * 60_000)) v = Math.max(0, (1 - q!.price / reference) * 100);
+        if (reference && (d.reference !== "lookback" || (h[0]?.[0] ?? at) <= at - (d.lookbackMinutes ?? 0) * 60_000)) v = Math.max(0, Number(((reference - q!.price) * 100 / reference).toPrecision(14)));
       } else if (signal.kind === "indicator" && signal.indicator) {
         const { name, period, timeframe } = signal.indicator, buckets = new Map<number, number>();
         for (const [t, price] of h) { const end = (Math.floor(t / TF_MS[timeframe]) + 1) * TF_MS[timeframe]; if (end <= at) buckets.set(end, price); }
@@ -118,7 +118,20 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     else if (pct <= -100 / p.leverage || (x.stopLossPct && pct <= -x.stopLossPct) || (x.takeProfitPct && pct >= x.takeProfitPct) || (x.trailingStopPct && p.peakPct - pct >= x.trailingStopPct) || (x.timeExitHours && at - p.openedAt >= x.timeExitHours * 3_600_000)) exitPosition(s, stage.id, at, q.price, p.qty, "exit", "Position exit condition met.");
     else for (let i = 0; i < x.ladder.length; i++) if (s.positions[stage.id] && !p.rungs.includes(i) && pct >= x.ladder[i].atPct) { p.rungs.push(i); exitPosition(s, stage.id, at, q.price, p.baseQty * x.ladder[i].fraction, "exit", `Take-profit rung ${i + 1}; fraction of original position.`); }
   }
-  for (const stage of w.stages) {
+  // Each sibling evaluates the same market observation. Re-arm shared drawdown
+  // signals only after every eligible order has consumed that observation.
+  const rearmed = new Set<string>();
+  const ordered: PlanStage[] = [];
+  const visited = new Set<string>();
+  const byStage = new Map(w.stages.map(stage => [stage.id, stage]));
+  function visit(stage: PlanStage) {
+    if (visited.has(stage.id)) return;
+    visited.add(stage.id);
+    for (const dep of stage.after) { const parent = byStage.get(dep.stageId); if (parent) visit(parent); }
+    ordered.push(stage);
+  }
+  w.stages.forEach(visit);
+  for (const stage of ordered) {
     const st = s.stages[stage.id], q = s.quotes[stage.assetId];
     if (!fresh(q, at) || !q || q.price <= 0 || q.settled) { st.status = "Waiting for fresh market data"; continue; }
     const dependencies = stage.after.every((d) => { const prev = s.stages[d.stageId]; return prev && (d.event === "filled" ? prev.fills > 0 : d.event === "closed" ? prev.closed : d.event === "resolved_profit" ? prev.resolved && (s.pools[d.stageId] ?? 0) > EPS : prev.realized > EPS && (s.pools[d.stageId] ?? 0) > EPS); });
@@ -131,6 +144,14 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     if (r?.intervalMinutes && st.lastFillAt !== null && at - st.lastFillAt < r.intervalMinutes * 60_000) { st.status = "Waiting for interval"; continue; }
     const drop = w.signals.filter((sig) => expressionRefs(stage.when).has(sig.id) && sig.kind === "drawdown" && (sig.drawdown?.reference === "peak" || sig.drawdown?.reference === "last_fill") && sig.assetId === stage.assetId);
     const dependencyStamp = stage.after.map((d) => `${d.stageId}:${d.event}:${s.stages[d.stageId]?.fills}:${s.stages[d.stageId]?.realized}:${s.stages[d.stageId]?.resolved}`).join("|");
+    if (r && !r.intervalMinutes && st.fills && stage.after.length > 1 && st.consumedDependency) {
+      const lastFills = new Map(st.consumedDependency.split("|").map(part => {
+        const [id, , count] = part.split(":"); return [id, Number(count)] as const;
+      }));
+      if (stage.after.some(dep => dep.event === "filled" && s.stages[dep.stageId].fills <= (lastFills.get(dep.stageId) ?? 0))) {
+        st.status = "Waiting for the next set of predecessor fills"; continue;
+      }
+    }
     if (r && !r.intervalMinutes && st.fills && !drop.length && (stage.after.length ? st.consumedDependency === dependencyStamp : was)) { st.status = "Waiting for a new condition event"; continue; }
     if (!(yes === true || (r?.conditionMode === "once_then_repeat" && st.latched))) { st.status = yes === null ? "Waiting for signal history / data" : "Waiting for condition"; continue; }
     if (s.dayOrders >= risk.maxOrdersPerDay || paperEquity(s) < s.dayStart * (1 - risk.maxDailyLossPct / 100)) { st.status = "Paused by daily risk limit"; continue; }
@@ -146,16 +167,24 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     }
     if (available + EPS < usd + usd * stage.leverage * feeRate) { st.status = stage.funding.kind === "profits" ? "Waiting for enough realized profit" : "Budget cannot cover the next full order and fees"; continue; }
     const existing = s.positions[stage.id]; const exposure = Object.values(s.positions).reduce((n, p) => n + p.qty * (s.quotes[p.assetId]?.price ?? p.entry), 0), eq = paperEquity(s);
-    if (!(usd > 0) || usd * stage.leverage + (existing?.qty ?? 0) * q.price > eq * risk.maxPositionPct / 100 + EPS || exposure + usd * stage.leverage > eq * risk.maxTotalExposurePct / 100 + EPS) { st.status = "Order blocked by exposure limit"; continue; }
+    const assetKey = (id: string) => {
+      const asset = w.assets.find(a => a.id === id);
+      return asset?.resolution?.selectedId ?? [asset?.venue, asset?.kind, asset?.query.toUpperCase(), asset?.outcome].join("|");
+    };
+    const key = assetKey(stage.assetId);
+    const positionExposure = Object.values(s.positions).filter(position => assetKey(position.assetId) === key)
+      .reduce((sum, position) => sum + position.qty * (s.quotes[position.assetId]?.price ?? position.entry), 0);
+    if (!(usd > 0) || usd * stage.leverage + positionExposure > eq * risk.maxPositionPct / 100 + EPS || exposure + usd * stage.leverage > eq * risk.maxTotalExposurePct / 100 + EPS) { st.status = "Order blocked by exposure limit"; continue; }
     const fee = usd * stage.leverage * feeRate, allocation = takeCash(s, stage, usd + fee);
     if (!allocation) { st.status = stage.funding.kind === "profits" ? "Waiting for enough realized profit" : "Budget cannot cover the next full order and fees"; continue; }
     const qty = usd * stage.leverage / q.price;
     const p: Position = existing ?? { assetId: stage.assetId, qty: 0, baseQty: 0, entry: q.price, margin: 0, entryFee: 0, side: stage.side === "short" ? -1 : 1, leverage: stage.leverage, openedAt: at, peakPct: 0, rungs: [], allocation: [] };
     p.entry = (p.entry * p.qty + q.price * qty) / (p.qty + qty); p.qty += qty; p.baseQty += qty; p.margin += usd; p.entryFee += fee; p.allocation.push(...allocation); s.positions[stage.id] = p;
     s.fees += fee; s.dayOrders++; st.fills++; st.lastFillAt = at; st.closed = false; st.resolved = false; st.consumedDependency = dependencyStamp; st.status = "Paper order filled";
-    for (const sig of drop) { s.anchors[sig.id] = q.price; values[sig.id + ".value"] = 0; } if (drop.length) st.active = false;
+    for (const sig of drop) { s.anchors[sig.id] = q.price; rearmed.add(sig.id); } if (drop.length) st.active = false;
     s.events.push({ at, stageId: stage.id, kind: "buy", amount: usd, price: q.price, fee, detail: `${stage.side} ${w.assets.find((a) => a.id === stage.assetId)?.query}; ${stage.leverage}x; ${stage.funding.kind} funding` });
   }
+  for (const signalId of rearmed) values[signalId + ".value"] = 0;
   s.previous = values; s.events = s.events.slice(-300); s.curve.push([at, paperEquity(s)]); s.curve = s.curve.slice(-1000); return s;
 }
 /** Explicit scenario data, never historical performance or a prediction. */

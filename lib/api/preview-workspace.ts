@@ -46,6 +46,8 @@ export async function deletePreviewDraft(id: string) {
 }
 
 export async function updatePreviewDraft(current: StrategyRecord, strategy: Strategy, expectedVersion: number) {
+  const latestLocal = previewDrafts().find(row => row.id === current.id);
+  if (latestLocal && latestLocal.version > expectedVersion) throw new ApiErr("conflict", "This draft changed in another tab. Reload before saving.", 409);
   if (current.version !== expectedVersion) throw new ApiErr("conflict", "This draft changed. Reload before saving.", 409);
   const record = { ...previewRecord(strategy, current.id, current.ownerId, current.createdAt, current.forkedFrom), version: expectedVersion + 1, updatedAt: new Date().toISOString() };
   // Only an already-online record uses the compare-and-swap endpoint. New/browser/example drafts are saved with the same id.

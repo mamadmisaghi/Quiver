@@ -43,9 +43,9 @@ services:
       - key: OPS_TOKEN
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://quiver-studio.gofivahootan.chatgpt.site
+        value: https://quiver-workspace.gofivahootan.chatgpt.site
       - key: SIWE_ORIGIN
-        value: https://quiver-studio.gofivahootan.chatgpt.site
+        value: https://quiver-workspace.gofivahootan.chatgpt.site
       - key: PRIVY_APP_ID
         sync: false
       - key: PRIVY_APP_SECRET
