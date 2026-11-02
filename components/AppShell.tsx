@@ -43,7 +43,9 @@ function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; 
 }
 export default function AppShell({ children }: { active?: string; children: React.ReactNode }) {
   const path = usePathname() || "/app";
-  const paperWorkspace = path === "/app/new" || path === "/app/run" || path.startsWith("/app/run/");
+  const paperTrades = path === "/app/run" || path.startsWith("/app/run/");
+  const paperWorkspace = path === "/app/new" || paperTrades;
+  const wideLayout = path === "/app" || path === "/app/portfolio" || paperTrades;
   const modeLabel = paperWorkspace ? "Paper workspace · virtual funds" : DEMO_LABEL;
   const [open, setOpen] = useState(false);
   const [cmdk, setCmdk] = useState(false); // M4.9.2 ⌘K
@@ -109,7 +111,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
             </div>
           </div>
         )}
-        <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" id="main">{children}</main>
+        <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" data-layout={wideLayout ? "wide" : undefined} id="main">{children}</main>
         <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 q-app-bottom grid grid-cols-5 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden">
           {BOTTOM.map(([n, h, d]) => { const on = isOn(h, path); return (
             <Link prefetch={false} key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>
