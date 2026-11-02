@@ -43,6 +43,8 @@ function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; 
 }
 export default function AppShell({ children }: { active?: string; children: React.ReactNode }) {
   const path = usePathname() || "/app";
+  const paperWorkspace = path === "/app/new" || path === "/app/run" || path.startsWith("/app/run/");
+  const modeLabel = paperWorkspace ? "Paper workspace · virtual funds" : DEMO_LABEL;
   const [open, setOpen] = useState(false);
   const [cmdk, setCmdk] = useState(false); // M4.9.2 ⌘K
   useEffect(() => {
@@ -79,7 +81,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
         <nav aria-label="Account" className="mt-2 flex flex-col gap-0.5">{ACCOUNT.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} />)}</nav>
         <div className="q-sidebar-foot mt-auto space-y-3 border-t border-line pt-4">
           <AccountMenu />
-          <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span data-motion="pulse-dot" className="relative h-1.5 w-1.5 rounded-full bg-long" /> {DEMO_LABEL}</div>
+          <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span data-motion="pulse-dot" className="relative h-1.5 w-1.5 rounded-full bg-long" /> {modeLabel}</div>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
@@ -102,7 +104,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
               <nav aria-label="Account" className="mt-2 flex flex-col gap-0.5" onClick={() => setOpen(false)}>{ACCOUNT.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} tall />)}</nav>
               <div className="q-sidebar-foot mt-auto space-y-3 border-t border-line pt-4">
                 <AccountMenu tall />
-                <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span className="relative h-1.5 w-1.5 rounded-full bg-long" /> {DEMO_LABEL}</div>
+                <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span className="relative h-1.5 w-1.5 rounded-full bg-long" /> {modeLabel}</div>
               </div>
             </div>
           </div>
