@@ -3,10 +3,11 @@ import { Strategy, Workflow, Risk } from "../lib/contracts";
 import { recurringDraft } from "../services/backend/src/compile/recurring";
 import { previewRecord } from "../lib/preview/records";
 import { createPaperSession, readPaperSession, listPaperSessions, checkpointPaperSession } from "../lib/paper/sessions";
-import { createPaper, stepPaper, paperProblems } from "../services/backend/src/workflows/paper";
+import { createPaper, stepPaper, paperProblems, type PaperStepEvent } from "../services/backend/src/workflows/paper";
 import { resolveMarket } from "../services/backend/src/compile/markets";
 import { quoteAsset } from "../services/backend/src/workflows/quotes";
 import { workflowView } from "../services/backend/src/engine/workflow-view";
+import { paperGraphPulses } from "../lib/paper/graph-events";
 import { graphLayout, GRAPH_GAP, NODE_WIDTH } from "../lib/graph-layout";
 class Memory implements Storage {
   data = new Map<string, string>(); get length() { return this.data.size; }
@@ -53,6 +54,31 @@ const v2 = workflowView(multi), g2 = graphLayout(v2.nodes, v2.edges, 1000);
 for (const e of v2.edges) assert(g2.boxes[e.to].x > g2.boxes[e.from].x);
 for (const a of Object.values(g2.boxes)) for (const b of Object.values(g2.boxes)) if (a !== b) assert(a.x + NODE_WIDTH <= b.x || b.x + NODE_WIDTH <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
 checks++;
+// Trace the exact observation that earned a pulse, including split and joined paths.
+const branch = structuredClone(multi);
+branch.assets.push({ ...branch.assets[0], id: "other", query: "TROLL" });
+branch.signals.push({ ...branch.signals[0], id: "other_price", assetId: "other" });
+branch.stages[0].when = { op: "or", args: [branch.stages[0].when!, { op: "gt", left: { ref: "other_price.value" }, right: { lit: 10 } }] };
+branch.stages[1].when = null;
+branch.stages[1].amount = { unit: "pct_profits", value: 50 };
+const observation = (price: number, time: number) => [{ assetId: "asset", price, observedAt: time, source: "test", synthetic: false }];
+const entering: PaperStepEvent[] = [], quiet: PaperStepEvent[] = [], leaving: PaperStepEvent[] = [];
+const before = createPaper(branch, t), after = stepPaper(branch, before, observation(.002, t), t, strategy.risk, entering);
+assert.deepEqual(after, stepPaper(branch, before, observation(.002, t), t, strategy.risk));
+assert.deepEqual(entering[0], { kind: "condition", stageId: "buy", signals: [branch.signals[0].id] });
+const entryLinks = paperGraphPulses(branch, entering, t);
+assert.deepEqual(entryLinks.map(p => [p.from, p.to]), [[`wf_sig_${branch.signals[0].id}`, "wf_when_buy"], ["wf_when_buy", "wf_do_buy"]]);
+assert(entryLinks[1].delay! > entryLinks[0].delay!); checks++;
+stepPaper(branch, after, observation(.002, t), t, strategy.risk, quiet);
+stepPaper(branch, after, observation(.002, t + 1), t + 1, strategy.risk, quiet);
+assert.deepEqual(quiet, []); checks++;
+stepPaper(branch, after, observation(.0025, t + 2), t + 2, strategy.risk, leaving);
+const exitLinks = paperGraphPulses(branch, leaving, t + 2);
+assert.deepEqual(exitLinks.map(p => [p.from, p.to]), [["wf_do_buy", "wf_exit_buy"], ["wf_exit_buy", "wf_when_next"], ["wf_when_next", "wf_do_next"]]);
+assert(exitLinks.every(p => workflowView(branch).edges.some(e => e.from === p.from && e.to === p.to))); checks++;
+const blocked: PaperStepEvent[] = [];
+const stopped = stepPaper(branch, before, observation(.002, t), t, { ...strategy.risk, maxPositionPct: 1 }, blocked);
+assert.equal(stopped.stages.buy.fills, 0); assert(!blocked.some(e => e.kind === "fill" || e.kind === "exit")); checks++;
 // Regression: a saved, one-off Hyperliquid draft used to look ready without a
 // budget while both launch buttons stayed disabled. Setup and launch must use
 // the same preflight, and adding a budget must be enough to open a quote session.

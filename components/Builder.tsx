@@ -55,6 +55,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const [phase, setPhase] = useState<Phase>("idle");
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
+  const [revealGraph, setRevealGraph] = useState(false);
   const [nodes, setNodes] = useState<GNode[]>([]);
   const [strategy, setStrategy] = useState<Strategy | null>(null);
   const [humanized, setHumanized] = useState<Humanized | null>(null);
@@ -141,6 +142,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     if (!continuation) pendingEdit.current = effectiveInstruction && baseForRefine ? { baseStrategy: baseForRefine, instruction: effectiveInstruction } : null;
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
     if (!continuation) setClarification(null);
+    setRevealGraph(false);
     setPaperAttempted(false); setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
     const fresh: GNode[] = [];
     try {
@@ -149,7 +151,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         if (c.signal.aborted) return;
         if (e.type === "progress") setSteps((s) => s.at(-1)?.step === e.step ? [...s.slice(0, -1), { step: e.step, label: e.label }] : [...s, { step: e.step, label: e.label }]);
         else if (e.type === "clarification") { setClarification({ draft: e.draft, questions: e.questions }); setPhase("clarifying"); setTook(performance.now() - t0); }
-        else if (e.type === "partial") { fresh.push(e.node); setNodes([...fresh]); }
+        else if (e.type === "partial") fresh.push(e.node);
         else if (e.type === "result") {
           const result = e.strategy;
           const preference = API_MODE === "mock" && !pendingEdit.current ? readPaperDefaults().budgetUsd : null;
@@ -161,7 +163,8 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
           if (!edited && !continuation && compiledText !== thesis && !new URLSearchParams(window.location.search).has("strategy")) setEditingRecord(null);
           setCompiledText(edited ? next.thesis : thesis);
           setCompiledImage(img?.url ?? null);
-          setStrategy(next); setHumanized(e.humanized); setIssues(e.issues);
+          setNodes(deriveNodes(next, Object.fromEntries(fresh.map(node => [node.id, node]))));
+          setRevealGraph(true); setStrategy(next); setHumanized(e.humanized); setIssues(e.issues);
           setDemo(e.compiler === "demo" ? e.notice ?? "Review these demo rules before running." : null);
           setPhase("done"); setTook(performance.now() - t0);
         }
@@ -182,7 +185,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     if (id) api.strategy(id).then((rec) => {
       if (!on) return;
       if (rec.strategy.workflow) rec.strategy.workflow = canonicalizeWorkflow(rec.strategy.workflow);
-      setText(rec.strategy.thesis); setCompiledText(rec.strategy.thesis); setStrategy(rec.strategy);
+      setRevealGraph(false); setText(rec.strategy.thesis); setCompiledText(rec.strategy.thesis); setStrategy(rec.strategy);
       setEditingRecord({ id: rec.id, version: rec.version, activeRunId: rec.activeRunId });
       setHumanized(rec.humanized); setNodes(deriveNodes(rec.strategy, Object.fromEntries(rec.nodes.map((node) => [node.id, node])))); setIssues(rec.issues); setSavedId(rec.id); setPhase("done");
       setDemo(null);
@@ -269,7 +272,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
             <span className="font-mono text-[12px] uppercase tracking-[.14em] text-muted">Graph</span>
             <span className="rounded-full border border-line-2 px-2.5 py-1 text-[12px] text-muted">Rules preview</span>
           </div>
-          <StrategyGraph nodes={graphNodes} edges={edges} revealed={graphNodes.length} ghosts={phase === "drafting" ? 1 : 0} reserve={RESERVE} />
+          <StrategyGraph nodes={graphNodes} edges={edges} reveal={revealGraph && phase === "done"} ghosts={phase === "drafting" ? 1 : 0} reserve={RESERVE} />
         </div>
       </section>
 
@@ -277,7 +280,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         pendingEdit.current = { baseStrategy: strategy };
         void run(undefined, text, { workflow: strategy.workflow!, history: [], answers: {} });
       }} onChange={(workflow) => {
-        const view = workflowView(workflow); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
+        const view = workflowView(workflow); setRevealGraph(false); setStrategy({ ...strategy, workflow }); setHumanized(view.humanized); setNodes(view.nodes); setSavedId(null); setSaveNotice(null);
       }} /></div>}
 
 

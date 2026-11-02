@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Pencil, SlidersHorizontal } from "lucide-react";
+import DisclosurePanel from "@/components/DisclosurePanel";
 import { Card } from "@/components/ui";
 import {
   KeyDefaults,
@@ -24,6 +25,7 @@ export default function WorkspaceDefaults({
   const [caps, setCaps] = useState({ trade: "", day: "", slippage: "" });
   const [notice, setNotice] = useState(""),
     [error, setError] = useState("");
+  const editorId = useId();
   const edit = useRef<HTMLButtonElement>(null);
   function load() {
     const p = readPaperDefaults(),
@@ -41,7 +43,7 @@ export default function WorkspaceDefaults({
   function close() {
     setEditing(false);
     setError("");
-    requestAnimationFrame(() => edit.current?.focus());
+    requestAnimationFrame(() => edit.current?.focus({ preventScroll: true }));
   }
   function save(event: React.FormEvent) {
     event.preventDefault();
@@ -100,11 +102,11 @@ export default function WorkspaceDefaults({
           <SlidersHorizontal size={16} className="text-accent" />
           {title}
         </h2>
-        {!editing && (
           <button
             ref={edit}
             type="button"
-            className="q-action"
+            className={`q-action${editing ? " invisible" : ""}`}
+            aria-expanded={editing} aria-controls={editorId}
             aria-label={`Edit ${title}`}
             onClick={() => {
               load();
@@ -115,9 +117,8 @@ export default function WorkspaceDefaults({
             <Pencil size={13} />
             Edit
           </button>
-        )}
       </div>
-      {editing ? (
+      <DisclosurePanel id={editorId} open={editing} focusFirst>
         <form
           onSubmit={save}
           onKeyDown={(e) => {
@@ -135,7 +136,6 @@ export default function WorkspaceDefaults({
                 Default virtual budget (USD)
                 <input
                   className="q-control"
-                  autoFocus
                   type="number"
                   step="any"
                   min="0.01"
@@ -153,12 +153,11 @@ export default function WorkspaceDefaults({
                 ["day", "Per day (USD)", 1000],
                 ["slippage", "Max slippage (%)", 1],
               ] as const
-            ).map(([key, label, max], i) => (
+            ).map(([key, label, max]) => (
               <label key={key}>
                 {label}
                 <input
                   className="q-control"
-                  autoFocus={i === 0}
                   required
                   type="number"
                   min="0.01"
@@ -189,7 +188,8 @@ export default function WorkspaceDefaults({
             </button>
           </div>
         </form>
-      ) : (
+      </DisclosurePanel>
+      <DisclosurePanel open={!editing}>
         <dl className="mt-3 divide-y divide-line">
           {rows.map(([label, val]) => (
             <div
@@ -201,7 +201,7 @@ export default function WorkspaceDefaults({
             </div>
           ))}
         </dl>
-      )}
+      </DisclosurePanel>
       <p className="mt-3 text-[12px] text-muted">
         {paper
           ? "Applied when a new draft leaves the virtual budget open. Paper orders use live market prices."

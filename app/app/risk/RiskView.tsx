@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Pencil, Check, ShieldCheck, Clock3 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import Wrap from "@/components/Wrap";
 import { Card } from "@/components/ui";
+import DisclosurePanel from "@/components/DisclosurePanel";
 import Loading from "@/components/Loading";
 import { api, API_MODE, DEMO_LABEL, errOf } from "@/lib/api";
 import { Risk, type Strategy } from "@/lib/contracts";
@@ -65,7 +66,7 @@ export default function RiskView() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save these limits."); }
     finally { setSaving(false); }
   };
-  useEffect(() => { if (!saving && !editing && returnFocus.current) { editButtons.current[returnFocus.current]?.focus(); returnFocus.current = null; } }, [saving, editing]);
+  useLayoutEffect(() => { if (!saving && !editing && returnFocus.current) { editButtons.current[returnFocus.current]?.focus({ preventScroll: true }); returnFocus.current = null; } }, [saving, editing]);
   const [confirm, setConfirm] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const sw = list.data && list.data.items.length > 0 && (
@@ -74,7 +75,7 @@ export default function RiskView() {
         {list.data.items.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
       </select>
     </label>);
-  const closeEditor = () => { if (saving) return; if (editing) editButtons.current[editing]?.focus(); setEditing(null); setError(null); };
+  const closeEditor = () => { if (saving) return; returnFocus.current = editing; setEditing(null); setError(null); };
   const r = rec.data?.strategy.risk;
   if (list.data && !list.data.items.length) return <Wrap><PageHeader title="Risk limits" sub="Draft a strategy first — its limits show up here." /></Wrap>;
   if (!r || !rec.data || rec.data.id !== id) return <Wrap><PageHeader title="Risk limits" sub={DEMO_LABEL} right={sw} /><Loading h={420} q={list.error ? list : rec} /></Wrap>;
@@ -100,29 +101,33 @@ export default function RiskView() {
       <div className="q-risk q-settings mt-8 grid items-start gap-5 xl:grid-cols-2">
         {[{ title: "Capital limits", help: "Position size, exposure and daily drawdown.", icon: ShieldCheck, rows: L.slice(0, 3) }, { title: "Execution rules", help: "Order frequency, timing and stale prices.", icon: Clock3, rows: L.slice(3) }].map(({ title, help, icon: Icon, rows }) => <Card key={title} className="q-risk-panel overflow-hidden">
           <div className="flex items-center gap-3 border-b border-line px-5 py-5 sm:px-6"><Icon size={19} strokeWidth={1.5} className="shrink-0 text-muted" /><div><h2 className="text-[15px] font-medium">{title}</h2><p className="mt-1 text-[12.5px] text-muted">{help}</p></div></div>
-          <div className="divide-y divide-line">{rows.map(([field, k, v, d]) => <div key={field} className={`q-risk-row px-5 pt-5 sm:px-6 ${editing === field ? "" : "pb-5"}`}>
+          <div className="divide-y divide-line">{rows.map(([field, k, v, d]) => {
+            const expanded = editing === field;
+            const values = expanded && draft ? draft : r;
+            return <div key={field} className="q-risk-row px-5 pt-5 sm:px-6" data-editing={expanded}
+              data-range={expanded && ["maxPositionPct", "maxTotalExposurePct", "maxDailyLossPct"].includes(field)}>
             <div className="q-risk-summary">
               <h3 className="q-risk-name">{k}</h3>
               <p className="q-risk-value tnum">{v}</p>
               <p className="q-risk-help">{d}</p>
               <button ref={(el) => { editButtons.current[field] = el; }} type="button" disabled={saving} onClick={() => { if (editing === field) { closeEditor(); return; } setDraft(structuredClone(r)); setEditing(field); setError(null); setMsg(null); }} className={`q-action shrink-0 px-3 ${editing === field ? "border-accent/40 text-accent" : ""}`} aria-label={`Edit ${k}`} aria-expanded={editing === field} aria-controls={`risk-edit-${field}`} title={run ? "Edit limits for a new draft of this strategy" : undefined}><Pencil size={13} />Edit</button>
             </div>
-            {editing === field && draft && <div id={`risk-edit-${field}`}><form className="q-risk-editor q-edit-panel -mx-5 mt-4 space-y-4 px-5 pb-5 pt-4 sm:-mx-6 sm:px-6" onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeEditor(); } }} onSubmit={(e) => { e.preventDefault(); void save(); }}>
+            <DisclosurePanel open={expanded} focusFirst id={`risk-edit-${field}`}><form className="q-risk-editor q-edit-panel -mx-5 mt-4 space-y-4 px-5 pb-5 pt-4 sm:-mx-6 sm:px-6" onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeEditor(); } }} onSubmit={(e) => { e.preventDefault(); void save(); }}>
               {run && <div className="q-risk-copy-note">Save a separate draft to use these limits in your next paper session.</div>}
               <fieldset disabled={saving} className="block text-[13px] text-ink-2"><legend className="text-[12px] text-muted">New {k.toLowerCase()}{field === "maxOrdersPerDay" ? "" : field.startsWith("max") ? " (%)" : ""}</legend>
-                {field === "equityWhenFeedStale" ? <select aria-label={k} autoFocus value={draft.equityWhenFeedStale} onChange={(e) => setDraft({ ...draft, equityWhenFeedStale: e.target.value as "skip" | "use_pool_twap" })} className="q-control mt-2"><option value="skip">Skip the trade</option><option value="use_pool_twap">Use the pool's average price</option></select>
+                {field === "equityWhenFeedStale" ? <select aria-label={k} value={values.equityWhenFeedStale} onChange={(e) => setDraft({ ...values, equityWhenFeedStale: e.target.value as "skip" | "use_pool_twap" })} className="q-control mt-2"><option value="skip">Skip the trade</option><option value="use_pool_twap">Use the pool's average price</option></select>
                 : field === "tradingHours" ? <span className="mt-2 block space-y-2">
-                  <label className="flex min-h-11 cursor-pointer items-center gap-2.5"><input type="checkbox" checked={!!draft.tradingHours} onChange={(e) => setDraft({ ...draft, tradingHours: e.target.checked ? { from: "09:30", to: "16:00", tz: "America/New_York", days: ["mon", "tue", "wed", "thu", "fri"] } : undefined })} />Limit trading hours</label>
-                  {draft.tradingHours && <><span className="flex gap-2">{(["from", "to"] as const).map((f) => <input key={f} aria-label={f === "from" ? "Start time" : "End time"} type="time" value={draft.tradingHours![f]} onChange={(e) => setDraft({ ...draft, tradingHours: { ...draft.tradingHours!, [f]: e.target.value } })} className="min-h-11 min-w-0 w-1/2 rounded-lg border border-line-2 bg-bg px-2" />)}</span>
-                    <input aria-label="Time zone" value={draft.tradingHours.tz} onChange={(e) => setDraft({ ...draft, tradingHours: { ...draft.tradingHours!, tz: e.target.value } })} className="q-control" />
-                    <span className="flex flex-wrap gap-1">{(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => <label key={day} className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-line-2 px-2.5 has-checked:border-accent/40 has-checked:bg-accent/5"><input type="checkbox" checked={draft.tradingHours!.days.includes(day)} onChange={(e) => setDraft({ ...draft, tradingHours: { ...draft.tradingHours!, days: e.target.checked ? [...draft.tradingHours!.days, day] : draft.tradingHours!.days.filter((x) => x !== day) } })} />{day}</label>)}</span></>}
-                </span> : <div className="q-number-editor"><input aria-label={k} autoFocus type="number" min={1} max={field === "maxOrdersPerDay" ? 500 : 100} step={field === "maxOrdersPerDay" ? 1 : "any"} required value={Number.isNaN(draft[field]) ? "" : draft[field]} onChange={(e) => setDraft({ ...draft, [field]: e.target.value === "" ? NaN : Number(e.target.value) })} className="q-control tnum mt-2 text-[20px]" />{field !== "maxOrdersPerDay" && <><span className="q-percent-suffix" aria-hidden="true">%</span><input aria-label={`${k} slider`} type="range" min={1} max={100} step={1} value={Number.isFinite(Number(draft[field])) ? Number(draft[field]) : 1} onChange={(e) => setDraft({ ...draft, [field]: Number(e.target.value) })} className="q-risk-range" /><span className="q-range-labels" aria-hidden="true"><span>1%</span><span>25%</span><span>50%</span><span>100%</span></span></>}</div>}
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2.5"><input type="checkbox" checked={!!values.tradingHours} onChange={(e) => setDraft({ ...values, tradingHours: e.target.checked ? { from: "09:30", to: "16:00", tz: "America/New_York", days: ["mon", "tue", "wed", "thu", "fri"] } : undefined })} />Limit trading hours</label>
+                  {values.tradingHours && <><span className="flex gap-2">{(["from", "to"] as const).map((f) => <input key={f} aria-label={f === "from" ? "Start time" : "End time"} type="time" value={values.tradingHours![f]} onChange={(e) => setDraft({ ...values, tradingHours: { ...values.tradingHours!, [f]: e.target.value } })} className="min-h-11 min-w-0 w-1/2 rounded-lg border border-line-2 bg-bg px-2" />)}</span>
+                    <input aria-label="Time zone" value={values.tradingHours.tz} onChange={(e) => setDraft({ ...values, tradingHours: { ...values.tradingHours!, tz: e.target.value } })} className="q-control" />
+                    <span className="flex flex-wrap gap-1">{(["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const).map((day) => <label key={day} className="flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-line-2 px-2.5 has-checked:border-accent/40 has-checked:bg-accent/5"><input type="checkbox" checked={values.tradingHours!.days.includes(day)} onChange={(e) => setDraft({ ...values, tradingHours: { ...values.tradingHours!, days: e.target.checked ? [...values.tradingHours!.days, day] : values.tradingHours!.days.filter((x) => x !== day) } })} />{day}</label>)}</span></>}
+                </span> : <div className="q-number-editor"><input aria-label={k} type="number" min={1} max={field === "maxOrdersPerDay" ? 500 : 100} step={field === "maxOrdersPerDay" ? 1 : "any"} required value={Number.isNaN(values[field]) ? "" : values[field]} onChange={(e) => setDraft({ ...values, [field]: e.target.value === "" ? NaN : Number(e.target.value) })} className="q-control tnum mt-2 text-[20px]" />{field !== "maxOrdersPerDay" && <><span className="q-percent-suffix" aria-hidden="true">%</span><input aria-label={`${k} slider`} type="range" min={1} max={100} step={1} value={Number.isFinite(Number(values[field])) ? Number(values[field]) : 1} onChange={(e) => setDraft({ ...values, [field]: Number(e.target.value) })} className="q-risk-range" /><span className="q-range-labels" aria-hidden="true"><span>1%</span><span>25%</span><span>50%</span><span>100%</span></span></>}</div>}
               </fieldset>
               <p className="text-[12px] text-muted">Applies only to “{rec.data!.name}”.</p>
               {error && <p role="alert" className="text-[13px] text-short">{error}</p>}
               <div className="flex gap-2"><button disabled={saving} className="q-action q-primary">{saving ? "Saving…" : run ? "Save as draft" : "Save changes"}</button><button type="button" disabled={saving} onClick={closeEditor} className="q-action">Cancel</button></div>
-            </form></div>}
-          </div>)}</div>
+            </form></DisclosurePanel>
+          </div>; })}</div>
         </Card>)}
       </div>
       {run && <p className="mt-3 text-[12.5px] text-muted">{API_MODE === "mock" ? "This example has a paper run. Edit a limit to save your own draft." : "Changes to running strategies are saved as a new draft."}</p>}

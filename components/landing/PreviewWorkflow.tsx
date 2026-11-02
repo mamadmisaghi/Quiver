@@ -1,11 +1,25 @@
 "use client";
-import { useId } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Activity, ChartNoAxesCombined, Filter, ShoppingCart, Shield, TrendingUp, X } from "lucide-react";
 import { Popover } from "radix-ui";
+import NodeDetails from "../NodeDetails";
 
 /** Illustrative graph; real strategies continue to use StrategyGraph. */
 export default function PreviewWorkflow({ probability = false, crossVenue = false }: { probability?: boolean; crossVenue?: boolean }) {
   const uid = useId().replace(/:/g, "");
+  const graph = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const el = graph.current;
+    if (!el || !window.IntersectionObserver) return;
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let visible = false;
+    const sync = () => setPlaying(visible && !document.hidden && !preference.matches);
+    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(); });
+    observer.observe(el);
+    document.addEventListener("visibilitychange", sync); preference.addEventListener("change", sync);
+    return () => { observer.disconnect(); document.removeEventListener("visibilitychange", sync); preference.removeEventListener("change", sync); };
+  }, []);
   const width = crossVenue ? 960 : 765;
   const nodes = [
     { id: "price", x: 10, y: 30, title: probability ? "Fed-cut odds" : "NVDA price", detail: probability ? "Polymarket · above 70%" : "Market price signal", kind: "Signal", Icon: ChartNoAxesCombined, full: probability ? "Watch the selected Polymarket outcome. Its probability must be above 70%." : "Read the latest NVDA price. It must be below its 20-day moving average." },
@@ -17,13 +31,16 @@ export default function PreviewWorkflow({ probability = false, crossVenue = fals
   ];
   const paths = ["M170 68H181Q190 68 190 77V124Q190 133 199 133H205", "M170 198H181Q190 198 190 189V142Q190 133 199 133H205", "M365 133H400", "M560 133H595"];
   if (crossVenue) paths.push("M755 133H790");
-  return <div className={`q-preview-graph${crossVenue ? " q-preview-cross" : ""}`} style={{ aspectRatio: `${width} / 270` }} role="group" aria-label={`Example workflow: two signals feed one trigger, then ${crossVenue ? "NVDA and SOL orders" : "a buy"} and stop-loss exit`}>
+  return <div ref={graph} data-playing={playing} className={`q-preview-graph${crossVenue ? " q-preview-cross" : ""}`} style={{ aspectRatio: `${width} / 270` }} role="group" aria-label={`Example workflow: two signals feed one trigger, then ${crossVenue ? "NVDA and SOL orders" : "a buy"} and stop-loss exit`}>
     <svg className="q-preview-wires" viewBox={`0 0 ${width} 270`} preserveAspectRatio="none" aria-hidden="true">
       <defs><marker id={`${uid}-arrow`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="var(--accent)" /></marker></defs>
-      {paths.map((d, i) => <g key={d}><path d={d} vectorEffect="non-scaling-stroke" fill="none" stroke="var(--accent)" strokeOpacity=".65" strokeWidth="1.3" markerEnd={`url(#${uid}-arrow)`} /><circle r="2.3" fill="var(--accent)" className="q-wire-pulse"><animateMotion dur="3.8s" begin={`${i * .45}s`} repeatCount="indefinite" path={d} /></circle></g>)}
+      {paths.map((d, i) => <g key={d}>
+        <path d={d} vectorEffect="non-scaling-stroke" fill="none" stroke="var(--accent)" strokeOpacity=".65" strokeWidth="1.3" markerEnd={`url(#${uid}-arrow)`} />
+        <circle r="2.3" fill="var(--accent)" className="q-demo-pulse" data-leg={i < 2 ? "inputs" : i === 2 ? "order" : i === 3 ? "next" : "risk"} style={{ offsetPath: `path("${d}")` }} />
+      </g>)}
     </svg>
-    {nodes.map(({ id, x, y, title, detail, kind, Icon, full }) => <Popover.Root key={id}><Popover.Trigger asChild><button className={`q-preview-node q-preview-node-${id}`} style={{ left: `${x / width * 100}%`, top: `${y / 270 * 100}%`, width: `${160 / width * 100}%` }} aria-label={`Example ${kind.toLowerCase()}: ${title}`}><Icon size={21} strokeWidth={1.5} /><span><strong>{title}</strong><small>{detail}</small></span></button></Popover.Trigger>
-      <Popover.Portal><Popover.Content className="q-node-popover" sideOffset={10} collisionPadding={16}><div className="flex items-center justify-between gap-4"><span className="text-[12px] text-muted">{kind} · Example</span><Popover.Close aria-label="Close details" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/5"><X size={14} /></Popover.Close></div><strong className="block text-[15px] font-medium">{title}</strong><p className="mt-2 text-[13px] leading-relaxed text-muted">{full}</p></Popover.Content></Popover.Portal>
-    </Popover.Root>)}
+    {nodes.map(({ id, x, y, title, detail, kind, Icon, full }) => <NodeDetails key={id} className="q-node-popover" sideOffset={10} label={`${title} example details`} trigger={<button type="button" className={`q-preview-node q-preview-node-${id}`} style={{ left: `${x / width * 100}%`, top: `${y / 270 * 100}%`, width: `${160 / width * 100}%` }} aria-label={`Example ${kind.toLowerCase()}: ${title}`}><Icon size={21} strokeWidth={1.5} /><span><strong>{title}</strong><small>{detail}</small></span></button>}>
+      <div className="flex items-center justify-between gap-4"><span className="text-[12px] text-muted">{kind} · Example</span><Popover.Close aria-label="Close details" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/5"><X size={14} /></Popover.Close></div><strong className="block text-[15px] font-medium">{title}</strong><p className="mt-2 text-[13px] leading-relaxed text-muted">{full}</p>
+    </NodeDetails>)}
   </div>;
 }

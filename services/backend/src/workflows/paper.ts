@@ -10,6 +10,11 @@ type Allocation = { source: string; value: number };
 type Position = { assetId: string; qty: number; baseQty: number; entry: number; margin: number; entryFee: number; side: 1 | -1; leverage: number; openedAt: number; peakPct: number; rungs: number[]; allocation: Allocation[] };
 type StageState = { fills: number; lastFillAt: number | null; active: boolean; latched: boolean; closed: boolean; resolved: boolean; realized: number; status: string; consumedDependency?: string };
 export type PaperState = { version: 1; startedAt: number; lastAt: number; budget: number; principal: number; pools: Record<string, number>; positions: Record<string, Position>; stages: Record<string, StageState>; anchors: Record<string, number>; history: Record<string, [number, number][]>; previous: Record<string, number | boolean | null>; quotes: Record<string, PaperQuote>; fees: number; realized: number; day: string; dayStart: number; dayOrders: number; events: { at: number; stageId: string; kind: "buy" | "sell" | "exit" | "settle"; amount: number; price: number; fee: number; detail: string }[]; curve: [number, number][] };
+// Transient observations for a single committed tick. They never enter a checkpoint.
+export type PaperStepEvent =
+  | { kind: "condition"; stageId: string; signals: string[] }
+  | { kind: "fill"; stageId: string; newDependencies: boolean }
+  | { kind: "exit"; stageId: string };
 const EPS = 1e-8, feeRate = .001;
 export function paperProblems(w: Workflow, live = false) {
   w = canonicalizeWorkflow(w);
@@ -46,7 +51,7 @@ function takeCash(s: PaperState, stage: PlanStage, value: number): Allocation[] 
   for (const id of sources) { const n = Math.min(left, available(id)); if (n > 0) { addCash(s, { source: id, value: n }, -n); out.push({ source: id, value: n }); left -= n; } }
   return out;
 }
-function exitPosition(s: PaperState, id: string, at: number, price: number, quantity: number, kind: "exit" | "settle", reason: string) {
+function exitPosition(s: PaperState, id: string, at: number, price: number, quantity: number, kind: "exit" | "settle", reason: string, trace?: PaperStepEvent[]) {
   const p = s.positions[id]; if (!p || !(quantity > 0)) return;
   const qty = Math.min(p.qty, quantity), fraction = qty / p.qty, margin = p.margin * fraction, entryFee = p.entryFee * fraction;
   const fee = kind === "settle" ? 0 : qty * price * feeRate;
@@ -57,6 +62,7 @@ function exitPosition(s: PaperState, id: string, at: number, price: number, quan
   for (const a of p.allocation) addCash(s, a, allocationTotal ? principalReturn * a.value / allocationTotal : 0);
   if (net > 0) s.pools[id] = (s.pools[id] ?? 0) + net;
   s.fees += fee; s.realized += net; s.stages[id].realized += net;
+  trace?.push({ kind: "exit", stageId: id });
   s.events.push({ at, stageId: id, kind, amount: qty * price, price, fee, detail: reason }); s.dayOrders++;
   p.margin -= margin; p.entryFee -= entryFee; p.qty -= qty; p.allocation = p.allocation.map((a) => ({ ...a, value: a.value * (1 - fraction) }));
   if (p.qty <= EPS * Math.max(1, p.baseQty)) { delete s.positions[id]; s.stages[id].closed = true; s.stages[id].resolved = kind === "settle"; }
@@ -72,8 +78,17 @@ function evaluate(e: PlanExpr, value: (ref: string) => number | boolean | null, 
   const pl = get(e.left, true), pr = get(e.right, true); if (typeof pl !== "number" || typeof pr !== "number") return false;
   return e.op === "crosses_above" ? pl <= pr && l > r : pl >= pr && l < r;
 }
+// For OR and NOT, trace only the operands that actually establish the result.
+function conditionWitness(expr: PlanExpr, values: PaperState["previous"], previous: PaperState["previous"], expected = true, out = new Set<string>()) {
+  if ("args" in expr) {
+    for (const child of expr.args) if (evaluate(child, ref => values[ref] ?? null, previous) === expected)
+      conditionWitness(child, values, previous, expected, out);
+  } else if ("arg" in expr) conditionWitness(expr.arg, values, previous, !expected, out);
+  else expressionRefs(expr, out);
+  return out;
+}
 /** Pure, checkpointable paper execution. The same evaluator can be driven by a browser or a server worker. */
-export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({})): PaperState {
+export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({}), trace?: PaperStepEvent[]): PaperState {
   w = canonicalizeWorkflow(w);
   const s = structuredClone(state); if (at <= s.lastAt) return s; s.lastAt = at;
   for (const q of incoming) if (w.assets.some((a) => a.id === q.assetId) && fresh(q, at) && (q.price > 0 || q.settled)) {
@@ -114,9 +129,9 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
   for (const stage of w.stages) {
     const p = s.positions[stage.id], q = s.quotes[stage.assetId]; if (!p || !fresh(q, at)) continue;
     const pct = (q.price / p.entry - 1) * p.side * 100, x = stage.exits; p.peakPct = Math.max(p.peakPct, pct);
-    if (q.settled && q.payout !== undefined) exitPosition(s, stage.id, at, q.payout, p.qty, "settle", "Outcome settled; proceeds are now available.");
-    else if (pct <= -100 / p.leverage || (x.stopLossPct && pct <= -x.stopLossPct) || (x.takeProfitPct && pct >= x.takeProfitPct) || (x.trailingStopPct && p.peakPct - pct >= x.trailingStopPct) || (x.timeExitHours && at - p.openedAt >= x.timeExitHours * 3_600_000)) exitPosition(s, stage.id, at, q.price, p.qty, "exit", "Position exit condition met.");
-    else for (let i = 0; i < x.ladder.length; i++) if (s.positions[stage.id] && !p.rungs.includes(i) && pct >= x.ladder[i].atPct) { p.rungs.push(i); exitPosition(s, stage.id, at, q.price, p.baseQty * x.ladder[i].fraction, "exit", `Take-profit rung ${i + 1}; fraction of original position.`); }
+    if (q.settled && q.payout !== undefined) exitPosition(s, stage.id, at, q.payout, p.qty, "settle", "Outcome settled; proceeds are now available.", trace);
+    else if (pct <= -100 / p.leverage || (x.stopLossPct && pct <= -x.stopLossPct) || (x.takeProfitPct && pct >= x.takeProfitPct) || (x.trailingStopPct && p.peakPct - pct >= x.trailingStopPct) || (x.timeExitHours && at - p.openedAt >= x.timeExitHours * 3_600_000)) exitPosition(s, stage.id, at, q.price, p.qty, "exit", "Position exit condition met.", trace);
+    else for (let i = 0; i < x.ladder.length; i++) if (s.positions[stage.id] && !p.rungs.includes(i) && pct >= x.ladder[i].atPct) { p.rungs.push(i); exitPosition(s, stage.id, at, q.price, p.baseQty * x.ladder[i].fraction, "exit", `Take-profit rung ${i + 1}; fraction of original position.`, trace); }
   }
   // Each sibling evaluates the same market observation. Re-arm shared drawdown
   // signals only after every eligible order has consumed that observation.
@@ -154,6 +169,9 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     }
     if (r && !r.intervalMinutes && st.fills && !drop.length && (stage.after.length ? st.consumedDependency === dependencyStamp : was)) { st.status = "Waiting for a new condition event"; continue; }
     if (!(yes === true || (r?.conditionMode === "once_then_repeat" && st.latched))) { st.status = yes === null ? "Waiting for signal history / data" : "Waiting for condition"; continue; }
+    if (trace && stage.when && yes && !was) {
+      trace.push({ kind: "condition", stageId: stage.id, signals: [...conditionWitness(stage.when, values, s.previous)] });
+    }
     if (s.dayOrders >= risk.maxOrdersPerDay || paperEquity(s) < s.dayStart * (1 - risk.maxDailyLossPct / 100)) { st.status = "Paused by daily risk limit"; continue; }
     if (risk.tradingHours) { const h = risk.tradingHours; const date = new Intl.DateTimeFormat("en-US", { timeZone: h.tz, hourCycle: "h23", hour: "2-digit", minute: "2-digit", weekday: "short" }).formatToParts(new Date(at)); const time = `${date.find((p) => p.type === "hour")?.value}:${date.find((p) => p.type === "minute")?.value}`, dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(date.find((p) => p.type === "weekday")?.value ?? ""); const inside = h.from < h.to ? time >= h.from && time < h.to : time >= h.from || time < h.to; if (!inside || !h.days.includes((["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const)[dow])) { st.status = "Outside allowed trading hours"; continue; } }
     const amount = stage.amount.value!; const available = stage.funding.kind === "budget" ? s.principal : stage.funding.from.reduce((n, id) => n + (s.pools[id] ?? 0), 0);
@@ -162,7 +180,8 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
       const positions = Object.entries(s.positions).filter(([, p]) => p.assetId === stage.assetId && p.side === 1);
       if (!positions.length) { st.status = "Waiting for a position to reduce"; continue; }
       let left = stage.amount.unit === "pct_position" ? positions.reduce((n, [, p]) => n + p.qty, 0) * amount / 100 : stage.amount.unit === "native" ? amount : usd / q.price;
-      for (const [id, p] of positions) { const n = Math.min(left, p.qty), before = s.realized, oldPool = s.pools[id] ?? 0; exitPosition(s, id, at, q.price, n, "exit", `Reduced by stage ${stage.id}`); if (id !== stage.id) { st.realized += s.realized - before; const earned = Math.max(0, (s.pools[id] ?? 0) - oldPool); s.pools[id] = (s.pools[id] ?? 0) - earned; s.pools[stage.id] = (s.pools[stage.id] ?? 0) + earned; } left -= n; if (left <= EPS) break; }
+      for (const [id, p] of positions) { const n = Math.min(left, p.qty), before = s.realized, oldPool = s.pools[id] ?? 0; exitPosition(s, id, at, q.price, n, "exit", `Reduced by stage ${stage.id}`, trace); if (id !== stage.id) { st.realized += s.realized - before; const earned = Math.max(0, (s.pools[id] ?? 0) - oldPool); s.pools[id] = (s.pools[id] ?? 0) - earned; s.pools[stage.id] = (s.pools[stage.id] ?? 0) + earned; } left -= n; if (left <= EPS) break; }
+      trace?.push({ kind: "fill", stageId: stage.id, newDependencies: st.consumedDependency !== dependencyStamp });
       st.fills++; st.lastFillAt = at; st.closed = true; st.consumedDependency = dependencyStamp; st.status = "Reduced position"; continue;
     }
     if (available + EPS < usd + usd * stage.leverage * feeRate) { st.status = stage.funding.kind === "profits" ? "Waiting for enough realized profit" : "Budget cannot cover the next full order and fees"; continue; }
@@ -180,6 +199,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     const qty = usd * stage.leverage / q.price;
     const p: Position = existing ?? { assetId: stage.assetId, qty: 0, baseQty: 0, entry: q.price, margin: 0, entryFee: 0, side: stage.side === "short" ? -1 : 1, leverage: stage.leverage, openedAt: at, peakPct: 0, rungs: [], allocation: [] };
     p.entry = (p.entry * p.qty + q.price * qty) / (p.qty + qty); p.qty += qty; p.baseQty += qty; p.margin += usd; p.entryFee += fee; p.allocation.push(...allocation); s.positions[stage.id] = p;
+    trace?.push({ kind: "fill", stageId: stage.id, newDependencies: st.consumedDependency !== dependencyStamp });
     s.fees += fee; s.dayOrders++; st.fills++; st.lastFillAt = at; st.closed = false; st.resolved = false; st.consumedDependency = dependencyStamp; st.status = "Paper order filled";
     for (const sig of drop) { s.anchors[sig.id] = q.price; rearmed.add(sig.id); } if (drop.length) st.active = false;
     s.events.push({ at, stageId: stage.id, kind: "buy", amount: usd, price: q.price, fee, detail: `${stage.side} ${w.assets.find((a) => a.id === stage.assetId)?.query}; ${stage.leverage}x; ${stage.funding.kind} funding` });

@@ -16,6 +16,7 @@ const InstructPanel = dynamic(() => import("./InstructPanel"));
 import SignInButton from "./SignInButton";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StrategyGraph from "./StrategyGraph";
+import type { EdgePulse } from "@/lib/paper/graph-events";
 import VenueMark from "./VenueMark";
 import { Card, Details, Pill } from "./ui";
 import { api, ApiErr, isValidation, fmtNum, fmtSignal, fmtTime, fmtUsd, fmtPct, fmtSource, fmtDur, localTz, errCopy, tone, strategyEdges, demoNodes, demoStrategy,
@@ -24,6 +25,7 @@ import { api, ApiErr, isValidation, fmtNum, fmtSignal, fmtTime, fmtUsd, fmtPct, 
 type Sig = Extract<RunEvent, { type: "tick" }>["signals"][number];
 type Fill = Extract<RunEvent, { type: "fill" }>;
 type Halt = Extract<RunEvent, { type: "risk_halt" }>;
+const exitParent = (id: string) => id.match(/^(.+)\.(?:exit|tp\d+|partial)$/)?.[1];
 const SIDE: Record<string, string> = { buy: "Buy", sell: "Sell", long: "Long", short: "Short" };
 
 const ROW_H = 58; // 2 lines of 12.5px + padding
@@ -35,7 +37,9 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
   const [stratWarn, setStratWarn] = useState<string | null>(null); // M4.9 strategy_updated
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [signals, setSignals] = useState<Record<string, Sig>>({});
-  const [met, setMet] = useState<{ path: string[]; holdUntil: string; forMinutes: number } | null>(null);
+  const [pulses, setPulses] = useState<EdgePulse[]>([]);
+  const [firedGate, setFiredGate] = useState<string | null>(null);
+  const [met, setMet] = useState<{ triggerId: string; path: string[]; holdUntil: string; forMinutes: number } | null>(null);
   const [fired, setFired] = useState<string[]>([]);
   const [fills, setFills] = useState<Fill[]>([]);
   const [pos, setPos] = useState<Positions | null>(null); // M4.6: server-marked open positions
@@ -82,7 +86,10 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
   useEffect(() => {
     if (!runId) return;
     ended.current = false; terminal.current = false;
-    return api.streamRun(runId, (e) => {
+    const orders = new Map<string, string>();
+    let lastGraphSeq = -1, clearTimer: ReturnType<typeof setTimeout> | undefined;
+    setPulses([]);
+    const stream = api.streamRun(runId, (e) => {
       // M3.6: "stopped" is terminal and always the last event. After the user presses Stop only the status frame
       // gets through; once stopped arrives, every later frame (late ticks, duplicates on reconnect) is dropped.
       if (terminal.current) return;
@@ -94,11 +101,32 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
       clock.current = new Date(e.ts).getTime();
       if (e.type === "heartbeat") return;
       if (e.type === "triggers_snapshot") { setTrig(Object.fromEntries(e.triggers.map((x) => [x.triggerId, x]))); return; } // M4.7: full state on connect/resume, not a log row
+      if (e.seq > lastGraphSeq) {
+        lastGraphSeq = e.seq;
+        const next: EdgePulse[] = [];
+        if (e.type === "trigger_met") {
+          for (const from of e.path) if (from !== e.triggerId) next.push({ from, to: e.triggerId, id: e.seq });
+        } else if (e.type === "trigger_fired") {
+          for (const id of e.intentIds) orders.set(id, e.triggerId);
+        } else if (e.type === "fill") {
+          const parent = exitParent(e.actionId), gate = orders.get(e.orderId);
+          if (parent) next.push({ from: parent, to: `${parent}.exit`, id: e.seq });
+          else if (gate) next.push({ from: gate, to: e.actionId, id: e.seq });
+          orders.delete(e.orderId);
+        } else if (e.type === "rejected" || (e.type === "error" && e.orderId)) {
+          orders.delete(e.orderId!);
+        }
+        if (next.length && !document.hidden) {
+          setPulses(old => [...old.filter(p => !next.some(n => n.from === p.from && n.to === p.to)), ...next]);
+          clearTimeout(clearTimer); clearTimer = setTimeout(() => setPulses([]), 360);
+        }
+        if ((e.type === "status" && e.status !== "running") || e.type === "risk_halt") setPulses([]);
+      }
       setEvents((es) => (es.some((x) => x.seq === e.seq && x.type === e.type) ? es : [e, ...es].slice(0, 40)));
       if (e.type === "tick") { ticks.current = [...ticks.current.slice(-1), clock.current]; setSignals((s) => ({ ...s, ...Object.fromEntries(e.signals.map((x) => [x.signalId, x])) })); if (e.triggers.length) setTrig((t) => ({ ...t, ...Object.fromEntries(e.triggers.map((x) => [x.triggerId, x])) })); }
       if (e.type === "intent") intents.current[e.orderId] = e.actionId;
-      if (e.type === "trigger_met") setMet({ path: e.path, holdUntil: e.holdUntil ?? e.ts, forMinutes: e.forMinutes });
-      if (e.type === "trigger_fired") { setFired(e.actionIds); setMet(null); }
+      if (e.type === "trigger_met") setMet({ triggerId: e.triggerId, path: e.path, holdUntil: e.holdUntil ?? e.ts, forMinutes: e.forMinutes });
+      if (e.type === "trigger_fired") { setFiredGate(e.triggerId); setFired(e.actionIds); setMet(null); }
       if (e.type === "fill") { applyFill(e); setPosTick((t) => t + 1); }
       if (e.type === "approval_requested") setPending((p) => (p.some((x) => x.id === e.approvalId) ? p : [...p, { id: e.approvalId, actionId: e.actionId, instrument: e.instrument, venue: e.venue, side: e.side, notionalUsd: e.notionalUsd, expiresAt: e.expiresAt, strategyName: e.strategyName, actionTitle: e.actionTitle }])); // M4.7 names on the event
       if (e.type === "approval_resolved") setPending((p) => { if (p.some((x) => x.id === e.approvalId)) setApvNote(APV_NOTE[e.decision]); return p.filter((x) => x.id !== e.approvalId); });
@@ -107,6 +135,7 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
       if (e.type === "status") setRun((r) => (r ? { ...r, status: e.status } : r));
       if (e.type === "warning" && e.code === "strategy_updated") { setStratWarn(e.message); refreshRef.current(); } // M4.9
     }, setStreamIssue);
+    return () => { clearTimeout(clearTimer); stream(); };
   }, [runId]);
   useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(iv); }, []);
   useEffect(() => { // fills that happened before the stream attached (stream starts at the tail)
@@ -180,14 +209,14 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
     let state: NodeState = "idle"; let value: string | undefined;
     const s = signals[n.id];
     if (n.kind === "watch") { value = fmtSignal(n.id, s?.value ?? null, s?.stale); if (met?.path.includes(n.id)) state = "met"; if (!s || s.value == null || s.stale) state = "waiting"; }
-    if (n.kind === "when") state = met ? "holding" : fired.length ? "fired" : "idle";
+    if (n.kind === "when") state = met?.triggerId === n.id ? "holding" : firedGate === n.id ? "fired" : "idle";
     if (n.kind === "do") state = flash === n.id ? "error" : fired.includes(n.id) ? "active" : "idle";
-    if (n.kind === "exit" && fills.some((f) => `${f.actionId}.exit` === n.id)) state = "active";
+    if (n.kind === "exit" && fills.some((f) => `${exitParent(f.actionId)}.exit` === n.id)) state = "fired";
     return { ...n, state, value };
-  }), [baseNodes, signals, met, fired, flash, fills]);
+  }), [baseNodes, signals, met, firedGate, fired, flash, fills]);
   const edges = useMemo(() => strategyEdges(rec?.strategy ?? demoStrategy).map((e) => ({
-    ...e, hot: (met ? met.path.includes(e.from) && met.path.includes(e.to) : false) || (fired.includes(e.to)) || fills.some((f) => f.actionId === e.from),
-  })), [rec, met, fired, fills]);
+    ...e, hot: (met?.triggerId === e.to && met.path.includes(e.from)) || pulses.some(p => p.from === e.from && p.to === e.to),
+  })), [rec, met, pulses]);
 
   function describe(e: RunEvent): string {
     switch (e.type) {
@@ -305,7 +334,7 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
           <span className="text-[13px] font-medium text-ink-2">Live graph</span>
           <span className="min-w-0 truncate pl-3 text-[12.5px] text-muted">{watching}</span>
         </div>
-        {baseNodes.length ? <StrategyGraph nodes={nodes} edges={edges} /> : <div className="h-[280px]" />}
+        {baseNodes.length ? <StrategyGraph nodes={nodes} edges={edges} pulses={status === "running" ? pulses : []} /> : <div className="h-[280px]" />}
       </Card>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_440px]">
