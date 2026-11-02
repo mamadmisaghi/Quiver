@@ -11,3 +11,5 @@ Data and local drafts are isolated by Site origin. Existing schemas are recreate
 Fonts are bundled in public/fonts and declared in app/fonts.css so development and deployed rendering use the same faces. The original Google Fonts downloads are unchanged; license notices accompany the assets.
 
 Quiver C is the selected product direction from November 2. Continue feature and deployment work on this Site. The application supports editable paper preferences, versioned risk drafts and private user connections. Keep active runs bound to the strategy version they started with.
+
+Use `emil-design-eng` alongside `frontend-design`, `impeccable`, and `ui-ux-pro-max` for Quiver C motion and interaction reviews. Keep the C visual identity, make rule order clear in the builder, and tie motion in Paper Trades to actual session events. Keyboard commands should respond immediately and respect reduced-motion preferences.
