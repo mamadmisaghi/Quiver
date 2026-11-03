@@ -20,7 +20,8 @@ export type MarketCandidate = z.infer<typeof MarketCandidate>;
 export const MarketResolution = z.object({ status: z.enum(["matched", "choose", "unavailable", "not_found"]), candidates: z.array(MarketCandidate).max(8), selectedId: z.string().max(160).nullable(), checkedAt: z.string(), message: z.string().max(500) });
 export const PlanAsset = z.object({ id: Id, query: z.string().min(1).max(200), sourceText: z.string().min(1).max(300), venue: Venue.nullable(), kind: z.enum(["token", "perp", "spot", "outcome"]).nullable(), outcome: z.string().max(80).nullable(), resolution: MarketResolution.optional() });
 export const PlanSignal = z.object({
-  id: Id, assetId: Id.nullable(), kind: z.enum(["price", "drawdown", "indicator", "funding", "odds", "timer", "position", "custom"]),
+  id: Id, assetId: Id.nullable(), kind: z.enum(["price", "drawdown", "price_change", "indicator", "funding", "odds", "timer", "position", "custom"]),
+  change: z.object({ reference: z.enum(["needs_choice", "start", "lookback"]), lookbackMinutes: z.number().positive().max(525600).nullable() }).optional(),
   drawdown: z.object({ reference: z.enum(["needs_choice", "peak", "last_fill", "lookback"]), lookbackMinutes: z.number().positive().max(525600).nullable() }).optional(),
   indicator: z.object({ name: z.enum(["sma", "ema", "rsi", "atr", "bb_upper", "bb_lower", "pct_change"]), period: z.number().int().min(2).max(500), timeframe: z.enum(["1m", "5m", "15m", "1h", "4h", "1d"]) }).nullable(),
   schedule: z.object({ cron: z.string().max(64), tz: z.string().max(64) }).nullable(), description: z.string().max(400),
@@ -39,6 +40,8 @@ export const Workflow = z.object({
   version: z.literal(1), name: z.string().min(1).max(80), summary: z.string().max(1000),
   budgetUsd: z.number().positive().max(1e12).nullable(),
   assets: z.array(PlanAsset).min(1).max(16), signals: z.array(PlanSignal).max(24), stages: z.array(PlanStage).min(1).max(24),
+  // Unresolved choice between one joint gate and one gate per entry. Blocks execution until answered.
+  entryGrouping: z.array(Id).min(2).max(8).optional(),
   questions: z.array(z.string().max(300)).max(16),
   assumptions: z.array(z.string().max(300)).max(12).default([]),
   risk: z.object({ maxPositionPct: z.number().min(1).max(100).optional(), maxTotalExposurePct: z.number().min(1).max(100).optional(), maxDailyLossPct: z.number().min(1).max(100).optional(), maxOrdersPerDay: z.number().int().min(1).max(500).optional() }).optional(),
@@ -61,8 +64,14 @@ export function prepareWorkflowInput(raw: unknown): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const copy = structuredClone(raw) as Record<string, any>;
   if (!Array.isArray(copy.assets) || !Array.isArray(copy.signals) || !Array.isArray(copy.stages)) return copy;
+  // Providers may spell an unspecified optional field as null. Never coerce an actual limit or quantity.
+  for (const key of ["risk", "entryGrouping"]) if (copy[key] === null) delete copy[key];
+  if (copy.risk && typeof copy.risk === "object") for (const key of Object.keys(copy.risk)) if (copy.risk[key] === null) delete copy.risk[key];
+  for (const signal of copy.signals) if (signal && typeof signal === "object") {
+    for (const key of ["drawdown", "change"]) if (signal[key] === null) delete signal[key];
+  }
   const ids = new Set([...copy.assets, ...copy.signals].map((x) => x?.id));
-  if (copy.assets.length === 1) for (const sig of copy.signals) if (sig && sig.assetId == null && ["price", "drawdown", "indicator", "funding", "odds", "position"].includes(sig.kind)) sig.assetId = copy.assets[0]?.id;
+  if (copy.assets.length === 1) for (const sig of copy.signals) if (sig && sig.assetId == null && ["price", "drawdown", "price_change", "indicator", "funding", "odds", "position"].includes(sig.kind)) sig.assetId = copy.assets[0]?.id;
   let remaining = 1000;
   const walk = (e: any) => {
     if (!e || typeof e !== "object" || --remaining < 0) return;
@@ -92,7 +101,7 @@ function repeatsStructuredExits(exits: PlanStage["exits"]): boolean {
 /** Normalize unambiguous provider field aliases before semantic validation. */
 export function canonicalizeWorkflow(w: Workflow): Workflow {
   const copy = structuredClone(w);
-  for (const signal of copy.signals) { if (signal.kind !== "drawdown") delete signal.drawdown; if (signal.kind !== "indicator") signal.indicator = null; if (signal.kind !== "timer") signal.schedule = null; }
+  for (const signal of copy.signals) { if (signal.kind !== "price_change") delete signal.change; if (signal.kind !== "drawdown") delete signal.drawdown; if (signal.kind !== "indicator") signal.indicator = null; if (signal.kind !== "timer") signal.schedule = null; }
   const walk = (e: PlanExpr | null) => {
     if (!e) return; if ("args" in e) { e.args.forEach(walk); return; } if ("arg" in e) { walk(e.arg); return; }
     for (const operand of [e.left, e.right]) if ("ref" in operand) {
@@ -109,6 +118,8 @@ export function canonicalizeWorkflow(w: Workflow): Workflow {
 export function workflowProblems(w: Workflow): string[] {
   const problems: string[] = [], assets = new Set(w.assets.map((a) => a.id)), sigs = new Set(w.signals.map((s) => s.id)), stages = new Set(w.stages.map((s) => s.id));
   for (const list of [w.assets, w.signals, w.stages]) if (new Set(list.map((x) => x.id)).size !== list.length) problems.push("Ids must be unique within each collection.");
+  if (w.entryGrouping && (new Set(w.entryGrouping).size !== w.entryGrouping.length || w.entryGrouping.some(id => !w.stages.find(s => s.id === id)?.when)))
+    problems.push("Each grouped entry must identify a distinct stage with a price condition.");
   const used = new Set<string>();
   const checkFields = (e: PlanExpr | null) => {
     if (!e) return; if ("args" in e) { e.args.forEach(checkFields); return; } if ("arg" in e) { checkFields(e.arg); return; }
@@ -151,6 +162,11 @@ export function stageMarketProblem(stage: PlanStage, candidate: MarketCandidate)
 
 export function workflowBlockers(w: Workflow): string[] {
   const out = [...w.questions];
+  if (w.entryGrouping) out.push("Choose when the entry orders should trigger.");
+  for (const s of w.signals) if (s.kind === "price_change") {
+    if (!s.change || s.change.reference === "needs_choice") out.push(`Choose the reference price for ${s.description || s.id}.`);
+    else if (s.change.reference === "lookback" && !s.change.lookbackMinutes) out.push(`Set a lookback period for ${s.description || s.id}.`);
+  }
   w.assets.forEach((a) => { if (!a.resolution?.selectedId) out.push(a.resolution?.message ?? `Choose the exact market for ${a.query}.`); });
   w.signals.forEach((s) => { if (s.drawdown?.reference === "needs_choice") out.push(`Choose the price reference for the drop on ${s.id}.`); });
   w.stages.forEach((s) => {

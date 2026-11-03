@@ -2,8 +2,11 @@ import type { Workflow, MarketCandidate } from "../../contracts/src/workflow";
 import { MOCK_INSTRUMENTS, isEquitySymbol } from "../venues/registry";
 
 type Asset = Workflow["assets"][number];
-const ALIASES: Record<string, string> = { "نیت": "NEET", "نییت": "NEET", "بیتکوین": "BTC", "سولانا": "SOL", "نویدیا": "NVDA", nvidia: "NVDA", "انویدیا": "NVDA", "انودیا": "NVDA", bitcoin: "BTC", "بیت کوین": "BTC", "بیت‌کوین": "BTC", ethereum: "ETH", ether: "ETH", "اتریوم": "ETH", tesla: "TSLA", apple: "AAPL", microsoft: "MSFT", "pump.fun": "PUMP", pumpfun: "PUMP", "pump fun": "PUMP", "پامپ فان": "PUMP", "neet": "NEET" };
-export const canonicalSymbol = (q: string) => ALIASES[q.trim().toLowerCase()] ?? q.trim().toUpperCase().replace(/^\$/, "");
+const ALIASES: Record<string, string> = { "نیت": "NEET", "نییت": "NEET", "بیتکوین": "BTC", "سولانا": "SOL", "نویدیا": "NVDA", nvidia: "NVDA", "انویدیا": "NVDA", "انودیا": "NVDA", solana: "SOL", monero: "XMR", bitcoin: "BTC", "بیت کوین": "BTC", "بیت‌کوین": "BTC", ethereum: "ETH", ether: "ETH", "اتریوم": "ETH", tesla: "TSLA", apple: "AAPL", microsoft: "MSFT", "pump.fun": "PUMP", pumpfun: "PUMP", "pump fun": "PUMP", "پامپ فان": "PUMP", "neet": "NEET" };
+export function canonicalSymbol(q: string) {
+  const value = q.trim().replace(/^\$/, ""), key = value.toLowerCase();
+  return Object.prototype.hasOwnProperty.call(ALIASES, key) ? ALIASES[key] : value.toUpperCase();
+}
 type JsonFetch = (url: string, init?: RequestInit) => Promise<unknown>;
 const cache = new Map<string, { at: number; value: unknown }>();
 /** Only fixed public market-data hosts. No account keys, balances, user identity or prompts are sent. */

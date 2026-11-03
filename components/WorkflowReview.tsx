@@ -137,6 +137,12 @@ export default function WorkflowReview({ workflow: w, onChange, onClarify, onLoo
             onBlur={(e) => { const v = e.currentTarget.valueAsNumber; if (!e.currentTarget.checkValidity() || !Number.isFinite(v)) { e.currentTarget.value = String(s.leverage); return; }
               if (v !== s.leverage) onChange({ ...w, stages: w.stages.map((st) => st.id === s.id ? { ...st, leverage: v } : st) }); }} />
         </label>}
+        {(() => {
+          const market = w.assets.find(a => a.id === s.assetId)?.resolution;
+          const selected = market?.candidates.find(c => c.id === market.selectedId);
+          const problem = selected && stageMarketProblem(s, selected);
+          return problem ? <p className="mt-2 text-[13px] leading-relaxed text-warn" role="status">{problem}</p> : null;
+        })()}
         {s.funding.kind === "profits" && <p className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-accent"><ArrowUpRight size={15} className="shrink-0" />Uses realized, available profit from earlier steps. Waits if there is not enough.</p>}
       </div>)}</div>
     </Group>

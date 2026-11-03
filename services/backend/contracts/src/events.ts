@@ -72,7 +72,8 @@ export type RunEventType = RunEvent["type"];
 /** Compile stream (POST /v1/compile, NDJSON). One JSON object per line. */
 export const CompileEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("clarification"), draft: DraftContext, questions: z.array(DraftQuestion).min(1).max(80) }),
-  z.object({ type: z.literal("progress"), step: z.enum(["reading", "resolving_markets", "choosing_feeds", "writing_rules", "checking_risk", "repairing"]), label: z.string(), attempt: z.number().int().min(1) }),
+  z.object({ type: z.literal("progress"), step: z.enum(["reading", "resolving_markets", "choosing_feeds", "writing_rules", "checking_risk", "repairing"]), label: z.string(), attempt: z.number().int().min(1),
+    operation: z.enum(["interpret", "audit", "markets", "rules", "risk", "feeds"]).optional(), status: z.enum(["working", "done"]).optional() }),
   z.object({ type: z.literal("partial"), node: z.object({ id: z.string(), kind: z.enum(["watch", "when", "do", "exit"]), title: z.string(), detail: z.string(), venue: Venue.optional() }) }),
   z.object({ type: z.literal("result"), compileId: z.string(), strategy: Strategy, humanized: Humanized, issues: z.array(ValidationIssue), usage: z.object({ attempts: z.number().int(), inputTokens: z.number().int(), outputTokens: z.number().int(), costUsd: Decimal }),
     /** "demo" = deterministic keyword compiler (no AI key, or AI failed/timed out); show a "Demo compile" label with `notice`. */

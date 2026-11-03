@@ -13,6 +13,8 @@ import { strategyNodes } from "../engine/nodes";
 import { hasErrors, validateStrategy } from "../engine/validate";
 import { newId } from "../lib/ids";
 import { localRefine } from "./refine";
+import { basketDraft, checkBoundClauses } from "./basket";
+import { compileProgress, correctionLabel } from "./progress";
 import { drawdownDraft } from "./drawdown";
 import { linkedEntry } from "./linked-entry";
 import { recurringDraft } from "./recurring";
@@ -25,6 +27,7 @@ ${venueVocabulary}
 Read English and Persian, including misspellings. Preserve every asset, amount, threshold, venue, side, leverage, condition, repeat, exit and funding dependency. Never substitute a familiar asset. Nvidia=NVIDIA=NVDA, Bitcoin=BTC, NEET is a Solana token query (never NVDA), Pump.fun=PUMP. Unknown assets remain exact queries. Never invent contracts, market ids, budgets, event deadlines or order amounts.
 assets: one entry per distinct instrument/venue/outcome. sourceText is ONLY the exact asset name/ticker/event phrase quoted from the user's text (no paraphrase). query can normalize an alias; for events use a concise search phrase preserving the event. Polymarket is both a signal source and a BUY/SELL outcome action destination. Preserve YES vs NO; null if unspecified. Do not replace one event with Fed cuts. Missing venue/kind/outcome may be null. Equity shares and tokenized shares are not interchangeable: preserve specified venue and otherwise leave venue null.
 For a percentage price DROP, use kind drawdown with drawdown:{reference:"peak"|"last_fill"|"lookback"|"needs_choice",lookbackMinutes:null or number}. Its value is positive percentage points of price decline, never an absolute price. Buy after a 30% drop MUST use gte(drawdown.value,30), never lte or a negative threshold. If no reference/time window was stated, reference needs_choice. Repeated drops use repeat:{intervalMinutes:null,maxTimes:null,conditionMode:"each_time"}, one purchase per new drop event, not continuous orders while a condition stays true.
+For mixed baskets, bind each percentage change to its own asset and direction. Use price_change with change:{reference:"start"|"lookback"|"needs_choice",lookbackMinutes:null or number} for signed returns: a rise is gte positive, a fall is lte negative. Preserve BTC long and XMR short as separate stages, including their respective leverages, whatever the ticker or number. "After that" following a basket means both downstream orders depend on every entry fill unless the user explicitly says otherwise. If the entry grouping is genuinely ambiguous, encode each individual gate and set entryGrouping to the affected stage ids so the user can choose. For a clearly shared AND condition assign it directly to each entry. Keep partial plans valid using nulls and typed questions instead of deleting unfinished actions.
 signals: only signals actually referenced in a stage's when expression. price/drawdown/indicator/funding/odds/position need assetId; timer uses schedule; custom describes an unsupported condition faithfully. refs are signalId.value, or position qty/pnl_pct/value_usd. Odds use 0..1, other percentages use percentage points. RSI period default 14, timeframe 1h if missing; document that assumption in assumptions, not questions. SMA 20-day means period20,timeframe1d. Include BOTH price and moving-average signal for a comparison. and/or must preserve all requested conditions.
 For refs, use the declared SIGNAL id, never the asset id.
 stages: one per requested action. Standard stop-loss/take-profit/time exits belong on the opening stage exits; do not generate a separate close stage for an ordinary take-profit. sourceText is an exact contiguous excerpt of the user's action clause, containing its amount if stated. conditionText preserves the condition's meaning. when=null only for immediate actions or conditions represented by after. Unknown conditions use custom signals, never invent a true condition. after lists stage dependencies: filled, closed, realized_profit (after a profitable close), resolved_profit (after a prediction market settles profitably). An unrealized gain is not spendable profit. Independent actions stay parallel, not arbitrarily ordered.
@@ -64,10 +67,12 @@ export function intentProblems(w: Workflow, original: string, base?: Strategy): 
     if ("args" in e) { e.args.forEach(check); return; }
     if ("arg" in e) { check(e.arg); return; }
     const operands = [e.left, e.right];
+    const signedMove = operands.some(o => "ref" in o && w.signals.some(s => s.id === o.ref.split(".")[0] && (s.kind === "price_change" || s.indicator?.name === "pct_change")));
     const odds = operands.some((o) => "ref" in o && w.signals.some((s) => s.id === o.ref.split(".")[0] && s.kind === "odds"));
-    for (const o of operands) if ("lit" in o && typeof o.lit === "number" && o.lit !== 0 && !requestedNumbers.some((n) => Math.abs(n - Number(o.lit)) < 1e-8 || odds && Math.abs(n / 100 - Number(o.lit)) < 1e-8)) errors.push(`Condition value ${o.lit} is not in the request. Do not invent a threshold.`);
+    for (const o of operands) if ("lit" in o && typeof o.lit === "number" && o.lit !== 0 && !requestedNumbers.some((n) => Math.abs(n - Number(o.lit)) < 1e-8 || signedMove && Math.abs(n - Math.abs(Number(o.lit))) < 1e-8 || odds && Math.abs(n / 100 - Number(o.lit)) < 1e-8)) errors.push(`Condition value ${o.lit} is not in the request. Do not invent a threshold.`);
   };
   w.stages.forEach((s) => check(s.when));
+  if (!base) errors.push(...checkBoundClauses(w, original));
   return [...new Set(errors)];
 }
 
@@ -82,7 +87,7 @@ export function lowerWorkflow(w: Workflow, thesis: string, d: CompileDeps, risk 
   for (const s of w.signals) {
     const instrument = s.assetId ? ids.get(s.assetId) : undefined;
     const b = { id: s.id, maxAgeSeconds: 120 };
-    if (s.kind === "custom" || s.kind === "drawdown") return draft;
+    if (s.kind === "custom" || s.kind === "drawdown" || s.kind === "price_change") return draft;
     if (s.kind === "timer") { if (!s.schedule) return draft; signals.push({ ...b, kind: "timer", params: s.schedule }); }
     else {
       if (!instrument) return draft;
@@ -134,6 +139,12 @@ function matchesExactDraft(template: Workflow, input: DraftContinuation, thesis:
   } catch { return false; }
 }
 
+function marketReport(w: Workflow) {
+  const matched = w.assets.filter(a => a.resolution?.selectedId).length;
+  const choices = w.assets.filter(a => !a.resolution?.selectedId && a.resolution?.candidates.length).length;
+  const unavailable = w.assets.length - matched - choices;
+  return [`Checked ${w.assets.length} markets`, matched && `${matched} matched`, choices && `${choices} to select`, unavailable && `${unavailable} unavailable`].filter(Boolean).join(" · ");
+}
 export function isEditRequest(text: string) { return /^\s*(add|change|edit|tighten|remove|adjust|increase|decrease|set|only trade|اضافه|تغییر|حذف|ویرایش)(?:\s|$)/i.test(text); }
 
 export async function* planCompile(req: Parameters<typeof compile>[0], d: CompileDeps): AsyncGenerator<CompileEvent> {
@@ -146,12 +157,14 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     ? "می‌خواهی چه دارایی‌ای را در چه شرایطی معامله کنی؟ مثلاً اگر بیت‌کوین ۵٪ افت کرد، ۱۰۰ دلار بخر."
     : "What would you like to trade? Describe the market, the action and what should trigger it.";
   let continued: ReturnType<typeof continueDraft> | null = null;
+  const attempt = d.plannerRepair ? 2 : 1;
+  yield compileProgress("interpret", "working", d.plannerRepair ? correctionLabel(d.plannerRepair.problems) : req.clarification ? "Applying your answers" : "Reading your instructions", attempt);
   try { if (req.clarification) continued = continueDraft(req.clarification, req.thesis); }
   catch (error) { yield { type: "error", code: "invalid_clarification", message: (error as Error).message }; return; }
   const history: DraftContext["history"] = continued?.draft.history ?? [];
   if (continued) {
     const remaining = draftQuestions(continued.draft.workflow, req.thesis);
-    if (remaining.length) { yield { type: "clarification", draft: continued.draft, questions: remaining }; return; }
+    if (remaining.length) { yield compileProgress("interpret", "done", "Applied your answers"); yield { type: "clarification", draft: continued.draft, questions: remaining }; return; }
   }
   const requestText = clarifiedRequest(req.instruction ?? req.note ?? req.thesis, history);
   const groundingBase = continued ? lowerWorkflow(req.clarification!.workflow, req.thesis, { ...d, retainWorkflow: true }, req.baseStrategy?.risk) : req.baseStrategy;
@@ -161,6 +174,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
       edited.thesis = `${req.baseStrategy.thesis}\nEdit: ${req.instruction ?? req.thesis}`.slice(-2000);
       const v = validateStrategy(edited, { registry: d.registry, stockTokensAllowed: d.stockTokensAllowed, purpose: "draft" });
       if (hasErrors(v.issues)) { yield { type: "error", code: "invalid_edit", message: v.issues[0].message }; return; }
+      yield compileProgress("interpret", "done", "Applied the requested edit");
       const h = humanize(edited, d.registry);
       for (const node of strategyNodes(edited, d.registry, h)) yield { type: "partial", node };
       yield { type: "result", compileId: newId("cmp"), strategy: edited, humanized: h, issues: v.issues, compiler: "rules", notice: "Applied the exact edit to this strategy; no new market or entry was generated.", usage: { attempts: 0, inputTokens: 0, outputTokens: 0, costUsd: "0" } }; return;
@@ -168,15 +182,22 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     if (!d.openrouter) { yield { type: "error", code: "ai_required", message: "Sign in for this refinement. Your current strategy has not been changed." }; return; }
   }
   if (!continued && !req.baseStrategy && isEditRequest(req.thesis)) { yield { type: "error", code: "needs_strategy", message: "Open the strategy you want to edit, then use Refine this draft. No unrelated strategy was created." }; return; }
-  const template = !req.baseStrategy && !req.image ? drawdownDraft(req.thesis) ?? recurringDraft(req.thesis) ?? (d.retainWorkflow ? linkedEntry(req.thesis) : null) : null;
+  const template = !req.baseStrategy && !req.image ? basketDraft(req.thesis) ?? drawdownDraft(req.thesis) ?? recurringDraft(req.thesis) ?? (d.retainWorkflow ? linkedEntry(req.thesis) : null) : null;
   const recurring = !continued ? template : template && req.clarification && matchesExactDraft(template, req.clarification, req.thesis)
     ? continued.draft.workflow : null;
   if (recurring) {
+    yield compileProgress("interpret", "done", `Identified ${recurring.signals.length} signals and ${recurring.stages.length} order steps`);
     const questions = draftQuestions(recurring, req.thesis);
     if (questions.length) { yield { type: "clarification", draft: { workflow: recurring, history: [] }, questions }; return; }
-    yield { type: "progress", step: "resolving_markets", label: "Looking up the requested markets", attempt: 1 };
-    const workflow = await resolveWorkflow(recurring), strategy = lowerWorkflow(workflow, req.thesis, d);
+    yield compileProgress("markets", "working", "Checking the requested markets");
+    const workflow = await resolveWorkflow(recurring);
+    yield compileProgress("markets", "done", marketReport(workflow));
+    yield compileProgress("rules", "working", "Connecting conditions and orders");
+    const strategy = lowerWorkflow(workflow, req.thesis, d);
+    yield compileProgress("rules", "done", "Connected order dependencies");
+    yield compileProgress("risk", "working", "Checking draft limits");
     const h = humanize(strategy, d.registry), v = validateStrategy(strategy, { registry: d.registry, stockTokensAllowed: true, purpose: "draft" });
+    if (!hasErrors(v.issues)) yield compileProgress("risk", "done", "Checked draft limits");
     for (const node of strategyNodes(strategy, d.registry, h)) yield { type: "partial", node };
     yield { type: "result", compileId: newId("cmp"), strategy, humanized: h, issues: v.issues, compiler: "rules", notice: "Rules matched your request. Review the markets and virtual budget before starting a paper session.", usage: { attempts: 0, inputTokens: 0, outputTokens: 0, costUsd: "0" } }; return;
   }
@@ -184,17 +205,20 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     if (continued) { yield { type: "error", code: "ai_required", message: "AI is unavailable right now. Your answers are kept; try Continue again shortly." }; return; }
     yield* compile(req, d); return;
   }
-  yield { type: "progress", step: "reading", label: "Understanding your intent", attempt: 1 };
+
   const o = d.openrouter, call = o.call ?? callOpenRouter, deadline = Date.now() + (o.totalBudgetMs ?? 120_000);
   const user = continued ? `${requestText}\n\nUnfinished workflow (preserve all rules except the user's explicit answers; already supplied numeric answers are applied):\n${JSON.stringify(continued.draft.workflow)}` : req.baseStrategy ? `Current strategy (preserve all unedited fields):\n${JSON.stringify(plannerBase(req.baseStrategy))}\nRequested edit: ${requestText}` : req.image ? `Read the attached chart and preserve its actual instrument and levels. Ask when unreadable. User note: ${requestText}` : requestText;
   let previous: unknown = d.plannerRepair?.previous ?? continued?.draft.workflow ?? null, problems: string[] = d.plannerRepair?.problems ?? [], workflow: Workflow | null = continued && !continued.replan && !d.plannerRepair ? continued.draft.workflow : null;
-  if (workflow) problems = intentProblems(workflow, requestText, groundingBase);
+  if (workflow) {
+    problems = intentProblems(workflow, requestText, groundingBase);
+    if (problems.length) { previous = workflow; workflow = null; }
+  }
   const usage = { attempts: 0, inputTokens: 0, outputTokens: 0, costUsd: "0" }; let cost = 0;
   for (let attempt = 1; attempt <= 2 && !workflow; attempt++) {
     const left = deadline - Date.now(); if (left < 500) break;
-    if (attempt > 1) yield { type: "progress", step: "repairing", label: "Checking the draft against your request", attempt };
+    if (attempt > 1) yield compileProgress("interpret", "working", correctionLabel(problems), attempt);
     try {
-      const result = await budgeted(o.budget, () => call({ apiKey: o.apiKey, model: o.model, maxTokens: o.budget.maxOutputTokens ?? 6000, system: PLANNER_PROMPT + (freshText ? " If the text expresses no trading intent, return empty assets and stages. Never invent a trade to fill that request." : ""), user, image: req.image, schema: { name: "QuiverWorkflow", schema: z.toJSONSchema(freshText ? WorkflowInput.extend({ assets: z.array(WorkflowInput.shape.assets.element).max(16), stages: z.array(WorkflowInput.shape.stages.element).max(24) }) : WorkflowInput, { io: "input" }) }, signal: AbortSignal.timeout(Math.min(o.callTimeoutMs ?? 60_000, left)), ...((attempt > 1 || d.plannerRepair) ? { repair: { previous, issues: problems.map((message) => ({ path: "/", code: "schema" as const, severity: "error" as const, message })) } } : {}) }));
+      const result = await budgeted(o.budget, () => call({ apiKey: o.apiKey, model: o.model, maxTokens: o.budget.maxOutputTokens ?? 6000, system: PLANNER_PROMPT + (freshText ? " If the text expresses no trading intent, return empty assets and stages. Never invent a trade to fill that request." : ""), user, image: req.image, schema: { name: "QuiverWorkflow", schema: z.toJSONSchema(freshText ? WorkflowInput.extend({ assets: z.array(WorkflowInput.shape.assets.element).max(16), stages: z.array(WorkflowInput.shape.stages.element).max(24) }) : WorkflowInput, { io: "input" }) }, signal: AbortSignal.timeout(Math.min(o.callTimeoutMs ?? 60_000, left)), ...((attempt > 1 || d.plannerRepair || previous && problems.length) ? { repair: { previous, issues: problems.map((message) => ({ path: "/", code: "schema" as const, severity: "error" as const, message })) } } : {}) }));
       if (!result) { yield { type: "error", code: o.budget.refusal?.() === "busy" ? "compile_busy" : "compile_cost_cap", message: o.budget.refusal?.() === "busy" ? "The AI compiler is busy. Please retry shortly." : "The AI budget has been reached. Your existing draft is unchanged." }; return; }
       usage.attempts++; usage.inputTokens += result.inputTokens; usage.outputTokens += result.outputTokens; cost += result.costUsd;
       previous = result.json;
@@ -213,13 +237,16 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
       if (!problems.length) break; workflow = null;
     } catch (error) { console.warn("ai_compile_unavailable", { reason: error instanceof Error ? error.message.slice(0, 100) : "unknown" }); yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not finish a verified draft. Please retry; no substitute strategy was generated." }; return; }
   }
-  if (!workflow || problems.length) { yield { type: "error", code: "intent_not_verified", message: "I couldn’t turn this description into clear rules. Start with one condition and the order it should trigger." }; return; }
+  if (!workflow || problems.length) { yield { type: "error", code: "intent_not_verified", message: problems.some(p => /leverage|order sequence|dependenc|price move|threshold/i.test(p))
+      ? "The proposed order sizes, price conditions or sequence did not match your instructions. Your original request is kept for another draft."
+      : "The compiler couldn’t verify the proposed rules. Your full description is kept; you can retry this draft." }; return; }
+  yield compileProgress("interpret", "done", `Identified ${workflow.signals.length} signals and ${workflow.stages.length} order steps`, attempt);
   const questions = draftQuestions(workflow, req.thesis);
   if (questions.length) {
     yield { type: "clarification", draft: { workflow, history }, questions }; return;
   }
   // A second, independent pass checks meaning, not merely JSON validity. It cannot change the plan.
-  yield { type: "progress", step: "checking_risk", label: "Comparing every rule with your request", attempt: 1 };
+  yield compileProgress("audit", "working", attempt > 1 ? "Rechecking the corrected rules" : "Comparing the rules with your instructions", attempt);
   try {
     const Verdict = z.object({ faithful: z.boolean(), issues: z.array(z.string().max(300)).max(12), clarification: z.string().min(8).max(300).nullable().optional() });
     const left = deadline - Date.now(); if (left < 500) throw new Error("verification_timeout");
@@ -228,35 +255,38 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     usage.attempts++; usage.inputTokens += audit.inputTokens; usage.outputTokens += audit.outputTokens; cost += audit.costUsd;
     const verdict = Verdict.parse(audit.json);
     if (!verdict.faithful || verdict.issues.length) {
+      if (verdict.clarification) {
+        workflow.questions = [verdict.clarification];
+        yield compileProgress("audit", "done", "Identified a decision for you");
+        yield { type: "clarification", draft: { workflow, history }, questions: draftQuestions(workflow, req.thesis) };
+        return;
+      }
       const remaining = deadline - Date.now();
       if (!d.plannerRepair && remaining > 1000) {
-        yield { type: "progress", step: "repairing", label: "Correcting the rule found by the independent check", attempt: 2 };
+        yield compileProgress("audit", "done", "Found a rule to correct");
         for await (const event of planCompile(req, { ...d, plannerRepair: { previous: workflow, problems: verdict.issues.length ? verdict.issues : ["Correct the workflow to match every requested condition."] }, openrouter: { ...o, totalBudgetMs: remaining } })) {
           if (event.type === "result") yield { ...event, usage: { attempts: event.usage.attempts + usage.attempts, inputTokens: event.usage.inputTokens + usage.inputTokens, outputTokens: event.usage.outputTokens + usage.outputTokens, costUsd: (Number(event.usage.costUsd) + cost).toFixed(6) } };
           else yield event;
         }
         return;
       }
-      // A structurally valid but disputed plan stays in clarification, never execution.
-      // Continue re-plans from the original request plus the user's answer and audits it again.
-      if (verdict.clarification) {
-        workflow.questions = [verdict.clarification];
-        yield { type: "clarification", draft: { workflow, history }, questions: draftQuestions(workflow, req.thesis) };
-      } else {
-        yield { type: "error", code: "intent_not_verified", message: "Which condition should trigger which order? Add that detail and draft again." };
-      }
+      yield { type: "error", code: "intent_not_verified", message: "The proposed rules still differ from your instructions. Retry the draft to check the original request again." };
       return;
     }
   } catch { yield { type: "error", code: "intent_check_unavailable", message: "The draft could not be checked against your request. Retry; no unverified replacement was saved." }; return; }
-  yield { type: "progress", step: "resolving_markets", label: "Looking up the requested markets", attempt: 1 };
+  yield compileProgress("audit", "done", "Verified the rules against your instructions", attempt);
+  yield compileProgress("markets", "working", "Checking the requested markets");
   workflow = await resolveWorkflow(workflow);
-  yield { type: "progress", step: "writing_rules", label: "Connecting conditions, actions and funding", attempt: 1 };
+  yield compileProgress("markets", "done", marketReport(workflow));
+  yield compileProgress("rules", "working", "Connecting conditions, orders and funding");
   const originalThesis = req.baseStrategy && req.instruction ? `${req.baseStrategy.thesis}\nEdit: ${req.instruction}` : req.thesis;
   const thesis = (continued ? clarifiedRequest(originalThesis, history) : originalThesis).slice(0, 2000);
   const strategy = lowerWorkflow(workflow, thesis, d, req.baseStrategy?.risk);
-  yield { type: "progress", step: "checking_risk", label: "Checking dependencies and risk limits", attempt: 1 };
+  yield compileProgress("rules", "done", "Connected order dependencies");
+  yield compileProgress("risk", "working", "Checking dependencies and risk limits");
   const validated = validateStrategy(strategy, { registry: d.registry, stockTokensAllowed: d.stockTokensAllowed, purpose: "draft" });
   if (hasErrors(validated.issues)) { yield { type: "error", code: "intent_not_verified", message: "Check the order sizes, risk limits and which condition starts each order." }; return; }
+  yield compileProgress("risk", "done", "Checked draft limits");
   const h = humanize(strategy, d.registry);
   for (const node of strategyNodes(strategy, d.registry, h)) yield { type: "partial", node };
   usage.costUsd = cost.toFixed(6);

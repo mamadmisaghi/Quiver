@@ -6,6 +6,7 @@ import { PaperQuote, paperProblems, type PaperState } from "@/services/backend/s
 const number = z.number().finite(), positive = number.nonnegative();
 const dict = <T extends z.ZodType>(value: T) => z.record(z.string(), value);
 const Checkpoint = z.object({
+  checks: dict(z.object({ met: positive, total: positive, unknown: positive, result: z.boolean().nullable() })).optional(),
   version: z.literal(1), startedAt: number, lastAt: number, budget: positive, principal: number, pools: dict(number),
   positions: dict(z.object({ assetId: z.string(), qty: positive, baseQty: positive, entry: positive, margin: positive, entryFee: positive, side: z.union([z.literal(1), z.literal(-1)]), leverage: positive, openedAt: number, peakPct: number, rungs: z.array(number), allocation: z.array(z.object({ source: z.string(), value: number })) })),
   stages: dict(z.object({ fills: positive, lastFillAt: number.nullable(), active: z.boolean(), latched: z.boolean(), closed: z.boolean(), resolved: z.boolean(), realized: number, status: z.string(), consumedDependency: z.string().optional() })),
@@ -15,6 +16,7 @@ const Checkpoint = z.object({
 export const PaperSessionSchema = z.object({
   version: z.literal(1), id: z.string().regex(/^paper_[a-zA-Z0-9-]+$/), strategyId: z.string(), strategyVersion: z.number().int().positive(), name: z.string(), strategy: Strategy,
   mode: z.enum(["scenario", "quotes"]), status: z.enum(["ready", "running", "paused", "completed"]), createdAt: number, updatedAt: number, state: Checkpoint.nullable(),
+  activeMs: positive.optional(), // Time accrued through updatedAt. Older records have no measured duration.
   startingBalance: z.number().finite().positive().optional(), legacyResult: BacktestRes.optional(),
 });
 export type PaperSession = z.infer<typeof PaperSessionSchema>;
@@ -40,12 +42,19 @@ export function createPaperSession(record: StrategyRecord, storage: Storage = lo
   const problems = paperProblems(strategy.workflow, true);
   if (problems.length) throw new Error(problems[0]);
   const now = Date.now();
-  return write(PaperSessionSchema.parse({ version: 1, id: `paper_${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")}`, strategyId: record.id, strategyVersion: record.version, name: record.name, strategy, mode: "quotes", status: "ready", createdAt: now, updatedAt: now, state: null }), storage);
+  return write(PaperSessionSchema.parse({ version: 1, id: `paper_${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")}`, strategyId: record.id, strategyVersion: record.version, name: record.name, strategy, mode: "quotes", status: "ready", activeMs: 0, createdAt: now, updatedAt: now, state: null }), storage);
 }
-export function checkpointPaperSession(id: string, state: PaperState | null, status: PaperSession["status"], storage: Storage = localStorage, resume = false) {
+/** Count an interval exactly once, only while a driver owns this session. */
+export function activeSessionMs(session: PaperSession, now: number, observing: boolean) {
+  const measured = session.activeMs ?? 0;
+  return measured + (observing && session.activeMs !== undefined && session.status === "running" ? Math.max(0, now - session.updatedAt) : 0);
+}
+export function checkpointPaperSession(id: string, state: PaperState | null, status: PaperSession["status"], storage: Storage = localStorage, resume = false, driverActive = true) {
   const session = readPaperSession(id, storage); if (!session) throw new Error("This paper session is no longer available in this browser.");
   if (status === "running" && session.status === "paused" && !resume) throw new Error("This session was paused in another tab.");
-  const next = write({ ...session, state: state ? Checkpoint.parse(state) : null, status, updatedAt: Date.now() }, storage);
+  const now = Math.max(Date.now(), session.updatedAt);
+  const activeMs = activeSessionMs(session, now, !resume && driverActive);
+  const next = write({ ...session, activeMs, state: state ? Checkpoint.parse(state) : null, status, updatedAt: now }, storage);
   if (typeof window !== "undefined") {
     if (session.status !== status) notifyPaperEvent(id, "status", next.updatedAt, session.name + " · " + status);
     const event = next.state?.events.at(-1), old = session.state?.events.at(-1);
@@ -72,6 +81,6 @@ export function completeLegacySession(id: string, result: z.infer<typeof Backtes
 }
 export function pauseAllPaperSessions(storage: Storage = localStorage) {
   const active = listPaperSessions(storage).filter(session => session.status === "running");
-  for (const session of active) checkpointPaperSession(session.id, session.state, "paused", storage);
+  for (const session of active) checkpointPaperSession(session.id, session.state, "paused", storage, false, sessionStatus(session) === "running");
   return active.length;
 }

@@ -1,6 +1,7 @@
 "use client";
 import { canonicalizeWorkflow } from "@/lib/contracts";
-import DraftProgress, { type DraftPhase, type DraftStep, type Clarification } from "./DraftProgress";
+import { updateDraftSteps, type DraftStep } from "@/lib/api/draft-progress";
+import DraftProgress, { type DraftPhase, type Clarification } from "./DraftProgress";
 import type { DraftContinuation } from "@/lib/contracts";
 import WorkflowReview from "./WorkflowReview";
 import { workflowView } from "@/services/backend/src/engine/workflow-view";
@@ -157,13 +158,13 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     ctl.current?.abort(); const c = (ctl.current = new AbortController()); const t0 = performance.now();
     if (!continuation) setClarification(null);
     setRevealGraph(false);
-    setPaperAttempted(false); setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
+    setPaperAttempted(false); setSavedId(null); setSaveNotice(null); setStrategy(null); setIssues([]); setPhase("drafting"); if (!continuation) setSteps([]); setErr(null); setSuggest([]); setDemo(null); setNodes([]); setHumanized(null);
     const fresh: GNode[] = [];
     try {
       const useImg = img && !effectiveInstruction && !pendingEdit.current?.instruction;
       const onEv = (e: Parameters<Parameters<typeof api.compile>[1]>[0]) => {
         if (c.signal.aborted) return;
-        if (e.type === "progress") setSteps((s) => s.at(-1)?.step === e.step ? [...s.slice(0, -1), { step: e.step, label: e.label }] : [...s, { step: e.step, label: e.label }]);
+        if (e.type === "progress") setSteps(s => updateDraftSteps(s, e));
         else if (e.type === "clarification") { setClarification({ draft: e.draft, questions: e.questions }); setPhase("clarifying"); setTook(performance.now() - t0); }
         else if (e.type === "partial") fresh.push(e.node);
         else if (e.type === "result") {
@@ -277,7 +278,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
           <span>Sign in to save drafts and paper-trade them, or press Draft strategy to try it first.</span>
           <SignInButton onDone={() => { setGuest(false); run(); }} />
         </div>)}
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" tabIndex={0} role="region" aria-label="Strategy prompts">
+      <div hidden={!!clarification || drafting} className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&[hidden]]:hidden" tabIndex={0} role="region" aria-label="Strategy prompts">
         {(API_MODE === "mock" ? PREVIEW_PROMPTS : SUGGESTIONS).map((s) => (
           <button key={s} type="button" onClick={() => { ctl.current?.abort(); setGuidance(null); setFollowUp(""); setText(s); setClarification(null); setPhase("idle"); setErr(null); }}
             className="btn shrink-0 rounded-full border border-line px-3 py-1.5 text-[12.5px] text-muted hover:border-line-2 hover:text-ink">{s === SAMPLE_PROMPT ? "Fed odds + NVDA & SOL" : s}</button>
