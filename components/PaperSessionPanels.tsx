@@ -1,10 +1,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Activity, ArrowDownLeft, ArrowUpRight, Check, Clock3, GitBranch, Radio, RotateCw } from "lucide-react";
-import { conditionText } from "@/services/backend/src/engine/workflow-view";
 import { freshPaperQuote } from "@/services/backend/src/workflows/paper";
 import { positionsFor } from "@/lib/paper/account";
 import { sessionActivity, type PaperSession } from "@/lib/paper/sessions";
-import { assetSymbol, dependencyDetail, marketPrice, stageLabel, type MarketObservation } from "@/lib/paper/observations";
+import { assetSymbol, dependencyDetail, triggerCondition, marketPrice, stageLabel, type MarketObservation } from "@/lib/paper/observations";
 import VenueMark from "./VenueMark";
 
 const time = (n: number) => new Date(n).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -71,12 +70,12 @@ export function RunActivity({ session, running }: { session: PaperSession; runni
         {rows.map((row, i) => { const Icon = eventIcon[row.kind]; return <li className="q-event-position" key={row.seq} style={{ height: rowHeight, transform: "translateY(" + i * rowHeight + "px)" }}>
           <div className="q-event-row" data-kind={row.kind} data-new={row.seq > initial.current || undefined}>
             <Icon className="q-event-icon" size={14} aria-hidden="true" />
-            <div className="q-event-body"><strong>{row.label}</strong><p title={row.detail}>{row.detail}</p></div>
-            <time dateTime={new Date(row.at).toISOString()}>{time(row.at)}</time>
+            <div className="q-event-body"><strong>{row.label}</strong>{row.count && <small className="q-check-count" title={"Since " + time(row.since ?? row.at)}>{row.count} checks</small>}<p title={row.detail}>{row.detail}</p></div>
+            <time key={row.at} data-updated={row.count && running || undefined} dateTime={new Date(row.at).toISOString()}>{time(row.at)}</time>
           </div></li>; })}
       </ol>
     </div>
-    <span className="sr-only" role="status">{rows[0] ? rows[0].label + ". " + rows[0].detail : ""}</span>
+    <span className="sr-only" role="status">{rows[0] ? rows[0].label + ". " + rows[0].detail + (rows[0].count ? " Latest check " + time(rows[0].at) : "") : ""}</span>
   </section>;
 }
 
@@ -92,7 +91,7 @@ export function RunTriggers({ session }: { session: PaperSession }) {
       const waiting = deps.filter(d => !d.met).map(d => d.text);
       const reason = waiting.length && st?.status.startsWith("Waiting for predecessor") ? "Waiting for " + waiting.map(d => d.replace(" · ", " ")).join(", ") : st?.status;
       const status = paused ? "Rule paused" : complete ? "Complete" : checked ? reason || "Watching" : "Awaiting next check";
-      const summary = stage.when ? conditionText(w, stage.when) : deps.length ? "After the required steps below." : "On the first eligible quote.";
+      const summary = stage.when ? triggerCondition(w, stage.when) : deps.length ? "After the required steps below." : "On the first eligible quote.";
       return <li key={stage.id}><span className="q-trigger-index">{String(i + 1).padStart(2, "0")}</span>
         <div className="q-trigger-copy"><h3>{stageLabel(w, stage.id)}</h3><p>{summary}</p>{!!deps.length && <ul className="q-dependencies">{deps.map((d, idx) => <li key={idx} data-met={d.met || complete || undefined}>{d.met || complete ? <Check size={12} /> : <Clock3 size={12} />}{d.text} · {complete ? "met at fill" : d.met ? "met" : "waiting"}</li>)}</ul>}</div>
         <div className="q-trigger-state"><strong data-complete={complete || undefined}>{status}</strong><small>{st?.fills ?? 0} {st?.fills === 1 ? "fill" : "fills"}{stage.repeat?.intervalMinutes ? " · every " + stage.repeat.intervalMinutes + " min" : !stage.repeat ? " · once" : ""}</small></div>

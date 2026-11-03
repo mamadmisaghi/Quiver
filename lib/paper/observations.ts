@@ -1,12 +1,13 @@
 import { z } from "zod";
-import type { Workflow, PlanStage } from "@/lib/contracts/workflow";
+import type { Workflow, PlanStage, PlanExpr } from "@/lib/contracts/workflow";
+import { conditionText } from "@/services/backend/src/engine/workflow-view";
 import { freshPaperQuote, paperDependencyMet, type PaperQuote, type PaperState, type PaperStepEvent } from "@/services/backend/src/workflows/paper";
 
 export type MarketObservation = { assetId: string; quote: PaperQuote | null; message: string };
 export const ActivityRow = z.object({
   seq: z.number().int().nonnegative(), at: z.number().finite(),
   kind: z.enum(["session", "quote", "check", "condition", "trigger", "fill", "wait", "issue", "edit"]),
-  label: z.string(), detail: z.string(),
+  label: z.string(), detail: z.string(), count: z.number().int().positive().optional(), since: z.number().finite().optional(),
 });
 export type ActivityRow = z.infer<typeof ActivityRow>;
 export type ActivityNote = Omit<ActivityRow, "seq">;
@@ -44,10 +45,14 @@ export function tickActivity(w: Workflow, before: PaperState, after: PaperState,
   const fresh = Object.keys(quoteUpdates(items, before, at));
   if (fresh.length) add("quote", "Quotes received", fresh.map(id => assetSymbol(w, id) + " " + marketPrice(after.quotes[id].price)).join(" · "));
   const checks = Object.values(after.checks ?? {});
-  const readable = Object.values(after.readings ?? {}).filter(v => v !== null).length;
   const unavailable = items.filter(i => !i.quote || !freshPaperQuote(i.quote, at)).map(i => assetSymbol(w, i.assetId));
-  const summary = checks.length ? checks.filter(c => c.result === true).length + " of " + checks.length + " entry conditions true" : "Checked scheduled orders and dependencies";
-  add("check", checks.length ? "Conditions checked" : "Markets checked", summary + (unavailable.length ? " · Awaiting fresh " + unavailable.join(", ") : fresh.length || readable ? "" : " · No new quote"));
+  const missing = unavailable.length ? "Waiting for fresh prices for " + unavailable.join(", ") + "." : "";
+  const met = checks.filter(c => c.result === true).length;
+  const allUnknown = checks.length > 0 && checks.every(c => c.unknown === c.total);
+  let summary = checks.length ? met ? met + (met === 1 ? " entry condition is true." : " entry conditions are true.") : "Entry conditions are still waiting." : "Checked order timing and dependencies.";
+  if (allUnknown) summary = missing || "Waiting for enough observations to evaluate the signals.";
+  else if (missing) summary += " " + missing;
+  add("check", checks.length && !allUnknown ? "Conditions checked" : "Markets checked", summary);
 
   // Interleave upstream fills and their dependent triggers in the exact execution order.
   const fills = after.events.filter(e => e.at === at);
@@ -66,6 +71,30 @@ export function tickActivity(w: Workflow, before: PaperState, after: PaperState,
     add(issue ? "issue" : "wait", issue ? "Order held" : "Waiting", stageLabel(w, stage.id) + " · " + status);
   }
   return notes;
+}
+
+/** Present common market comparisons in trading language, keeping compound logic intact. */
+export function triggerCondition(w: Workflow, expr: PlanExpr): string {
+  if ("args" in expr) return expr.args.map(child => {
+    const phrase = triggerCondition(w, child);
+    return "args" in child && child.op !== expr.op ? "(" + phrase + ")" : phrase;
+  }).join(expr.op === "and" ? " and " : " or ");
+  if ("arg" in expr) return "Not (" + triggerCondition(w, expr.arg) + ")";
+  if ("ref" in expr.left && "lit" in expr.right && typeof expr.right.lit === "number") {
+    const ref = expr.left.ref.split(".")[0];
+    const signal = w.signals.find(s => s.id === ref);
+    if (signal?.assetId) {
+      const value = expr.right.lit, symbol = assetSymbol(w, signal.assetId);
+      const greater = expr.op === "gte" || expr.op === "gt", less = expr.op === "lte" || expr.op === "lt";
+      const boundary = expr.op === "gte" || expr.op === "lte" ? "at least" : "more than";
+      if (signal.kind === "price_change" && value < 0 && less || signal.kind === "drawdown" && value > 0 && greater)
+        return symbol + " drops " + boundary + " " + Math.abs(value) + "%";
+      if (signal.kind === "price_change" && value > 0 && greater) return symbol + " rises " + boundary + " " + value + "%";
+      const comparison = { lt: "below", lte: "at or below", gt: "above", gte: "at or above", eq: "equals", neq: "differs from", crosses_above: "crosses above", crosses_below: "crosses below" }[expr.op];
+      if (signal.kind === "price") return symbol + " price " + comparison + " " + marketPrice(value);
+    }
+  }
+  return conditionText(w, expr);
 }
 
 export function dependencyDetail(w: Workflow, stage: PlanStage, state: PaperState | null) {

@@ -33,9 +33,20 @@ export function listPaperSessions(storage: Storage = localStorage) {
   for (let i = 0; i < storage.length; i++) { const key = storage.key(i); if (key?.startsWith(prefix)) { const s = readPaperSession(key.slice(prefix.length), storage); if (s) sessions.push(s); } }
   return sessions.sort((a, b) => b.createdAt - a.createdAt);
 }
+// Consecutive identical polls share one row. Intervening quotes, fills or edits always keep their place.
+function compactChecks(rows: ActivityRow[]) {
+  const out: ActivityRow[] = [];
+  for (const row of rows) {
+    const last = out.at(-1);
+    if (last && row.kind === "check" && last.kind === "check" && row.label === last.label && row.detail === last.detail) {
+      out[out.length - 1] = { ...last, at: row.at, since: last.since ?? last.at, count: (last.count ?? 1) + (row.count ?? 1) };
+    } else out.push(row);
+  }
+  return out.slice(-100);
+}
 /** Project only history that older checkpoints actually recorded. */
 export function sessionActivity(session: PaperSession): ActivityRow[] {
-  if (session.activity) return session.activity;
+  if (session.activity) return compactChecks(session.activity);
   const notes: ActivityNote[] = [{ at: session.createdAt, kind: "session", label: "Session created", detail: session.name }];
   if (session.strategy.workflow) for (const fill of session.state?.events ?? []) notes.push(fillNote(session.strategy.workflow, fill));
   if (session.state && session.state.lastAt >= session.state.startedAt) {
@@ -47,7 +58,7 @@ export function sessionActivity(session: PaperSession): ActivityRow[] {
 function appendActivity(session: PaperSession, notes: ActivityNote[]) {
   const rows = sessionActivity(session);
   let seq = rows.at(-1)?.seq ?? 0;
-  return [...rows, ...notes.map(row => ({ ...row, seq: ++seq }))].slice(-100);
+  return compactChecks([...rows, ...notes.map(row => ({ ...row, seq: ++seq }))]);
 }
 function write(session: PaperSession, storage: Storage) {
   try { storage.setItem(prefix + session.id, JSON.stringify(session)); }
