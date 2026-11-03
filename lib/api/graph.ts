@@ -4,7 +4,7 @@ import type { Expr, GraphNode, Strategy } from "./types";
 import { workflowView } from "@/services/backend/src/engine/workflow-view";
 
 export type NodeState = "idle" | "met" | "holding" | "fired" | "active" | "error" | "waiting";
-export type GNode = GraphNode & { state?: NodeState; value?: string; quoteFlashAt?: number };
+export type GNode = GraphNode & { state?: NodeState; value?: string };
 export type GEdge = { from: string; to: string; hot?: boolean };
 
 function refs(e: Expr, out = new Set<string>()): Set<string> {

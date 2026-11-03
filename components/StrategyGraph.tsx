@@ -90,7 +90,7 @@ export default function StrategyGraph({ nodes, edges, ghosts, label, reserve, re
             style={{ left: b.x, top: b.y, width: b.w, height: b.h, animationDelay: reveal ? `${revealDelay(b.depth)}ms` : undefined, background: "var(--q-node-bg)" }}>
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-[7px] font-mono text-[12px] uppercase leading-none tracking-[.06em] text-muted">
-                <i key={n.quoteFlashAt ?? "steady"} data-quote-update={n.quoteFlashAt || undefined} className={`h-1.5 w-1.5 shrink-0 rounded-full ${n.kind === "when" ? "bg-cream" : n.state === "active" ? "bg-paper" : "bg-faint"} ${lit ? "shadow-[0_0_0_4px_color-mix(in_srgb,var(--q-amber)_18%,transparent)]" : ""}`} />
+                <i className={`h-1.5 w-1.5 shrink-0 rounded-full ${n.kind === "when" ? "bg-cream" : n.state === "active" ? "bg-paper" : "bg-faint"} ${lit ? "shadow-[0_0_0_4px_color-mix(in_srgb,var(--q-amber)_18%,transparent)]" : ""}`} />
                 <span>{KIND_LABEL[n.kind]}</span>
               </span>
               <span className="flex shrink-0 items-center gap-1.5">

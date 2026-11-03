@@ -51,7 +51,7 @@ function market(workflow: Workflow, assetId: string) {
     venue: selected?.venue ?? asset?.venue ?? null, assetClass: kind ? kinds[kind] : null };
 }
 
-function positionsFor(session: PaperSession, workflow: Workflow): PaperAccountPosition[] {
+export function positionsFor(session: PaperSession, workflow: Workflow): PaperAccountPosition[] {
   const state = session.state;
   if (!state) return [];
   return Object.entries(state.positions).filter(([, p]) => p.qty > 0).map(([stageId, p]) => {

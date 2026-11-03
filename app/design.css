@@ -322,8 +322,6 @@ html[data-design="c"] { --q-shadow-focus:none; }
 .q-session-clock { font-family:var(--font-geist-mono),monospace; font-variant-numeric:tabular-nums; font-size:12px; letter-spacing:.01em; padding-inline-start:9px; border-inline-start:1px solid var(--line-2); color:var(--ink-2); }
 .q-observation-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; margin-bottom:18px; }
 .q-observation-head span { font-size:12px; font-variant-numeric:tabular-nums; color:var(--muted); }
-@keyframes q-quote-received { 0%,22% { background:var(--ink); transform:scale(1.45); } 100% { transform:scale(1); } }
-@media(prefers-reduced-motion:no-preference) { .q-strategy-node [data-quote-update] { animation:q-quote-received 650ms cubic-bezier(.22,.8,.2,1) both; } }
 @media(max-width:580px) {
   .q-clarification-card>header,.q-clarification-card>footer,.q-draft-outline,.q-draft-questions,.q-draft-log { padding-inline:16px; }
   .q-draft-outline>div { grid-template-columns:1fr; gap:2px; padding-block:6px; }

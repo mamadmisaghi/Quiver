@@ -10,7 +10,7 @@ type Allocation = { source: string; value: number };
 type Position = { assetId: string; qty: number; baseQty: number; entry: number; margin: number; entryFee: number; side: 1 | -1; leverage: number; openedAt: number; peakPct: number; rungs: number[]; allocation: Allocation[] };
 type StageState = { fills: number; lastFillAt: number | null; active: boolean; latched: boolean; closed: boolean; resolved: boolean; realized: number; status: string; consumedDependency?: string };
 export type ConditionCheck = { met: number; total: number; unknown: number; result: boolean | null };
-export type PaperState = { checks?: Record<string, ConditionCheck>; version: 1; startedAt: number; lastAt: number; budget: number; principal: number; pools: Record<string, number>; positions: Record<string, Position>; stages: Record<string, StageState>; anchors: Record<string, number>; history: Record<string, [number, number][]>; previous: Record<string, number | boolean | null>; quotes: Record<string, PaperQuote>; fees: number; realized: number; day: string; dayStart: number; dayOrders: number; events: { at: number; stageId: string; kind: "buy" | "sell" | "exit" | "settle"; amount: number; price: number; fee: number; detail: string }[]; curve: [number, number][] };
+export type PaperState = { readings?: Record<string, number | boolean | null>; checks?: Record<string, ConditionCheck>; version: 1; startedAt: number; lastAt: number; budget: number; principal: number; pools: Record<string, number>; positions: Record<string, Position>; stages: Record<string, StageState>; anchors: Record<string, number>; history: Record<string, [number, number][]>; previous: Record<string, number | boolean | null>; quotes: Record<string, PaperQuote>; fees: number; realized: number; day: string; dayStart: number; dayOrders: number; events: { at: number; stageId: string; kind: "buy" | "sell" | "exit" | "settle"; amount: number; price: number; fee: number; detail: string }[]; curve: [number, number][] };
 // Transient observations for a single committed tick. They never enter a checkpoint.
 export type PaperStepEvent =
   | { kind: "condition"; stageId: string; signals: string[] }
@@ -88,8 +88,16 @@ function conditionWitness(expr: PlanExpr, values: PaperState["previous"], previo
   else expressionRefs(expr, out);
   return out;
 }
+export function paperDependencyMet(state: PaperState, dep: PlanStage["after"][number]) {
+  const prior = state.stages[dep.stageId];
+  if (!prior) return false;
+  if (dep.event === "filled") return prior.fills > 0;
+  if (dep.event === "closed") return prior.closed;
+  return (state.pools[dep.stageId] ?? 0) > EPS && (dep.event === "resolved_profit" ? prior.resolved : prior.realized > EPS);
+}
+
 /** Pure, checkpointable paper execution. The same evaluator can be driven by a browser or a server worker. */
-export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({}), trace?: PaperStepEvent[]): PaperState {
+export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({}), trace?: PaperStepEvent[], pausedRules: readonly string[] = []): PaperState {
   w = canonicalizeWorkflow(w);
   const s = structuredClone(state); if (at <= s.lastAt) return s; s.lastAt = at;
   for (const q of incoming) if (w.assets.some((a) => a.id === q.assetId) && freshPaperQuote(q, at) && (q.price > 0 || q.settled)) {
@@ -161,6 +169,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
   s.checks = {};
   const valueOf = (ref: string) => values[ref] ?? null;
   for (const stage of ordered) {
+    if (pausedRules.includes(stage.id)) { s.stages[stage.id].status = "Rule paused"; continue; }
     const yes = stage.when ? evaluate(stage.when, valueOf, s.previous) : true;
     if (stage.when) {
       const results = "args" in stage.when ? stage.when.args.map(child => evaluate(child, valueOf, s.previous)) : [yes];
@@ -168,7 +177,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     }
     const st = s.stages[stage.id], q = s.quotes[stage.assetId];
     if (!freshPaperQuote(q, at) || !q || q.price <= 0 || q.settled) { st.status = "Waiting for fresh market data"; continue; }
-    const dependencies = stage.after.every((d) => { const prev = s.stages[d.stageId]; return prev && (d.event === "filled" ? prev.fills > 0 : d.event === "closed" ? prev.closed : d.event === "resolved_profit" ? prev.resolved && (s.pools[d.stageId] ?? 0) > EPS : prev.realized > EPS && (s.pools[d.stageId] ?? 0) > EPS); });
+    const dependencies = stage.after.every(dep => paperDependencyMet(s, dep));
     if (!dependencies) { st.status = "Waiting for predecessor / realized profit"; continue; }
     const was = st.active; if (yes !== null) st.active = yes;
     if (yes) st.latched = true;
@@ -222,6 +231,8 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     for (const sig of drop) { s.anchors[sig.id] = q.price; rearmed.add(sig.id); } if (drop.length) st.active = false;
     s.events.push({ at, stageId: stage.id, kind: "buy", amount: usd, price: q.price, fee, detail: `${stage.side} ${w.assets.find((a) => a.id === stage.assetId)?.query}; ${stage.leverage}x; ${stage.funding.kind} funding` });
   }
+  // Preserve the observation used for this check before rearming the next drawdown.
+  s.readings = { ...values };
   for (const signalId of rearmed) values[signalId + ".value"] = 0;
   s.previous = values; s.events = s.events.slice(-300); s.curve.push([at, paperEquity(s)]); s.curve = s.curve.slice(-1000); return s;
 }

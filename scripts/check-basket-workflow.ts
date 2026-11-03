@@ -3,10 +3,13 @@ import { updateDraftSteps, type DraftStep } from "../lib/api/draft-progress";
 import { planCompile } from "../services/backend/src/compile/planner";
 import { Registry, MOCK_INSTRUMENTS } from "../services/backend/src/venues/registry";
 import { POST } from "../app/api/preview/compile/route";
+import { POST as previewEdit } from "../app/api/preview/paper-change/route";
+import { editFields, preparePaperEdit, EditOps } from "../lib/paper/changes";
+import { savePaperEdit, sessionActivity } from "../lib/paper/sessions";
 import { CompileEvent, Risk, Strategy, type DraftContinuation, type Workflow } from "../lib/contracts";
 import { previewRecord } from "../lib/preview/records";
 import { activeSessionMs, checkpointPaperSession, createPaperSession, readPaperSession } from "../lib/paper/sessions";
-import { observedNodes, quoteUpdates } from "../lib/paper/observations";
+import { tickActivity, quoteUpdates } from "../lib/paper/observations";
 import { paperGraphPulses } from "../lib/paper/graph-events";
 import { basketDraft, checkBoundClauses } from "../services/backend/src/compile/basket";
 import { continueDraft, draftQuestions } from "../services/backend/src/compile/clarifications";
@@ -93,13 +96,12 @@ assert(!paperGraphPulses(w,trace,partial.lastAt).some(p=>p.to.startsWith("wf_do_
 const items=partialQuotes.map(q=>({assetId:q.assetId,quote:q,message:""})), updates=quoteUpdates(items,firstState,partial.lastAt);
 assert.equal(Object.keys(updates).length,5);
 assert.deepEqual(quoteUpdates(items,partial,partial.lastAt),{});
-const nodes=observedNodes(workflowView(w).nodes,w,partial,items,updates,partial.lastAt);
-assert.equal(nodes.find(n=>n.id==="wf_when_buy_1")?.value,"2/3 met");
-assert(nodes.find(n=>n.id==="wf_sig_move_1")?.quoteFlashAt);
+assert(tickActivity(w, firstState, partial, items, trace).some(row => row.kind === "quote"));
+assert(!tickActivity(w, firstState, partial, items, trace).some(row => row.kind === "fill"));
 const stale=stepPaper(w,partial,[],at+160_001);
 assert.equal(stale.checks?.buy_1.unknown,3);
 assert.equal(stale.events.length,0);
-assert.equal(observedNodes(workflowView(w).nodes,w,stale,items,{},stale.lastAt).find(n=>n.id==="wf_sig_move_1")?.value,"Stale quote");
+assert.equal(stale.readings?.[w.signals[0].id + ".value"], null);
 trace=[];
 const filled=stepPaper(w,partial,quotes([90,72,120,100,100],at+40_000),at+40_000,Risk.parse({}),trace);
 assert.deepEqual(filled.events.map(e=>e.stageId),w.stages.map(s=>s.id));
@@ -146,6 +148,46 @@ try {
 assert.equal(draftQuestions(w,thesis).length,0);
 console.log("PASS active time across pause, resume, reload, an interrupted driver and pre-timer sessions.");
 
+
+// A preview cannot spend funds or change a running session. The committed edit takes effect on the next tick.
+const editSession = createPaperSession(record, storage);
+const editBase = checkpointPaperSession(editSession.id, partial, "running", storage, true);
+const fields = editFields(editBase);
+const preview = (text: string, group?: string) => previewEdit(new Request("https://quiver.example/api/preview/paper-change", {
+  method: "POST", body: JSON.stringify({ text, fields: fields.filter(f => !group || f.group === group) }),
+}));
+assert.equal((await preview("Set order size to $12")).status, 422, "ask which of several orders to change");
+const named = await preview("Set NEET order size to $12 and stop loss to 5%");
+assert.equal(named.status, 200);
+const namedOps = EditOps.parse((await named.json() as {ops: unknown}).ops);
+assert(namedOps.length === 2 && namedOps.every(op => op.key.startsWith("buy_1.")));
+const change = await preview("Set order size to $12 and stop loss to 5%", "buy_1");
+assert.equal(change.status, 200);
+const ops = EditOps.parse((await change.json() as {ops:unknown}).ops);
+assert.equal(preparePaperEdit(editBase, ops).changes.length, 2);
+assert.equal(readPaperSession(editSession.id, storage)!.strategy.workflow!.stages[0].amount.value, 10);
+const edited = savePaperEdit(editSession.id, 0, s => preparePaperEdit(s, ops), true, storage);
+assert.equal(edited.editRevision, 1);
+assert.deepEqual(edited.state, editBase.state);
+assert.throws(() => savePaperEdit(editSession.id, 0, s => preparePaperEdit(s, ops), true, storage), /since this preview/);
+assert.throws(() => checkpointPaperSession(editSession.id, partial, "running", storage, false, true, [], 0), /rules changed/);
+const tickAt = at + 40_000, packet = quotes([90,72,120,100,100],tickAt);
+const emitted: PaperStepEvent[] = [];
+const next = stepPaper(edited.strategy.workflow!, edited.state!, packet, tickAt, edited.strategy.risk, emitted, edited.pausedRules);
+assert.equal(next.events[0].amount, 12); assert.equal(next.events[1].amount, 10);
+const notes = tickActivity(edited.strategy.workflow!, edited.state!, next, packet.map(q => ({assetId:q.assetId,quote:q,message:""})), emitted);
+assert.equal(notes.filter(n => n.kind === "fill").length, 5);
+assert(notes.findIndex(n => n.kind === "fill" && n.detail.startsWith("Buy SOL")) < notes.findIndex(n => n.kind === "trigger" && n.detail === "Long BTC"));
+checkpointPaperSession(edited.id, next, "running", storage, false, true, notes, 1);
+const restored = readPaperSession(edited.id, storage)!;
+assert(sessionActivity(restored).some(n => n.kind === "edit"));
+assert.deepEqual(sessionActivity(restored).slice(-notes.length).map(n => n.detail), notes.map(n => n.detail));
+const repeated = stepPaper(edited.strategy.workflow!, next, packet, tickAt+1000);
+assert.deepEqual(tickActivity(w,next,repeated,packet.map(q=>({assetId:q.assetId,quote:q,message:""})),[]).map(n=>n.kind), ["check"]);
+const pausedRules = preparePaperEdit(editBase,[{key:"buy_2.enabled", value:0}]);
+const gated = stepPaper(pausedRules.strategy.workflow!, partial, packet, tickAt, editBase.strategy.risk, [], pausedRules.pausedRules);
+assert.equal(gated.stages.buy_2.fills,0); assert.equal(gated.stages[w.stages[3].id].fills,0);
+console.log("PASS scoped natural-language edits, preview before apply, revision conflicts, next-tick execution and ordered, persisted activity.");
 
 // A real audit retry in the planner has two provider passes but just one visible row per operation.
 const phrase="Open a BTC long at 7x with $10 margin at market price";

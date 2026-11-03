@@ -1,3 +1,4 @@
+import { ActivityRow, fillNote, type ActivityNote } from "./observations";
 import { notifyPaperEvent } from "@/lib/api/preview-alerts";
 import { z } from "zod";
 import { Strategy, BacktestRes } from "@/lib/contracts";
@@ -6,6 +7,7 @@ import { PaperQuote, paperProblems, type PaperState } from "@/services/backend/s
 const number = z.number().finite(), positive = number.nonnegative();
 const dict = <T extends z.ZodType>(value: T) => z.record(z.string(), value);
 const Checkpoint = z.object({
+  readings: dict(z.union([number, z.boolean(), z.null()])).optional(),
   checks: dict(z.object({ met: positive, total: positive, unknown: positive, result: z.boolean().nullable() })).optional(),
   version: z.literal(1), startedAt: number, lastAt: number, budget: positive, principal: number, pools: dict(number),
   positions: dict(z.object({ assetId: z.string(), qty: positive, baseQty: positive, entry: positive, margin: positive, entryFee: positive, side: z.union([z.literal(1), z.literal(-1)]), leverage: positive, openedAt: number, peakPct: number, rungs: z.array(number), allocation: z.array(z.object({ source: z.string(), value: number })) })),
@@ -16,6 +18,7 @@ const Checkpoint = z.object({
 export const PaperSessionSchema = z.object({
   version: z.literal(1), id: z.string().regex(/^paper_[a-zA-Z0-9-]+$/), strategyId: z.string(), strategyVersion: z.number().int().positive(), name: z.string(), strategy: Strategy,
   mode: z.enum(["scenario", "quotes"]), status: z.enum(["ready", "running", "paused", "completed"]), createdAt: number, updatedAt: number, state: Checkpoint.nullable(),
+  activity: z.array(ActivityRow).max(100).optional(), editRevision: z.number().int().nonnegative().optional(), rulesChangedAt: number.optional(), pausedRules: z.array(z.string()).optional(),
   activeMs: positive.optional(), // Time accrued through updatedAt. Older records have no measured duration.
   startingBalance: z.number().finite().positive().optional(), legacyResult: BacktestRes.optional(),
 });
@@ -29,6 +32,22 @@ export function listPaperSessions(storage: Storage = localStorage) {
   const sessions: PaperSession[] = [];
   for (let i = 0; i < storage.length; i++) { const key = storage.key(i); if (key?.startsWith(prefix)) { const s = readPaperSession(key.slice(prefix.length), storage); if (s) sessions.push(s); } }
   return sessions.sort((a, b) => b.createdAt - a.createdAt);
+}
+/** Project only history that older checkpoints actually recorded. */
+export function sessionActivity(session: PaperSession): ActivityRow[] {
+  if (session.activity) return session.activity;
+  const notes: ActivityNote[] = [{ at: session.createdAt, kind: "session", label: "Session created", detail: session.name }];
+  if (session.strategy.workflow) for (const fill of session.state?.events ?? []) notes.push(fillNote(session.strategy.workflow, fill));
+  if (session.state && session.state.lastAt >= session.state.startedAt) {
+    notes.push({ at: session.state.lastAt, kind: "check", label: "Last recorded check", detail: "Restored from this session’s saved observations." });
+  }
+  if (session.status === "paused") notes.push({ at: session.updatedAt, kind: "session", label: "Session paused", detail: "Observation paused in this browser." });
+  return notes.sort((a, b) => a.at - b.at).map((row, seq) => ({ ...row, seq })).slice(-100);
+}
+function appendActivity(session: PaperSession, notes: ActivityNote[]) {
+  const rows = sessionActivity(session);
+  let seq = rows.at(-1)?.seq ?? 0;
+  return [...rows, ...notes.map(row => ({ ...row, seq: ++seq }))].slice(-100);
 }
 function write(session: PaperSession, storage: Storage) {
   try { storage.setItem(prefix + session.id, JSON.stringify(session)); }
@@ -49,12 +68,18 @@ export function activeSessionMs(session: PaperSession, now: number, observing: b
   const measured = session.activeMs ?? 0;
   return measured + (observing && session.activeMs !== undefined && session.status === "running" ? Math.max(0, now - session.updatedAt) : 0);
 }
-export function checkpointPaperSession(id: string, state: PaperState | null, status: PaperSession["status"], storage: Storage = localStorage, resume = false, driverActive = true) {
+export function checkpointPaperSession(id: string, state: PaperState | null, status: PaperSession["status"], storage: Storage = localStorage, resume = false, driverActive = true, notes: ActivityNote[] = [], expectedEdit?: number) {
   const session = readPaperSession(id, storage); if (!session) throw new Error("This paper session is no longer available in this browser.");
+  if (expectedEdit !== undefined && expectedEdit !== (session.editRevision ?? 0)) throw new Error("The session rules changed. Resume with the latest version.");
   if (status === "running" && session.status === "paused" && !resume) throw new Error("This session was paused in another tab.");
   const now = Math.max(Date.now(), session.updatedAt);
   const activeMs = activeSessionMs(session, now, !resume && driverActive);
-  const next = write({ ...session, activeMs, state: state ? Checkpoint.parse(state) : null, status, updatedAt: now }, storage);
+  const added = [...notes];
+  if (status !== session.status && (status === "paused" || status === "running")) {
+    const label = status === "paused" ? "Session paused" : session.status === "ready" ? "Session started" : "Session resumed";
+    added.push({ at: now, kind: "session", label, detail: status === "paused" ? "Market observation paused." : "Watching the selected markets." });
+  }
+  const next = write({ ...session, activity: appendActivity(session, added), activeMs, state: state ? Checkpoint.parse(state) : null, status, updatedAt: now }, storage);
   if (typeof window !== "undefined") {
     if (session.status !== status) notifyPaperEvent(id, "status", next.updatedAt, session.name + " · " + status);
     const event = next.state?.events.at(-1), old = session.state?.events.at(-1);
@@ -68,6 +93,17 @@ export function checkpointPaperSession(id: string, state: PaperState | null, sta
     }
   }
   return next;
+}
+export function savePaperEdit(id: string, expectedEdit: number, change: (current: PaperSession) => { strategy: PaperSession["strategy"]; pausedRules: string[]; summaries: string[] }, driverActive: boolean, storage: Storage = localStorage) {
+  const session = readPaperSession(id, storage);
+  if (!session || session.mode !== "quotes" || !session.strategy.workflow) throw new Error("Open a live-quote paper session to change its rules.");
+  if ((session.editRevision ?? 0) !== expectedEdit) throw new Error("The rules changed since this preview. Preview the change again.");
+  const { strategy, pausedRules, summaries } = change(session);
+  const now = Math.max(session.updatedAt, Date.now());
+  const editRevision = expectedEdit + 1;
+  const row: ActivityNote = { at: now, kind: "edit", label: "Rules updated", detail: summaries.join(" · ") };
+  return write({ ...session, strategy, pausedRules, editRevision, rulesChangedAt: now, updatedAt: now, activeMs: activeSessionMs(session, now, driverActive),
+    activity: appendActivity(session, [row]) }, storage);
 }
 export function sessionStatus(session: PaperSession) {
   return session.status === "running" && Date.now() - session.updatedAt > 60_000 ? "paused" : session.status;
