@@ -12,7 +12,6 @@ const post = (method: string, value: unknown) => ({
   headers: { "content-type": "application/json" },
   body: JSON.stringify(value),
 });
-const subscribed = z.boolean();
 export const previewAlerts: Pick<
   QuiverApi,
   | "alertSettings"
@@ -25,14 +24,12 @@ export const previewAlerts: Pick<
 > = {
   async alertSettings() {
     const result = C.AlertSettings.parse(await connectionRequest(path));
-    writeSetting("webhook-on", subscribed, !!result.webhookUrl);
     return result;
   },
   async putAlertSettings(input) {
     const result = C.PutAlertSettingsRes.parse(
       await connectionRequest(path, post("PUT", input)),
     );
-    writeSetting("webhook-on", subscribed, !!result.webhookUrl);
     return result;
   },
   async alertRules() {
@@ -73,23 +70,3 @@ export const previewAlerts: Pick<
     );
   },
 };
-export function notifyPaperEvent(
-  session: string,
-  event: "fill" | "status" | "risk_halt" | "rejected",
-  at: number,
-  message: string,
-) {
-  if (
-    !readSetting("webhook-on", subscribed, false) ||
-    !readRules().some(
-      (r) => r.enabled && r.runId === null && r.events.includes(event),
-    )
-  )
-    return;
-  void connectionRequest(
-    path,
-    post("POST", { kind: "run_event", session, event, at, message }),
-  ).catch(() => {
-    /* The paper engine is independent of alert delivery. */
-  });
-}

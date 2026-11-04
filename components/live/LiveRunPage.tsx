@@ -10,7 +10,7 @@ export default function LiveRunPage({ id }: { id: string }) {
     <Wrap>
       <div className="live-desk">
         <Link href="/app/live" className="live-inline mb-4">
-          ← Trading account
+          ← Trading Desk
         </Link>
         <header className="live-header">
           <div>

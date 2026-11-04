@@ -2,6 +2,8 @@
   max-width: 1120px;
   margin: 0 auto;
   color: var(--color-ink, #f2f1ed);
+}
+.live-desk, .desk-dialog {
   --lv-line: var(--color-line, #303035);
   --lv-bg: var(--color-card, #131315);
   --lv-muted: var(--color-muted, #aaa8a4);
@@ -585,3 +587,35 @@
 .live-bridge button { margin-top: .75rem; }
 .live-field { display: flex; align-items: center; gap: .75rem; font-size: .85rem; }
 .live-field select { background: var(--lv-bg); border: 1px solid var(--lv-line); padding: .4rem; border-radius: 6px; }
+
+.trading-desk .live-header { align-items:center; padding-bottom:1.5rem; }
+.trading-desk .live-header h1 { font-size:clamp(2rem,4vw,2.65rem); }
+.desk-venue-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin:1.25rem 0; padding:4px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+.desk-venue-tab { position:relative; display:flex; align-items:center; gap:11px; min-width:0; min-height:60px; padding:10px 14px; text-align:left; border:1px solid transparent; border-radius:8px; color:var(--muted); cursor:pointer; }
+.desk-venue-tab strong,.desk-venue-tab small { display:block; }
+.desk-venue-tab strong { color:var(--ink-2); font-size:.9rem; font-weight:550; }
+.desk-venue-tab small { font-size:.72rem; margin-top:2px; }
+.desk-venue-tab[data-state="active"] { background:color-mix(in srgb,var(--accent) 8%,var(--card)); border-color:color-mix(in srgb,var(--accent) 45%,var(--line)); }
+.desk-venue-tab[data-state="active"] strong { color:var(--accent); }
+.desk-market-panel[data-state="inactive"] { display:none; }
+.desk-market-panel[data-state="active"] { display:grid; grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr); border:1px solid var(--line); border-radius:14px; background:var(--card); }
+.desk-market,.desk-ticket { min-width:0; }
+.desk-ticket { border-left:1px solid var(--line); padding:20px 22px; }
+.desk-ticket-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.desk-ticket-head h2,.desk-dialog h2 { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:550; }
+.desk-ticket .live-form { margin-top:16px; }
+.desk-text-action { display:inline-flex; align-items:center; gap:3px; min-height:36px; color:var(--ink-2); font-size:12px; cursor:pointer; }
+.desk-run-history { margin-top:24px; padding:20px 0; border-block:1px solid var(--line); }
+.desk-run-history .desk-ticket-head>span { font:12px var(--font-geist-mono),monospace; color:var(--muted); }
+.desk-scrim { position:fixed; inset:0; z-index:100; background:rgb(0 0 0 / .65); }
+.desk-dialog { position:fixed; z-index:101; left:50%; top:50%; transform:translate(-50%,-50%); width:min(570px,calc(100% - 28px)); max-height:88dvh; display:flex; flex-direction:column; border:1px solid var(--line-2); border-radius:14px; color:var(--ink); background:var(--card); }
+.desk-dialog>header { display:flex; gap:12px; align-items:start; justify-content:space-between; padding:20px 22px; border-bottom:1px solid var(--line); }
+.desk-dialog>header p,.desk-dialog .live-note { color:var(--muted); font-size:13px; margin-top:5px; }
+.desk-dialog-body { padding:16px 20px; overflow:auto; overscroll-behavior:contain; }
+.desk-picker-list li+li { border-top:1px solid var(--line); }
+.desk-picker-list a { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:48px; padding:10px 8px; font-size:14px; border-radius:6px; }
+.desk-picker-list small { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
+.desk-picker-foot { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+@media (hover:hover) { .desk-venue-tab:hover { background:var(--raised); } .desk-text-action:hover,.desk-picker-list a:hover,.live-home-list a:hover { color:var(--accent); } .desk-picker-list a:hover { background:var(--raised); } }
+@media (max-width:1100px) { .desk-market-panel[data-state="active"] { grid-template-columns:minmax(0,1fr); } .desk-ticket { border-left:0; border-top:1px solid var(--line); } }
+@media (max-width:560px) { .desk-venue-tab { flex-direction:column; align-items:flex-start; gap:5px; padding:8px; } .desk-venue-tab strong { font-size:12px; } .desk-venue-tab small { display:none; } .desk-ticket { padding:16px; } .trading-desk .live-header { align-items:flex-start; } }

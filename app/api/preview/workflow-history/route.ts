@@ -4,7 +4,7 @@ import { Risk } from "@/services/backend/contracts/src/strategy";
 import { replayWorkflowHistory } from "@/services/backend/src/workflows/history";
 import { Registry, MOCK_INSTRUMENTS } from "@/services/backend/src/venues/registry";
 import { TiingoHistory } from "@/services/backend/src/venues/tiingo";
-import { previewJson, readPreviewBody, sameOrigin, previewOwner } from "@/lib/preview/server";
+import { previewJson, readPreviewBody, sameOrigin } from "@/lib/preview/server";
 const schema = z
   .object({
     workflow: Workflow,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (!sameOrigin(request))
     return previewJson({ message: "Start historical replay from the strategy editor." }, 403);
   const now = Date.now(),
-    owner = previewOwner(request) ?? "guest";
+    owner = "guest";
   for (const [key, line] of use) if (line.time <= now - 60000) use.delete(key);
   const row = use.get(owner) ?? { time: now, n: 0 };
   if (inflight >= 3 || row.n >= 6 || use.size > 1000)

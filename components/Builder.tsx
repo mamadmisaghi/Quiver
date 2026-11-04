@@ -27,7 +27,6 @@ const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
 import SignInButton from "./SignInButton";
 import { SAMPLE_PROMPT, SUGGESTIONS } from "@/lib/copy";
 import PreviewWorkspaceNotice from "./PreviewWorkspaceNotice";
-import { previewSaveLocation } from "@/lib/api/preview-workspace";
 import { strategyNodes as deriveNodes } from "@/lib/api/graph";
 
 type Phase = DraftPhase;
@@ -222,7 +221,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const saveDraft = async () => {
     if (!strategy || dirty || phase !== "done") return;
     setSaving(true); setErr(null);
-    try { const record = await storeDraft(strategy); setEditingRecord({ id: record.id, version: record.version }); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice(previewSaveLocation() === "online" ? "Saved online and in this browser." : "Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
+    try { const record = await storeDraft(strategy); setEditingRecord({ id: record.id, version: record.version }); setSavedId(record.id); if (API_MODE === "mock") setSaveNotice("Saved in this browser. Export a backup from Strategies to keep a portable copy."); }
     catch (e) { setErr(errOf(e, "Could not save this draft.")); }
     finally { setSaving(false); }
   };
@@ -257,7 +256,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
                 <img src={img.url} alt="" className="h-6 w-6 rounded-full object-cover" />
                 <span className="max-w-[12ch] truncate sm:max-w-[22ch]" title={img.name}>{img.name}</span><span className="tnum shrink-0">{img.bytes < 1e6 ? `${Math.max(1, Math.round(img.bytes / 1e3))} KB` : `${(img.bytes / 1e6).toFixed(1)} MB`}</span>
                 <button type="button" onClick={() => setImg(null)} aria-label="Remove chart" className="grid h-6 w-6 place-items-center rounded-full hover:bg-white/10" data-testid="chart-remove">×</button></span>
-              : <button type="button" disabled={API_MODE === "mock" && !previewAiReady} title={API_MODE === "mock" && !previewAiReady ? "Sign in with ChatGPT for configured chart AI" : undefined} onClick={() => fileRef.current?.click()} className="btn min-h-11 rounded-full border border-line-2 px-2.5 py-1 hover:border-white/30 hover:text-ink disabled:opacity-40" data-testid="chart-attach">Attach chart</button>}
+              : <button type="button" disabled={API_MODE === "mock" && !previewAiReady} title={API_MODE === "mock" && !previewAiReady ? "Chart analysis is unavailable in this workspace" : undefined} onClick={() => fileRef.current?.click()} className="btn min-h-11 rounded-full border border-line-2 px-2.5 py-1 hover:border-white/30 hover:text-ink disabled:opacity-40" data-testid="chart-attach">Attach chart</button>}
             <span className="hidden font-mono sm:inline">Ctrl / ⌘ Enter</span>
           </div>
           <button type="submit" disabled={drafting || (!text.trim() && !img)}

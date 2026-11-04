@@ -160,7 +160,7 @@ export const mockApi: QuiverApi = {
   async strategy(id) {
     const draft = (await listPreviewDrafts()).find(s => s.id === id);
     if (draft) return draft;
-    throw new ApiErr("not_found", "That draft was not found. Import its backup or sign in to its workspace.", 404);
+    throw new ApiErr("not_found", "This draft isn’t saved in this browser. Open it on the original device or import a backup.", 404);
   },
   compileImage: previewCompileImage,
   compile: previewCompile,

@@ -82,7 +82,7 @@ export default function SecretsCard() {
         <div><dt>Tiingo · underlying stock prices</dt><dd>{q.data.shared.stocks ? "Configured" : "Needs a key"}</dd></div>
       </dl>}
       {!q.data && !extra.unavailable ? <p className="mt-3 text-[13.5px] text-muted">{q.error ?? "Loading…"}</p> : <>
-        {unavailable && <p role="status" className="mt-3 rounded-[8px] border border-line-2 bg-white/[.03] p-3 text-[13px] text-ink-2" data-testid="sec-unavailable">{API_MODE === "mock" && !q.data?.authenticated ? <>Workspace connections are available. To manage a personal key or RPC, <a className="text-accent underline" href="/signin-with-chatgpt?return_to=%2Fapp%2Fsettings" target="_top">sign in with ChatGPT</a>.</> : UNAVAIL}</p>}
+        {unavailable && <p role="status" className="mt-3 rounded-[8px] border border-line-2 bg-white/[.03] p-3 text-[13px] text-ink-2" data-testid="sec-unavailable">{API_MODE === "mock" ? "Personal RPC and API keys are managed through your connected Quiver account." : UNAVAIL}</p>}
         {items.length > 0 && <ul className="mt-3 divide-y divide-line border-y border-line text-[13.5px]" data-testid="sec-list">{items.map((x) => <Item key={x.id + x.updatedAt} x={x} onGone={() => { setExtra((e) => ({ ...e, items: items.filter((i) => i.id !== x.id) })); setMsg("Removed."); }} />)}</ul>}
         {!unavailable && <><SecretForm kind="rpc" onSaved={saved} onUnavailable={() => setExtra((e) => ({ ...e, unavailable: true }))} disabled={unavailable} />
         <SecretForm kind="ai_key" onSaved={saved} onUnavailable={() => setExtra((e) => ({ ...e, unavailable: true }))} disabled={unavailable} />

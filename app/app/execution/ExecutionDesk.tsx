@@ -136,7 +136,7 @@ export default function ExecutionDesk() {
       "mt-1 block w-full rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm text-ink";
   return (
     <Wrap>
-      <Link className="q-action mb-4 inline-flex" href="/app/live">Open live trading ↗</Link>
+      <Link className="q-action mb-4 inline-flex" href="/app/live">Open Trading Desk ↗</Link>
       <header className="border-b border-line pb-7">
         <div className="mb-3 flex items-center gap-2 text-xs text-accent">
           <Radio size={14} aria-hidden />

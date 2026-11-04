@@ -1,10 +1,8 @@
 import { EvmAddress } from "@/lib/contracts";
 import {
-  previewDatabase,
   previewJson,
-  previewOwner,
 } from "@/lib/preview/server";
-import { openConnection, readAccount } from "@/lib/preview/connections";
+import { readAccount } from "@/lib/preview/connections";
 
 export async function GET(req: Request) {
   const address = EvmAddress.safeParse(
@@ -13,15 +11,11 @@ export async function GET(req: Request) {
   if (!address.success)
     return previewJson({ message: "Choose a valid EVM address." }, 422);
   try {
-    const owner = previewOwner(req);
-    const custom = owner
-      ? await openConnection(await previewDatabase(), owner, "rpc", true)
-      : null;
     const res = await readAccount(
-      custom ?? "https://rpc.testnet.chain.robinhood.com",
+      "https://rpc.testnet.chain.robinhood.com",
       address.data,
     );
-    return previewJson({ res, rpc: custom ? "user" : "server" });
+    return previewJson({ res, rpc: "server" });
   } catch {
     return previewJson(
       {

@@ -66,7 +66,7 @@ function Alerts({ init, reload }: { init: { s: AlertSettings; r: AlertRule[]; d:
       </div>
       <div className="mt-4 grid gap-6 lg:grid-cols-2">
         <div>
-          {API_MODE === "mock" && <p className="mb-3 text-[12.5px] text-muted">{s.providerStatus === "not_configured" ? <a className="text-accent underline" href="/signin-with-chatgpt?return_to=%2Fapp%2Fsettings" target="_top">Sign in to connect a private webhook.</a> : "Connect a Zapier or Make webhook, or an approved receiver. Rules apply to paper sessions in this browser."}</p>}
+          {API_MODE === "mock" && <p className="mb-3 text-[12.5px] text-muted">{s.providerStatus === "not_configured" ? "Webhook delivery is available with a connected Quiver account." : "Connect a Zapier or Make webhook, or an approved receiver. Rules apply to paper sessions in this browser."}</p>}
           <label htmlFor="al-url" className="text-[13px] text-ink-2">Webhook URL</label>
           <div className="mt-1.5 flex flex-wrap gap-2">
             <input id="al-url" type="url" disabled={API_MODE === "mock" && s.providerStatus === "not_configured"} inputMode="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/quiver" value={url} onChange={(e) => { setUrl(e.target.value.trim()); setUrlErr(null); }}

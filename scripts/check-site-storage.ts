@@ -8,7 +8,7 @@ import { createPreviewBudget } from "../lib/preview/budget";
 import { readOnlineDrafts, writeOnlineDraft, removeOnlineDraft, replaceOnlineDraft } from "../lib/preview/storage";
 import { previewRecord } from "../lib/preview/records";
 import { draftBackup, parseDraftBackup, draftFingerprint } from "../lib/api/draft-backup";
-import { mergePreviewDrafts } from "../lib/api/preview-workspace";
+import { GET as previewConnections } from "../app/api/preview/connections/route";
 import { STRATEGY_RAW, USER_ID } from "../lib/api/fixtures";
 import { budgeted } from "../services/backend/src/compile";
 import { GET, POST, DELETE } from "../app/api/preview/workspace/route";
@@ -140,11 +140,15 @@ try {
   assert.throws(() => parseDraftBackup("{}"));
   assert.throws(() => parseDraftBackup(JSON.stringify({ ...backup, drafts: [...backup.drafts, { ...backup.drafts[0], strategy: { ...a.strategy, actions: [{ ...a.strategy.actions[0], instrument: "hl:perp:UNKNOWN" }] } }] })));
   assert.throws(() => parseDraftBackup("x".repeat(1_000_001))); checks++;
-  assert.equal(mergePreviewDrafts([a], [b]).length, 1); assert.equal(mergePreviewDrafts([a], [b])[0].name, b.name); checks++;
+  const legacyIdentity = new Request("https://quiver.example/api/preview/workspace", { headers: { "oai-authenticated-user-id": "owner-a", "oai-authenticated-user-email": "owner@example.com" } });
+  const retired = await (await GET(legacyIdentity)).json() as { authenticated: boolean; items: unknown[] };
+  assert.equal(retired.authenticated, false); assert.deepEqual(retired.items, []);
+  assert.equal((await POST(legacyIdentity)).status, 401);
+  assert.deepEqual((await (await previewConnections()).json() as { items: unknown[] }).items, []); checks++;
   const request = (method = "GET", origin?: string) => new Request("https://quiver.example/api/preview/workspace", { method, headers: origin ? { origin } : {} });
   assert.equal((await GET(request())).status, 200); assert.equal(((await (await GET(request())).json()) as { authenticated: boolean }).authenticated, false);
   assert.equal((await POST(request("POST"))).status, 401); assert.equal((await DELETE(request("DELETE"))).status, 401);
   assert.equal((await POST(request("POST", "https://other.example"))).status, 403);
-  assert.equal((await compileImage(request("POST"))).status, 401); checks++;
+  assert.equal((await compileImage(request("POST"))).status, 503); checks++;
   console.log(`PASS: ${checks} Site storage checks (user isolation, atomic AI budget, daily-limit opt-out and restoration, concurrency, retained billing, portable backup and authorization).`);
 } finally { sqlite.close(); rmSync(dir, { recursive: true, force: true }); }

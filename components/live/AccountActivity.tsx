@@ -57,7 +57,7 @@ function View({ part }: { part: "approvals" | "portfolio" | "activity" }) {
               : "My live trading activity"}
         </h2>
         <Link className="text-[12px] text-accent" href="/app/live">
-          Live desk ↗
+          Trading Desk ↗
         </Link>
       </div>
       {part === "portfolio" ? (

@@ -1,7 +1,6 @@
 import type { ActivityNote } from "./observations";
 import { activeSessionMs, appendActivity, Checkpoint, PaperSessionSchema, type PaperSession } from "@/services/backend/src/workflows/session";
 export { activeSessionMs, sessionActivity, PaperSessionSchema, type PaperSession } from "@/services/backend/src/workflows/session";
-import { notifyPaperEvent } from "@/lib/api/preview-alerts";
 import { z } from "zod";
 import { Strategy, BacktestRes } from "@/lib/contracts";
 import type { StrategyRecord } from "@/lib/api/types";
@@ -41,20 +40,7 @@ export function checkpointPaperSession(id: string, state: PaperState | null, sta
     const label = status === "paused" ? "Session paused" : session.status === "ready" ? "Session started" : "Session resumed";
     added.push({ at: now, kind: "session", label, detail: status === "paused" ? "Market observation paused." : "Watching the selected markets." });
   }
-  const next = write({ ...session, activity: appendActivity(session, added), activeMs, state: state ? Checkpoint.parse(state) : null, status, updatedAt: now }, storage);
-  if (typeof window !== "undefined") {
-    if (session.status !== status) notifyPaperEvent(id, "status", next.updatedAt, session.name + " · " + status);
-    const event = next.state?.events.at(-1), old = session.state?.events.at(-1);
-    if (event && (event.at !== old?.at || event.stageId !== old?.stageId || event.kind !== old?.kind))
-      notifyPaperEvent(id, "fill", event.at, session.name + " · " + event.detail.slice(0,150));
-    const stageStatus = Object.values(next.state?.stages ?? {});
-    for (const [rule, phrase] of [["risk_halt","daily risk limit"], ["rejected","blocked"]] as const) {
-      const blocked = stageStatus.some(s=>s.status.toLowerCase().includes(phrase));
-      const wasBlocked = Object.values(session.state?.stages ?? {}).some(s=>s.status.toLowerCase().includes(phrase));
-      if (blocked && !wasBlocked) notifyPaperEvent(id, rule, next.updatedAt, session.name + " · " + (rule==="risk_halt"?"Daily loss limit reached":"Order blocked by a risk limit"));
-    }
-  }
-  return next;
+  return write({ ...session, activity: appendActivity(session, added), activeMs, state: state ? Checkpoint.parse(state) : null, status, updatedAt: now }, storage);
 }
 export function savePaperEdit(id: string, expectedEdit: number, change: (current: PaperSession) => { strategy: PaperSession["strategy"]; pausedRules: string[]; summaries: string[] }, driverActive: boolean, storage: Storage = localStorage) {
   const session = readPaperSession(id, storage);

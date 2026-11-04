@@ -2,11 +2,6 @@ import { createPreviewBudget } from "./budget";
 import type { CompileDeps } from "@/services/backend/src/compile";
 
 export const previewJson = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
-// These headers are set by Sites dispatch. This module is never used to authenticate Render's API.
-export function previewOwner(request: Request): string | null {
-  const id = request.headers.get("oai-authenticated-user-id"), email = request.headers.get("oai-authenticated-user-email");
-  return id && email && id.length <= 256 ? id : null;
-}
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   return !origin || origin === new URL(request.url).origin;
@@ -45,14 +40,10 @@ const number = (value: string | undefined, fallback: number, min: number, max: n
   const n = Number(value); return value && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 export async function previewAi(request: Request, vision = false): Promise<CompileDeps["openrouter"]> {
-  if (!previewAiEnabled()) return undefined;
-  const authenticated = previewOwner(request);
-  if (!authenticated && !previewPublicAiEnabled()) return undefined;
-  const owner = authenticated ?? await anonymousBudgetKey(request);
+  if (!previewPublicAiEnabled()) return undefined;
+  const owner = await anonymousBudgetKey(request);
   const db = await previewDatabase();
   const model = (vision ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL) || (vision ? "openai/gpt-4.1-mini" : "openai/gpt-5.6-sol");
-  const personal = authenticated && process.env.SECRETS_MASTER_KEY
-    ? await (await import("./connections")).openConnection(db, authenticated, "ai_key", true) : null;
-  return { apiKey: personal ?? process.env.OPENROUTER_API_KEY!, totalBudgetMs: 120_000, callTimeoutMs: 60_000, model,
-    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 6000, 256, 6000), reservationUsd: model.startsWith("openai/gpt-5") ? .60 : .10, maxOwnerCalls: authenticated ? 60 : 30, publicCapUsd: 1, enforceDailyLimits: previewDailyAiLimitsEnabled() }) };
+  return { apiKey: process.env.OPENROUTER_API_KEY!, totalBudgetMs: 120_000, callTimeoutMs: 60_000, model,
+    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 6000, 256, 6000), reservationUsd: model.startsWith("openai/gpt-5") ? .60 : .10, maxOwnerCalls: 30, publicCapUsd: 1, enforceDailyLimits: previewDailyAiLimitsEnabled() }) };
 }

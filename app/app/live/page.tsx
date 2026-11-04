@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { liveReviewPath, liveRunPath } from "@/lib/live-navigation";
 import LiveDesk from "./LiveDesk";
 
-export const metadata = { title: "Live trading — Quiver" };
+export const metadata = { title: "Trading Desk — Quiver" };
 export default async function LiveTradingPage({
   searchParams,
 }: {
