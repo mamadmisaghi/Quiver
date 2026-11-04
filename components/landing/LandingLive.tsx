@@ -44,13 +44,13 @@ export function WhatItTrades() {
           )}
         </div>
         {err ? <Failed /> : (
-          <ul className="divide-y divide-line border-y border-line" aria-busy={!d}>
+          <ul className="min-w-0 divide-y divide-line border-y border-line" aria-busy={!d}>
             {d ? d.trades.map((t, i) => (
-              <li key={t.id} className="group grid grid-cols-[2.5rem_1fr_auto] items-center gap-4 py-6 sm:grid-cols-[2.5rem_14rem_1fr_auto]">
-                <span className="tnum font-mono text-[12px] text-muted">{tag(i + 1)}</span>
-                <div className="text-[18px] font-medium tracking-[-0.02em]">{t.label}</div>
-                <div className="col-start-2 text-[13.5px] text-muted sm:col-start-auto">{t.example}</div>
-                <div className="col-start-3 row-start-1 flex items-center gap-2 sm:col-start-auto">
+              <li key={t.id} className="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 py-6 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto] xl:grid-cols-[2.5rem_14rem_minmax(0,1fr)_auto]">
+                <span className="tnum col-start-1 row-start-1 font-mono text-[12px] text-muted">{tag(i + 1)}</span>
+                <div className="col-start-2 row-start-1 min-w-0 text-[18px] font-medium tracking-[-0.02em]">{t.label}</div>
+                <div className="col-start-2 col-end-4 row-start-2 min-w-0 text-[13.5px] text-muted xl:col-start-3 xl:row-start-1">{t.example}</div>
+                <div className="col-start-3 row-start-1 flex items-center gap-2 xl:col-start-4">
                   <span className="hidden gap-1 md:flex">{t.venues.map((v) => <VenueMark key={v} venue={v} />)}</span>
                   <Pill tone={t.status === "paper" ? "long" : "muted"}>{t.status === "paper" ? "Paper" : "Watch only"}</Pill>
                 </div>
