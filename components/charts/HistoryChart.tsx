@@ -34,7 +34,7 @@ export function hasCandles(history: MarketHistoryRes) {
         !c.synthetic &&
         !c.modeled &&
         (history.dataSource === "tiingo" ||
-          /Hyperliquid perpetual trades|Coinbase SOL\/USD reference|GeckoTerminal/i.test(
+          /Hyperliquid perpetual trades|Coinbase SOL\/USD reference|Kraken (SOL|JUP)\/USD reference|GeckoTerminal/i.test(
             c.source,
           )),
     )

@@ -12,9 +12,13 @@ const ranges = [
 export default function DeskHistory({
   id,
   active,
+  observed,
+  source,
 }: {
   id: string;
   active: boolean;
+  observed: { t: number; v: number }[];
+  source?: string;
 }) {
   const [selection, setSelection] = useState(0),
     [records, setRecords] = useState<Record<string, MarketHistoryRes>>({}),
@@ -71,6 +75,13 @@ export default function DeskHistory({
           short
           step={sel.step}
           candles={hasCandles(hist)}
+        />
+      ) : (error === key || hist) && observed.length ? (
+        <HistoryChart
+          title="Observed this session"
+          source={source}
+          points={observed}
+          short
         />
       ) : (
         <div className="q-chart-empty" role="status">

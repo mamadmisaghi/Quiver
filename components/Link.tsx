@@ -6,6 +6,7 @@ import {
   type AnchorHTMLAttributes,
   type MouseEvent,
 } from "react";
+import { warmRoute,workspaceNavigation } from "@/lib/workspace-navigation";
 import { useRouter } from "next/navigation";
 
 type Props = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
@@ -46,7 +47,7 @@ const Link = forwardRef<HTMLAnchorElement, Props>(function Link(
         .connection?.saveData
     )
       return;
-    router.prefetch(href);
+    warmRoute(router,href);
   };
   const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
@@ -74,6 +75,7 @@ const Link = forwardRef<HTMLAnchorElement, Props>(function Link(
 
     event.preventDefault();
     const path = target.pathname + target.search + target.hash;
+    window.dispatchEvent(new CustomEvent(workspaceNavigation,{detail:path}));
     startTransition(() => {
       if (replace) router.replace(path, { scroll });
       else router.push(path, { scroll });

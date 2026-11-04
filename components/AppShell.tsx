@@ -3,6 +3,8 @@ import AccountMenu from "@/components/auth/AccountMenu";
 import Link from "@/components/Link";
 import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import WorkspaceOutlet,{warmWorkspaceModule} from "./WorkspaceOutlet";
+import {quickPages,warmRoute} from "@/lib/workspace-navigation";
 import Logo from "./Logo";
 import dynamic from "next/dynamic";
 // ⌘K palette loads on first open: it isn't needed for first paint, so it stays out of every /app page's initial JS.
@@ -44,10 +46,13 @@ function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; 
 export default function AppShell({ children }: { active?: string; children: React.ReactNode }) {
   const router=useRouter();
   useEffect(()=>{
-    if(!window.crypto?.subtle)return;
-    if((navigator as Navigator & {connection?:{saveData?:boolean;effectiveType?:string}}).connection?.saveData)return;
-    const warm=()=>{if(!document.hidden)for(const route of ["/app/new","/app/run","/app/settings"])if(route!==window.location.pathname)router.prefetch(route);};
-    const timer=window.setTimeout(warm,750);return ()=>window.clearTimeout(timer);
+    const connection=(navigator as Navigator & {connection?:{saveData?:boolean;effectiveType?:string}}).connection;
+    if(connection?.saveData||connection?.effectiveType?.includes("2g"))return;
+    const timer=window.setTimeout(()=>{
+      if(document.hidden)return;
+      for(const route of quickPages){warmWorkspaceModule(route);if(route!==location.pathname)warmRoute(router,route);}
+    },350);
+    return ()=>window.clearTimeout(timer);
   },[router]);
   const path = usePathname() || "/app";
   const paperTrades = path === "/app/run" || path.startsWith("/app/run/");
@@ -114,7 +119,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
             </div>
           </div>
         )}
-        <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" data-layout={wideLayout ? "wide" : undefined} id="main">{children}</main>
+        <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" data-layout={wideLayout ? "wide" : undefined} id="main"><WorkspaceOutlet>{children}</WorkspaceOutlet></main>
         <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 q-app-bottom grid grid-cols-5 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden">
           {BOTTOM.map(([n, h, d]) => { const on = isOn(h, path); return (
             <Link key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>

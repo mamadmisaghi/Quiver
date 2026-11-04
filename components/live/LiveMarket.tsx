@@ -24,6 +24,7 @@ const fmt = (n: number, d = 2) =>
     maximumFractionDigits: d,
   });
 const quotes = new Map<string,Price>();
+const observed = new Map<string,{t:number;v:number}[]>();
 export default function LiveMarket({ net, active }: { net: LiveNetwork; active:boolean }) {
   const perp = net === "hyperliquid-mainnet",
     stock = net === "robinhood-mainnet",
@@ -60,6 +61,10 @@ export default function LiveMarket({ net, active }: { net: LiveNetwork; active:b
         if (!v.source || !Number.isFinite(v.at))
           throw Error("The quote could not be verified.");
         if (alive) {
+          if(v.price!==null && Number.isFinite(v.price)){
+            const series=quotes.get(key)?.source===v.source ? observed.get(key)??[] : [];
+            if(!series.length || v.at>series[series.length-1].t)observed.set(key,[...series.slice(-119),{t:v.at,v:v.price}]);
+          }
           quotes.set(key,v);
           setFresh(v);
           setError("");
@@ -223,7 +228,7 @@ export default function LiveMarket({ net, active }: { net: LiveNetwork; active:b
           </figure>
         )}
       </div>
-      <DeskHistory key={historyId} id={historyId} active={active} />
+      <DeskHistory key={historyId} id={historyId} active={active} observed={observed.get(key)??[]} source={record?.source} />
       <dl className="live-stats">
         {stats.map(([name, val]) => (
           <div key={name}>

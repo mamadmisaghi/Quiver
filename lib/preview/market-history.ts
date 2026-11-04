@@ -91,6 +91,39 @@ async function spotBars(
       : [],
   );
 }
+async function krakenBars(
+  symbol: string,
+  from: number,
+  to: number,
+  step: number,
+) {
+  const pair = symbol + "USD",
+    query = new URLSearchParams({
+      pair,
+      interval: String(step / 60000),
+      since: String(from / 1000 - 1),
+    });
+  const raw = (await marketJson(
+    "https://api.kraken.com/0/public/OHLC?" + query,
+    undefined,
+    60000,
+  )) as { error?: unknown[]; result?: Record<string, unknown> };
+  const rows = raw.result?.[pair];
+  if (raw.error?.length || !Array.isArray(rows)) return [];
+  return validBars(
+    rows
+      .filter(Array.isArray)
+      .map(([t, o, h, l, c]) => ({
+        t: Number(t) * 1000 + step,
+        o: Number(o),
+        h: Number(h),
+        l: Number(l),
+        c: Number(c),
+      })),
+    from,
+    to,
+  );
+}
 type Pool = {
   attributes?: { address?: string };
   relationships?: {
@@ -192,14 +225,31 @@ export async function readMarketHistory(
           c: Number(x.c),
         }));
   } else if (market.venue === "solana") {
-    if (market.symbol === "SOL") {
-      source = "Coinbase SOL/USD reference";
-      input = await spotBars("SOL", from, to, step).catch(() => []);
-    }
-    if (!input.length) {
-      source = "GeckoTerminal · Solana pool trades";
-      input = await poolBars(market.id.split(":")[2], tf, from, to, step);
-    }
+    const symbol = market.symbol;
+    const reference = async (provider: string, read: Promise<Bar[]>) => {
+      const bars = validBars(await read, from, to);
+      if (!bars.length) throw Error("Empty candle history");
+      return { source: provider, bars };
+    };
+    const refs = [
+      reference(
+        "Kraken " + symbol + "/USD reference",
+        krakenBars(symbol, from, to, step),
+      ),
+    ];
+    if (symbol === "SOL")
+      refs.push(
+        reference(
+          "Coinbase SOL/USD reference",
+          spotBars("SOL", from, to, step),
+        ),
+      );
+    const response = await Promise.any(refs).catch(async () => ({
+      source: "GeckoTerminal · Solana pool trades",
+      bars: await poolBars(market.id.split(":")[2], tf, from, to, step),
+    }));
+    source = response.source;
+    input = response.bars;
   } else if (market.assetClass === "equity" || market.assetClass === "etf") {
     source = "Tiingo underlying equity";
     dataSource = "tiingo";
