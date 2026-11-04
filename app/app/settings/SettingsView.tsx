@@ -11,10 +11,13 @@ import { useQ } from "@/lib/api/useQ";
 import { pauseAllPaperSessions, PAPER_SESSION_EVENT } from "@/lib/paper/sessions";
 import { getPreviewWorkspace } from "@/lib/api/preview-workspace";
 import WorkspaceDefaults from "./WorkspaceDefaults";
-import AlertsCard from "./AlertsCard";
-import ChannelsCard from "./ChannelsCard";
-import SecretsCard from "./SecretsCard";
-import { ProfileCard, FollowingCard, CopiesCard } from "./SocialCards";
+import dynamic from "next/dynamic";
+const AlertsCard=dynamic(()=>import("./AlertsCard"));
+const ChannelsCard=dynamic(()=>import("./ChannelsCard"));
+const SecretsCard=dynamic(()=>import("./SecretsCard"));
+const ProfileCard=dynamic(()=>import("./SocialCards").then(m=>m.ProfileCard));
+const FollowingCard=dynamic(()=>import("./SocialCards").then(m=>m.FollowingCard));
+const CopiesCard=dynamic(()=>import("./SocialCards").then(m=>m.CopiesCard));
 
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex items-baseline justify-between gap-4 py-2.5"><dt className="text-[13.5px] text-muted">{k}</dt><dd className="tnum text-right font-mono text-[13.5px] text-ink">{v}</dd></div>;

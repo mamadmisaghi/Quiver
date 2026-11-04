@@ -2,7 +2,8 @@
 // Backtest stats + costs (backend M3, api-contracts §13). Coverage labels via fmtSource: Chainlink / Modeled / —.
 import { useEffect, useState } from "react";
 import { API_MODE, api, ApiErr, reasonOf, checkEquity, errOf, rangeGuidance, fmtNum, fmtPct, fmtUsd, fmtSource, warmupMsg, WARMUP_SHORT, tone, type BacktestRes, type Strategy } from "@/lib/api";
-import { Card, Spark } from "./ui";
+import HistoryChart from "./charts/HistoryChart";
+import { Card } from "./ui";
 
 const cap = (x: string) => x.replace(/^./, (c) => c.toUpperCase());
 /** Human label for a coverage row: market symbol/name when known, otherwise a venue-level label. Never a raw instrument id. */
@@ -99,7 +100,7 @@ export default function BacktestPanel({ strategy, days = 30 }: { strategy: Strat
                   <div key={k} className="flex justify-between"><dt className="text-ink-2">{k}</dt><dd className="tnum font-mono">{fmtUsd(v)}</dd></div>))}
                 <div className="flex justify-between border-t border-line pt-2"><dt className="text-ink-2">Total</dt><dd className="tnum font-mono">{fmtUsd((Number(co.feesUsd) + Number(co.gasUsd) + Number(co.spreadUsd) + Number(co.impactUsd)).toFixed(2))}</dd></div>
               </dl>) : <p className="mt-3 text-[13px] text-muted">Fees {fmtUsd(res.feesUsd)}</p>}
-            {res.equityCurve.length > 1 && <div className="mt-4"><Spark fluid tone={Number(res.returnPct) < 0 ? "short" : "long"} pts={res.equityCurve.map(([, v]) => Number(v))} /></div>}
+            {res.equityCurve.length > 1 && <div className="mt-4"><HistoryChart title="Backtest equity" source="Simulated account history" points={res.equityCurve.map(([t,v])=>({t:Date.parse(t),v:Number(v)}))} /></div>}
           </div>
         </div>
         <div className="mt-5">

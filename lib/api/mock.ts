@@ -1,3 +1,4 @@
+import { publicChartHistory } from "./chart-history";
 import { readKeyDefaults } from "./browser-settings";
 import { listPaperSessions, sessionStatus } from "@/lib/paper/sessions";
 import { isQuoteSession } from "@/lib/paper/account";
@@ -125,11 +126,7 @@ export const mockApi: QuiverApi = {
     if (!market) throw new ApiErr("not_found", "That market isn’t listed.", 404);
     return { market, returns: { "1d": null, "7d": null, "30d": null }, high30d: null, low30d: null, volatility30dPct: null, synthetic: false, notice: null };
   },
-  async marketHistory(id, { tf, range }) {
-    const now = new Date().toISOString();
-    return { instrumentId: id, tf, range, from: now, to: now, bars: [], synthetic: false, dataSource: "fallback", coverage: [], warmup: false, warmupNotice: null, notice: null,
-      stats: { open: null, high: null, low: null, last: null, changePct: null, rangePct: null, volatilityPct: null, bars: 0 } };
-  },
+  marketHistory(id, { tf, range }) { return publicChartHistory(id,tf,range); },
   ...mockExt(runOf),
   ...mockSocial,
   ...mockShare,
@@ -160,7 +157,7 @@ export const mockApi: QuiverApi = {
   async strategy(id) {
     const draft = (await listPreviewDrafts()).find(s => s.id === id);
     if (draft) return draft;
-    throw new ApiErr("not_found", "This draft isn’t saved in this browser. Open it on the original device or import a backup.", 404);
+    throw new ApiErr("not_found", "Draft not found in this browser. Open it on the original device or import a backup.", 404);
   },
   compileImage: previewCompileImage,
   compile: previewCompile,

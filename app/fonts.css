@@ -138,3 +138,19 @@
 }
 
 :root{--font-geist-sans:"Geist",Arial,sans-serif;--font-geist-mono:"Geist Mono",Consolas,monospace;--font-instrument-serif:"Instrument Serif",Georgia,serif;}
+@font-face {
+  font-family: "Quiver figures";
+  src: url("/fonts/rubik-numeric-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 599;
+  font-display: swap;
+  unicode-range: U+0024-0025,U+002B-0039,U+00B1,U+2080-2089,U+20AC,U+2212;
+}
+@font-face {
+  font-family: "Quiver figures";
+  src: url("/fonts/rubik-numeric-bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600 900;
+  font-display: swap;
+  unicode-range: U+0024-0025,U+002B-0039,U+00B1,U+2080-2089,U+20AC,U+2212;
+}

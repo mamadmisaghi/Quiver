@@ -4,7 +4,9 @@
 // The live quote is the hero: it re-reads GET /markets every 5s and flashes on change (data-motion="price-tick" for Ellis).
 import { onSession } from "@/lib/api/session";
 import Link from "@/components/Link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import HistoryChart,{chartBars,hasCandles} from "@/components/charts/HistoryChart";
+import QuoteNumber from "@/components/charts/QuoteNumber";
 import VenueMark from "@/components/VenueMark";
 import SignInButton from "@/components/SignInButton";
 import { Card, Pill } from "@/components/ui";
@@ -21,11 +23,12 @@ export default function MarketDetailView({ id }: { id: string }) {
   const [x, setX] = useState<Extra>({ positions: [], strategies: [] });
   const [err, setErr] = useState<Error | null>(null);
   const [live, setLive] = useState<Market | null>(null);
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+
   const [ri, setRi] = useState(0);
   const [hist, setHist] = useState<MarketHistoryRes | null>(null);
   const [histErr, setHistErr] = useState<string | null>(null);
-  const warm = warmupMsg(hist?.warmupNotice);
+  const visibleHist=hist?.instrumentId===id && hist.range===CHART_RANGES[ri].range?hist:null;
+  const warm = warmupMsg(visibleHist?.warmupNotice);
   const [nonce, setNonce] = useState(0);
   useEffect(() => onSession(() => setNonce((n) => n + 1)), []); // inline sign-in refetches
   const [now, setNow] = useState(0);
@@ -42,20 +45,18 @@ export default function MarketDetailView({ id }: { id: string }) {
   }, [d, id]);
   const sel = CHART_RANGES[ri];
   useEffect(() => { let on = true; api.marketHistory(id, { tf: sel.tf, range: sel.range }).then((h) => { if (on) { setHist(h); setHistErr(null); } }).catch((e) => { if (on) { setHist(null); setHistErr(e instanceof ApiErr ? errCopy(e.code, e.message) : "Couldn’t load the chart."); } }); return () => { on = false; }; }, [id, sel.tf, sel.range]);
-  const last = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!d) return; last.current = d.market.price;
+    if (!d) return; let alive=true;
     const t = setInterval(() => {
       if (document.hidden) return;
       api.markets({ q: d.market.symbol }).then((p) => {
-        const m = p.items.find((y) => y.id === id); if (!m) return;
-        if (m.price && last.current && m.price !== last.current) setFlash(Number(m.price) > Number(last.current) ? "up" : "down");
-        last.current = m.price; setLive(m); setNow(Date.now());
+        const m = p.items.find((y) => y.id === id); if (!m || !alive) return;
+        setLive(m); setNow(Date.now());
       }).catch(() => {});
     }, 5000);
-    return () => clearInterval(t);
+    return () => {alive=false;clearInterval(t);};
   }, [d, id]);
-  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 1100); return () => clearTimeout(t); }, [flash]);
 
   if (err) {
     const auth = err instanceof ApiErr && err.status === 401, nf = err instanceof ApiErr && err.status === 404;
@@ -74,20 +75,19 @@ export default function MarketDetailView({ id }: { id: string }) {
           <p className="mt-1 truncate text-[14px] text-muted">{m.name}</p>
         </div>
         <div className="text-right" aria-live="polite">
-          <div data-testid="md-price" data-motion="price-tick" data-dir={flash ?? undefined}
-            className={`tnum rounded-[8px] px-1 font-mono text-[34px] leading-none font-medium transition-colors duration-[1100ms] ${flash === "up" ? "bg-long/15" : flash === "down" ? "bg-short/15" : "bg-transparent"}`}>{px(m, m.price)}</div>
+          <div data-testid="md-price" className="q-market-hero">{m.price==null?"—":<QuoteNumber key={m.id} value={m.price} unit={m.kind==="outcome"?"percent":"usd"}/>}</div>
           <div className="mt-2 flex items-center justify-end gap-3 text-[13px]"><span className={`tnum font-mono ${tone(m.change24hPct)}`}>{fmtPct(m.change24hPct, { sign: true, dp: 2 })} 24h</span><span className="text-muted">{fmtSource(m.priceSource, m.priceAt, now)}</span></div>
         </div>
       </header>
 
       <Card className="mt-6 p-4 sm:p-5" data-testid="md-chart">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div role="tablist" aria-label="Chart range" className="flex gap-1">{CHART_RANGES.map((r, i) => <button key={r.range} type="button" role="tab" aria-selected={ri === i} onClick={() => setRi(i)} title={`${r.tf} bars`}
+          <div role="tablist" aria-label="Chart range" className="q-chart-switch">{CHART_RANGES.map((r, i) => <button key={r.range} type="button" role="tab" aria-selected={ri === i} onClick={() => setRi(i)} title={`${r.tf} bars`}
             className={`btn rounded-full px-3 py-1 font-mono text-[12.5px] ${ri === i ? "bg-white/[.08] text-ink" : "text-muted hover:text-ink"}`}>{r.label}</button>)}</div>
-          <div className="flex items-center gap-2">{!!hist?.bars.length && <span data-testid="md-datasource" className="whitespace-nowrap rounded-[4px] border border-line-2 px-1.5 py-0.5 font-mono text-[11.5px] text-muted">Data: {hist.dataSource === "tiingo" ? "Tiingo" : "fallback"}</span>}{warm && <span data-testid="md-warmup" title={warm} className="whitespace-nowrap font-mono text-[11.5px] text-muted">{WARMUP_SHORT}<span className="sr-only">: {warm}</span></span>}{hist?.synthetic && <span data-testid="md-synthetic"><Pill tone="warn">Synthetic</Pill></span>}</div>
+          <div className="flex items-center gap-2">{!!visibleHist?.bars.length && <span data-testid="md-datasource" className="whitespace-nowrap rounded-[4px] border border-line-2 px-1.5 py-0.5 font-mono text-[11.5px] text-muted">Data: {visibleHist.coverage[0]?.source ?? visibleHist.dataSource}</span>}{warm && <span data-testid="md-warmup" title={warm} className="whitespace-nowrap font-mono text-[11.5px] text-muted">{WARMUP_SHORT}<span className="sr-only">: {warm}</span></span>}{visibleHist?.synthetic && <span data-testid="md-synthetic"><Pill tone="warn">Synthetic</Pill></span>}</div>
         </div>
-        {hist && hist.bars.length > 1 ? <Chart h={hist} m={m} label={sel.label} /> : histErr ? <p role="alert" className="mt-4 grid h-[220px] place-items-center text-[13.5px] text-muted">{histErr}</p> : hist ? <p className="mt-4 grid h-[220px] place-items-center text-[13.5px] text-muted">No price history for this range yet.</p> : <div className="mt-4 h-[260px] animate-pulse rounded-[10px] bg-white/[.03]" />}
-        {hist?.notice && hist.notice !== warm && <p className="mt-2 text-[12px] text-muted" data-testid="md-notice">{hist.notice}</p>}
+        {visibleHist && visibleHist.bars.length > 1 ? <HistoryChart key={id+sel.range} points={chartBars(visibleHist)} title={m.symbol+" · "+sel.label} source={visibleHist.coverage[0]?.source ?? "Price history"} unit={m.kind==="outcome"?"percent":"usd"} candles={hasCandles(visibleHist)} step={({"15m":900000,"1h":3600000,"4h":14400000,"1d":86400000})[sel.tf]} /> : histErr ? <p role="alert" className="mt-4 grid h-[220px] place-items-center text-[13.5px] text-muted">{histErr}</p> : visibleHist ? <p className="mt-4 grid h-[220px] place-items-center text-[13.5px] text-muted">No price history for this range yet.</p> : <div className="mt-4 h-[260px] animate-pulse rounded-[10px] bg-white/[.03]" />}
+        {visibleHist?.notice && visibleHist.notice !== warm && <p className="mt-2 text-[12px] text-muted" data-testid="md-notice">{visibleHist.notice}</p>}
       </Card>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_22rem]">
@@ -128,32 +128,6 @@ export default function MarketDetailView({ id }: { id: string }) {
           <p className="text-center text-[12px] text-muted">Opens the builder with an idea filled in. Nothing runs until you say so.</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Chart({ h, m, label }: { h: MarketHistoryRes; m: Market; label: string }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const W = 800, H = 260;
-  const { d, area, ys, vals } = useMemo(() => {
-    const vals = h.bars.map((b) => Number(b.c)); const mn = Math.min(...vals), mx = Math.max(...vals), pad = (mx - mn) * 0.08 || 1;
-    const ys = vals.map((v) => H - 8 - ((v - mn + pad) / (mx - mn + 2 * pad)) * (H - 16));
-    const d = ys.map((y, i) => `${i ? "L" : "M"}${((i / (ys.length - 1)) * W).toFixed(1)},${y.toFixed(1)}`).join(" ");
-    return { d, area: `${d} L${W},${H} L0,${H} Z`, ys, vals };
-  }, [h]);
-  const up = vals[vals.length - 1] >= vals[0], col = up ? "var(--q-up)" : "var(--q-down)";
-  const i = hover ?? vals.length - 1, pt = h.bars[i];
-  const fmtT = (t: string) => new Date(t).toLocaleString("en-US", h.range === "1d" ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric" });
-  return (
-    <div className="mt-4">
-      <div className="tnum flex items-baseline gap-3 font-mono text-[13px]" aria-live="off"><span>{px(m, pt.c)}</span><span className="text-muted">{fmtT(pt.t)}</span>
-        <span className={up ? "text-long" : "text-short"}>{fmtPct(String(((vals[vals.length - 1] - vals[0]) / vals[0]) * 100), { sign: true, dp: 2 })} {label}</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="mt-2 block h-[220px] w-full touch-none sm:h-[260px]" role="img" aria-label={`${m.symbol} price, ${label}`} data-motion="chart-draw"
-        onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setHover(Math.max(0, Math.min(vals.length - 1, Math.round(((e.clientX - r.left) / r.width) * (vals.length - 1))))); }} onPointerLeave={() => setHover(null)}>
-        <path d={area} fill={col} fillOpacity=".07" />
-        <path d={d} fill="none" stroke={col} strokeWidth="1.6" vectorEffect="non-scaling-stroke" strokeLinejoin="round" pathLength={1} data-motion="chart-line" />
-        {hover != null && <><line x1={(i / (vals.length - 1)) * W} x2={(i / (vals.length - 1)) * W} y1={0} y2={H} stroke="var(--line-2)" vectorEffect="non-scaling-stroke" /><circle cx={(i / (vals.length - 1)) * W} cy={ys[i]} r={3.5} fill={col} /></>}
-      </svg>
     </div>
   );
 }

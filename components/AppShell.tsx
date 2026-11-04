@@ -1,7 +1,7 @@
 "use client";
 import AccountMenu from "@/components/auth/AccountMenu";
 import Link from "@/components/Link";
-import { usePathname } from "next/navigation";
+import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Logo from "./Logo";
 import dynamic from "next/dynamic";
@@ -34,7 +34,7 @@ const BOTTOM: [string, string, string][] = [["Home", ...nav("Home").slice(1)], [
 function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; path: string; tall?: boolean }) {
   const on = isOn(href, path);
   return (
-    <Link prefetch={false} href={href} aria-current={on ? "page" : undefined}
+    <Link href={href} aria-current={on ? "page" : undefined}
       className={`q-nav-item btn flex items-center gap-2.5 rounded-[8px] px-2.5 ${tall ? "min-h-11 py-2.5 text-[15px]" : "py-[7px] text-[13.5px]"} ${on ? "bg-white/[.06] text-ink" : "text-muted hover:bg-white/[.03] hover:text-ink"}`}>
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={on ? "text-accent" : ""}><path d={d} /></svg>
       {n}
@@ -42,6 +42,13 @@ function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; 
   );
 }
 export default function AppShell({ children }: { active?: string; children: React.ReactNode }) {
+  const router=useRouter();
+  useEffect(()=>{
+    if(!window.crypto?.subtle)return;
+    if((navigator as Navigator & {connection?:{saveData?:boolean;effectiveType?:string}}).connection?.saveData)return;
+    const warm=()=>{if(!document.hidden)for(const route of ["/app/new","/app/run","/app/settings"])if(route!==window.location.pathname)router.prefetch(route);};
+    const timer=window.setTimeout(warm,750);return ()=>window.clearTimeout(timer);
+  },[router]);
   const path = usePathname() || "/app";
   const paperTrades = path === "/app/run" || path.startsWith("/app/run/");
   const wideLayout = path === "/app/live" || path === "/app" || path === "/app/portfolio" || paperTrades;
@@ -70,7 +77,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
       {cmdk && <CommandPalette setOpen={setCmdk} pages={[...NAV, ...ACCOUNT].map(([n, h]) => [n, h] as [string, string])} />}
       <aside className="q-sidebar sticky top-0 hidden h-screen self-start overflow-y-auto w-[240px] shrink-0 flex-col border-r border-line bg-bg-2 px-3 py-5 lg:flex">
         <Link prefetch={false} href="/" className="q-sidebar-brand px-2"><Logo /></Link>
-        <Link prefetch={false} href="/app/new" className="btn mt-6 flex items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press">
+        <Link href="/app/new" className="btn mt-6 flex items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press">
           <span aria-hidden className="text-[15px] leading-none">+</span> New strategy
         </Link>
         <button type="button" onClick={() => setCmdk(true)} aria-haspopup="dialog" data-testid="cmdk-open" className="btn mt-3 flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[13px] text-muted hover:border-line-2 hover:text-ink">
@@ -87,7 +94,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-bg/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:hidden" style={{ boxSizing: "content-box" }}>
           <Link prefetch={false} href="/" className="flex min-h-11 items-center" aria-label="Quiver home"><Logo /></Link>
           <div className="flex items-center gap-2">
-            <Link prefetch={false} href="/app/new" className="btn flex min-h-11 items-center rounded-full bg-accent px-4 text-[13px] font-medium text-bg">+ New</Link>
+            <Link href="/app/new" className="btn flex min-h-11 items-center rounded-full bg-accent px-4 text-[13px] font-medium text-bg">+ New</Link>
             <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open} aria-controls="app-drawer" className="btn flex h-11 w-11 items-center justify-center rounded-full border border-line-2">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden><path d="M3 6h14M3 10h14M3 14h14" /></svg>
             </button>
@@ -110,7 +117,7 @@ export default function AppShell({ children }: { active?: string; children: Reac
         <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" data-layout={wideLayout ? "wide" : undefined} id="main">{children}</main>
         <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 q-app-bottom grid grid-cols-5 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden">
           {BOTTOM.map(([n, h, d]) => { const on = isOn(h, path); return (
-            <Link prefetch={false} key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>
+            <Link key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={on ? "text-accent" : ""}><path d={d} /></svg>{n}
             </Link>); })}
           <button type="button" onClick={() => setOpen(true)} aria-label="More pages" className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${BOTTOM.some(([, h]) => isOn(h, path)) ? "text-muted" : "text-ink"}`}>

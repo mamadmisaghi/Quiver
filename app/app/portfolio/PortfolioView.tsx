@@ -1,4 +1,5 @@
 "use client";
+import HistoryChart from "@/components/charts/HistoryChart";
 import AccountActivity from "@/components/live/AccountActivity";
 // M4.3: GET /v1/portfolio/runs, /portfolio/allocation?by=, /portfolio/history. Paper mode only in the UI for now.
 import { useState } from "react";
@@ -21,18 +22,7 @@ const tab = (on: boolean) => `btn rounded-full border px-3.5 py-1.5 text-[13px] 
 function History({ h }: { h: { points: { ts: string; equityUsd: string; pnlUsd: string }[] } }) {
   const pts = h.points;
   if (pts.length < 2) return <p className="mt-4 text-[13.5px] text-muted" data-testid="pf-history-empty">The chart starts after your first paper run records equity.</p>;
-  const W = 600, H = 160, ys = pts.map((p) => Number(p.equityUsd)), mn = Math.min(...ys), mx = Math.max(...ys);
-  const x = (i: number) => (i / (pts.length - 1)) * W, y = (v: number) => H - 6 - ((v - mn) / (mx - mn || 1)) * (H - 12);
-  const d = ys.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const last = pts[pts.length - 1], up = !last.pnlUsd.startsWith("-"), col = up ? "var(--q-up)" : "var(--q-down)";
-  return (
-    <figure className="mt-4" data-testid="pf-history">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block h-[160px] w-full" role="img" aria-label={`Combined paper equity from ${fmtUsd(pts[0].equityUsd)} to ${fmtUsd(last.equityUsd)}`}>
-        <path d={`${d} L${W},${H} L0,${H} Z`} fill={col} fillOpacity=".06" />
-        <path d={d} fill="none" stroke={col} strokeWidth="1.5" vectorEffect="non-scaling-stroke" data-motion="portfolio-line" />
-      </svg>
-      <figcaption className="mt-2 flex justify-between font-mono text-[11.5px] tabular-nums text-muted"><span>{day(pts[0].ts)}</span><span>low {fmtUsd(String(mn), { dp: 0 })} · high {fmtUsd(String(mx), { dp: 0 })}</span><span>{day(last.ts)}</span></figcaption>
-    </figure>);
+  return <div data-testid="pf-history"><HistoryChart title="Portfolio equity" source="Combined paper account history" points={pts.map(p=>({t:Date.parse(p.ts),v:Number(p.equityUsd)}))}/></div>;
 }
 
 export default function PortfolioView() {

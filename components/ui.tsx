@@ -32,13 +32,17 @@ export const Card = ({ children, className = "", ...rest }: React.HTMLAttributes
 export const usd = (n: number, d = 0) => (n < 0 ? "−" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 export const pct = (n: number, d = 1) => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(d) + "%";
 export const Spark = ({ pts, w = 120, h = 32, tone = "long", fluid, draw }: { pts: number[]; w?: number; h?: number; tone?: "long" | "short" | "accent"; fluid?: boolean; draw?: boolean }) => {
-  const mn = Math.min(...pts), mx = Math.max(...pts);
-  const d = pts.map((p, i) => `${i ? "L" : "M"}${((i / (pts.length - 1)) * w).toFixed(1)},${(h - 2 - ((p - mn) / (mx - mn || 1)) * (h - 4)).toFixed(1)}`).join(" ");
+  const vals=pts.filter(Number.isFinite);
+  if(!vals.length)return null;
+  const mn=Math.min(...vals),mx=Math.max(...vals),pad=3;
+  const yy=(v:number)=>mx===mn?h/2:h-pad-(v-mn)/(mx-mn)*(h-2*pad);
+  const d=vals.map((v,i)=>(i?"L":"M")+(pad+i/Math.max(1,vals.length-1)*(w-2*pad)).toFixed(2)+","+yy(v).toFixed(2)).join(" ");
   const col = { long: "var(--q-up)", short: "var(--q-down)", accent: "var(--q-amber)" }[tone];
   return (
     <svg width={fluid ? "100%" : w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden className="block">
-      {fluid && <path d={`${d} L${w},${h} L0,${h} Z`} fill={col} fillOpacity=".06" />}
-      <path d={d} pathLength={draw ? 1 : undefined} data-motion={draw ? "equity-line" : undefined} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path d={d+" L"+(w-pad)+","+h+" L"+pad+","+h+" Z"} fill={col} fillOpacity=".065" />
+      <path d={d} pathLength={draw ? 1 : undefined} data-motion={draw ? "equity-line" : undefined} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      {!fluid && <circle cx={w-pad} cy={yy(vals[vals.length-1])} r={1.9} fill={col}/>}
     </svg>
   );
 };

@@ -619,3 +619,11 @@
 @media (hover:hover) { .desk-venue-tab:hover { background:var(--raised); } .desk-text-action:hover,.desk-picker-list a:hover,.live-home-list a:hover { color:var(--accent); } .desk-picker-list a:hover { background:var(--raised); } }
 @media (max-width:1100px) { .desk-market-panel[data-state="active"] { grid-template-columns:minmax(0,1fr); } .desk-ticket { border-left:0; border-top:1px solid var(--line); } }
 @media (max-width:560px) { .desk-venue-tab { flex-direction:column; align-items:flex-start; gap:5px; padding:8px; } .desk-venue-tab strong { font-size:12px; } .desk-venue-tab small { display:none; } .desk-ticket { padding:16px; } .trading-desk .live-header { align-items:flex-start; } }
+.desk-venue-tabs { position:relative; isolation:isolate; }
+.desk-venue-slider { position:absolute; z-index:-1; pointer-events:none; top:4px; bottom:4px; left:4px; width:calc((100% - 16px) / 3); border:1px solid color-mix(in srgb,var(--accent) 48%,var(--line)); border-radius:8px; background:color-mix(in srgb,var(--accent) 9%,var(--card)); transform:translateX(calc(var(--venue-index) * (100% + 4px))); }
+.desk-venue-tab[data-state=active],.desk-venue-tab[data-state=active]:hover { border-color:transparent; background:transparent; }
+@media (prefers-reduced-motion:no-preference) {
+  .desk-venue-slider { transition:transform 150ms cubic-bezier(.22,.72,.28,1); }
+  .desk-market-panel[data-state=active] > section { animation:q-market-tab-in 135ms ease-out both; }
+  @keyframes q-market-tab-in { from { opacity:.78; transform:translateY(2px); } to { opacity:1; transform:none; } }
+}

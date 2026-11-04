@@ -359,3 +359,40 @@ html[data-design="c"] { --q-shadow-focus:none; }
 }
 @media (hover:none),(pointer:coarse) { .q-row-edit,.q-icon-action,.q-strategy-title,.q-row-menu [role=menuitem] { min-height:44px; } .q-icon-action { width:44px; } }
 @media (prefers-reduced-motion:no-preference) { .q-strategy-title,.q-row-edit,.q-icon-action,.q-navigable-row,.q-linked-row { transition:color 120ms,border-color 120ms,background-color 120ms; } .q-strategy-title>svg { transition:transform 120ms,opacity 120ms; } }
+
+/* Financial figures share tabular digits while adjacent labels keep the workspace typeface. */
+:root { --q-figures:"Quiver figures",var(--font-geist-sans),system-ui,sans-serif; }
+.q-app-shell .tnum,.q-app-shell .q-number,.q-app-shell [data-label=Price],.q-app-shell .live-stats dd,
+.q-app-shell .live-price,.q-app-shell .q-run-stat,.q-app-shell .q-amount { font-family:var(--q-figures); font-variant-numeric:lining-nums tabular-nums; font-feature-settings:"tnum"; }
+.q-app-shell .live-price,.q-market-hero { font-size:clamp(30px,3.5vw,49px); line-height:1.04; letter-spacing:-.045em; font-weight:700; }
+.q-market-hero { font-family:var(--q-figures); }
+.q-precise-price { position:relative; display:inline-flex; }
+.q-price-tip { position:absolute; top:100%; right:0; z-index:5; width:max-content; font:13px var(--q-figures); padding:6px 8px; border:1px solid var(--line-2); border-radius:5px; color:var(--ink); background:var(--raised); }
+.q-history-chart { min-width:0; margin-top:14px; contain:layout; }
+.q-history-head,.q-plot-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.q-chart-label,.q-plot-toolbar>span { font-size:12px; line-height:1.5; color:var(--muted); }
+.q-chart-readout { display:flex; align-items:baseline; gap:9px; margin-top:3px; }
+.q-chart-readout strong { color:var(--ink); font-size:clamp(20px,2.1vw,29px); line-height:1.15; letter-spacing:-.035em; font-weight:700; }
+.q-chart-readout small { font:500 12px var(--q-figures); font-variant-numeric:tabular-nums; }
+.q-chart-readout .q-up { color:var(--q-up); }.q-chart-readout .q-down { color:var(--q-down); }
+.q-history-legend { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 3px; min-height:16px; color:var(--muted); font:11px/1.5 var(--font-geist-sans); }
+.q-chart-ohlc { font-family:var(--q-figures); font-variant-numeric:tabular-nums; }
+.q-history-chart svg { display:block; touch-action:pan-y; cursor:crosshair; border-radius:3px; }
+.q-history-chart svg:focus-visible { outline:1px solid var(--accent); outline-offset:2px; }
+.q-history-chart svg text { font:10px var(--q-figures); font-variant-numeric:tabular-nums; fill:var(--muted); }
+.q-plot-grid { stroke:var(--line-2); stroke-width:.7; stroke-dasharray:2 5; }
+.q-plot-cursor { stroke:var(--muted); stroke-dasharray:3 3; }
+.q-chart-switch { display:inline-flex; flex-wrap:wrap; gap:2px; padding:2px; border:1px solid var(--line); border-radius:7px; background:var(--bg); }
+.q-chart-switch button { padding:4px 8px; min-height:26px; border-radius:4px; font:500 11px var(--font-geist-sans); color:var(--muted); }
+.q-chart-switch button:is([aria-pressed=true],[aria-selected=true]) { background:var(--raised); color:var(--accent); }
+.q-chart-empty { min-height:110px; display:grid; align-content:center; text-align:center; font-size:12px; color:var(--muted); }
+.q-market-trend { display:inline-flex; align-items:center; }
+.q-desk-history { padding-block:16px 10px; margin-bottom:10px; border-block:1px solid var(--line); }
+.q-app-shell a[data-route-pending=true] { color:var(--accent); }
+@media (hover:hover) { .q-chart-switch button:hover { color:var(--ink); } }
+@media (prefers-reduced-motion:no-preference) {
+  .q-digit-changed { display:inline-block; animation:q-figure-tick 165ms ease-out both; }
+  @keyframes q-figure-tick { from { opacity:.55; transform:translateY(.12em); } to { opacity:1; transform:none; } }
+  .q-app-shell :is([role=tab],.q-chart-switch button,a.q-nav-item,.q-action) { transition:background-color .14s ease-out,color .14s ease-out,border-color .14s ease-out; }
+  .q-app-shell :is([role=tab],.q-chart-switch button,.q-action):active { translate:0 1px; }
+}

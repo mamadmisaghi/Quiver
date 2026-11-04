@@ -100,7 +100,7 @@ export default function LiveDesk() {
           </DeskDialog>
         </header>
         <Tabs.Root value={net} onValueChange={(v) => setNet(v as LiveNetwork)}>
-          <Tabs.List className="desk-venue-tabs" aria-label="Trading venue">
+          <Tabs.List className="desk-venue-tabs" aria-label="Trading venue" style={{ "--venue-index": NETWORKS.indexOf(net) } as React.CSSProperties}><span className="desk-venue-slider" aria-hidden="true"/>
             {NETWORKS.map((n) => (
               <Tabs.Trigger key={n} value={n} className="desk-venue-tab">
                 <VenueMark venue={venues[n].mark} />
@@ -114,7 +114,7 @@ export default function LiveDesk() {
           {NETWORKS.map((n) => (
             <Tabs.Content key={n} value={n} forceMount className="desk-market-panel">
               <section className="desk-market">
-                {net === n && <LiveMarket net={n} />}
+                <LiveMarket net={n} active={net===n} />
               </section>
               <section className="desk-ticket">
                 <div className="desk-ticket-head">

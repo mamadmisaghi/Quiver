@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import QuoteNumber from "../charts/QuoteNumber";
+import DeskHistory from "../charts/DeskHistory";
 import { RefreshCw } from "lucide-react";
 import { shortAddress, type LiveNetwork } from "@/lib/live-client";
 type Price = {
@@ -21,7 +23,8 @@ const fmt = (n: number, d = 2) =>
     minimumFractionDigits: Math.min(2, d),
     maximumFractionDigits: d,
   });
-export default function LiveMarket({ net }: { net: LiveNetwork }) {
+const quotes = new Map<string,Price>();
+export default function LiveMarket({ net, active }: { net: LiveNetwork; active:boolean }) {
   const perp = net === "hyperliquid-mainnet",
     stock = net === "robinhood-mainnet",
     symbols = perp
@@ -30,14 +33,18 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
         ? ["NVDA", "AAPL", "TSLA", "SPY"]
         : ["SOL"];
   const [symbol, setSymbol] = useState(symbols[0]),
-    [record, setRecord] = useState<Price | null>(null),
+    [fresh, setFresh] = useState<Price | null>(null),
     [error, setError] = useState(""),
     [serial, setSerial] = useState(0);
+  const key=net+"|"+symbol;
+  const record=fresh?.symbol===symbol?fresh:quotes.get(key)??null;
+  const historyId=perp?"hl:perp:"+symbol:stock?"underlying:"+symbol:"sol:token:So11111111111111111111111111111111111111112";
   useEffect(() => {
+    if(!active)return;
     let alive = true;
     const ctl = new AbortController();
     let t: ReturnType<typeof setTimeout>;
-    setRecord(null);
+    setFresh(quotes.get(key)??null);
     setError("");
     const poll = async () => {
       try {
@@ -53,12 +60,13 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
         if (!v.source || !Number.isFinite(v.at))
           throw Error("The quote could not be verified.");
         if (alive) {
-          setRecord(v);
+          quotes.set(key,v);
+          setFresh(v);
           setError("");
         }
       } catch (e) {
         if (alive) {
-          setRecord(null);
+          setFresh(quotes.get(key)??null);
           setError(e instanceof Error ? e.message : "Market data unavailable.");
         }
       } finally {
@@ -75,7 +83,7 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
       ctl.abort();
       clearTimeout(t);
     };
-  }, [net, symbol, serial, perp, stock]);
+  }, [active,key,net, symbol, serial, perp, stock]);
   const levels = record?.levels,
     book = levels && levels.length === 2 ? levels : null;
   const max = book
@@ -117,11 +125,11 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
       <div className="live-market-head">
         <h2>Market watch</h2>
         <div className="live-market-opts">
-          <label className="sr-only" htmlFor="watch-pair">
+          <label className="sr-only" htmlFor={"watch-pair-"+net}>
             Market watch symbol
           </label>
           <select
-            id="watch-pair"
+            id={"watch-pair-"+net}
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
           >
@@ -146,7 +154,7 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
           </span>
           <div className="live-price">
             {record?.price != null
-              ? "$" + fmt(record.price, record.price < 1 ? 5 : 2)
+              ? <QuoteNumber value={record.price}/>
               : error
                 ? "Unavailable"
                 : record
@@ -154,7 +162,7 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
                   : "…"}
           </div>
           <div className="live-source">
-            {record?.source ??
+            {error && record ? "Last observation · " : ""}{record?.source ??
               (error ? "Waiting for venue data" : "Reading the venue")}{" "}
             {record && (
               <time dateTime={new Date(record.at).toISOString()}>
@@ -215,6 +223,7 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
           </figure>
         )}
       </div>
+      <DeskHistory key={historyId} id={historyId} active={active} />
       <dl className="live-stats">
         {stats.map(([name, val]) => (
           <div key={name}>

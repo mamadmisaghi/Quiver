@@ -4,7 +4,7 @@ import { canonicalizeWorkflow } from "@/lib/contracts";
 import { updateDraftSteps, type DraftStep } from "@/lib/api/draft-progress";
 import DraftProgress, { type DraftPhase, type Clarification } from "./DraftProgress";
 import type { DraftContinuation } from "@/lib/contracts";
-import WorkflowReview from "./WorkflowReview";
+
 import { workflowView } from "@/services/backend/src/engine/workflow-view";
 import { useEffect, useRef, useState } from "react";
 import { addDraftDetail, classifyDraftPrompt, type DraftGuidance } from "@/services/backend/src/compile/prompt-guidance";
@@ -22,6 +22,7 @@ import { launchHosted } from "@/lib/paper/hosted";
 import { randomHex } from "@/lib/api/live";
 import { createPaperSession } from "@/lib/paper/sessions";
 import { paperProblems } from "@/services/backend/src/workflows/paper";
+const WorkflowReview = dynamic(()=>import("./WorkflowReview"));
 const WorkflowHistoryPanel = dynamic(() => import("./WorkflowHistory"), { ssr:false });
 const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
 import SignInButton from "./SignInButton";
@@ -54,7 +55,7 @@ const PREVIEW_PROMPTS = [
 
 // Reserve the sample graph's height (values on, so the tallest variant) before the draft streams in.
 const RESERVE: GNode[] = demoNodes.map((n) => ({ ...n, value: n.kind === "watch" ? "0" : n.value }));
-export default function Builder({ initialPrompt }: { initialPrompt?: string } = {}) {
+export default function Builder({ initialPrompt, strategyId }: { initialPrompt?: string; strategyId?: string } = {}) {
   const [text, setText] = useState(initialPrompt ?? "");
   const typed = useRef(false);
   const guidanceField = useRef<HTMLInputElement>(null);
@@ -142,7 +143,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
         const signature = [rec.id, rec.version, confirmEach, ttl].join(":");
         if (launchRequest.current?.signature !== signature) launchRequest.current = { signature, key: randomHex(32) };
         const session = API_MODE === "live" ? (await launchHosted(rec.id, rec.version, confirmEach, launchRequest.current.key, ttl)).session : createPaperSession(rec);
-        window.location.assign(`/app/run/${session.id}`);
+        router.push(`/app/run/${session.id}`);
       } else {
         const r = await api.startRun({ strategyId: rec.id, mode: "paper", ...(confirmEach ? { approvalMode: "confirm_each" as const, approvalTtlSec: ttl } : {}) }); router.push(`/app/run/${r.id}`);
       }
@@ -206,7 +207,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
     // Hydrate the externally supplied browser URL after SSR; subsequent typing stays local.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (prompt && !typed.current) setText(prompt.slice(0, 2000));
-    const id = sp.get("strategy"); let on = true;
+    const id = strategyId ?? sp.get("strategy"); let on = true;
     if (id) api.strategy(id).then((rec) => {
       if (!on) return;
       if (rec.strategy.workflow) rec.strategy.workflow = canonicalizeWorkflow(rec.strategy.workflow);
@@ -217,7 +218,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       if (API_MODE === "mock") setSaveNotice("Draft saved. Choose Run paper trade to open a session.");
     }).catch((e) => on && setErr(errOf(e, "Could not open this draft.")));
     return () => { on = false; ctl.current?.abort(); };
-  }, [initialPrompt]);
+  }, [initialPrompt,strategyId]);
   const saveDraft = async () => {
     if (!strategy || dirty || phase !== "done") return;
     setSaving(true); setErr(null);

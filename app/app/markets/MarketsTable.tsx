@@ -4,10 +4,12 @@ import Link from "@/components/Link";
 import { useEffect, useRef, useState } from "react";
 import VenueMark from "@/components/VenueMark";
 import { Th } from "@/components/Wrap";
-import { Card, Spark } from "@/components/ui";
+import MarketTrend from "@/components/charts/MarketTrend";
+import QuoteNumber from "@/components/charts/QuoteNumber";
+import { Card } from "@/components/ui";
 import SignInButton from "@/components/SignInButton";
 import { onSession } from "@/lib/api/session";
-import { api, ApiErr, errCopy, change24hTitle, fmtPct, fmtUsd, fmtSource, SESSION_LABEL, tone, type Market, type Venue } from "@/lib/api";
+import { api, ApiErr, errCopy, change24hTitle, fmtPct, fmtSource, SESSION_LABEL, tone, type Market, type Venue } from "@/lib/api";
 const TABS = [["All", undefined], ["Stock tokens", "robinhood"], ["Perps", "hyperliquid"], ["Solana", "solana"], ["Predictions", "polymarket"]] as const;
 const KIND: Record<string, string> = { token: "Token", perp: "Perp", spot: "Spot", outcome: "Outcome", stock_token: "Stock token" };
 
@@ -63,9 +65,9 @@ export default function MarketsTable() {
                 <th scope="row" data-label="Market" className="px-5 py-4 text-left font-normal"><div className="flex items-center gap-1.5 font-mono font-medium"><Link href={`/app/markets/${encodeURIComponent(m.id)}`} data-testid="mk-link" className="hover:text-accent after:absolute after:inset-0">{m.symbol}</Link>{m.isMock === true && <span title="Simulated price, not a real market feed." className="rounded-[4px] border border-line-2 px-1 font-sans text-[12px] font-normal text-muted">Mock</span>}{m.addressVerified === true && <span title={`Token address verified${m.addressChainId ? ` on chain ${m.addressChainId}` : m.venue === "solana" ? " on Solana" : ""}${m.addressSource ? ` · source: ${new URL(m.addressSource).hostname}` : ""}`} className="inline-flex items-center gap-0.5 rounded-[4px] border border-long/25 px-1 font-sans text-[12px] font-normal text-long/80"><svg width="8" height="8" viewBox="0 0 8 8" aria-hidden><path d="M1.5 4.2 3.2 5.8 6.5 2.2" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>Verified</span>}{m.addressVerified === false && <span title="Only a placeholder address is known for this token." className="rounded-[4px] border border-line-2 px-1 font-sans text-[12px] font-normal text-muted">Unverified</span>}</div><div className="text-[12.5px] text-muted">{m.name}{m.venue === "robinhood" && m.marketSession !== "always" && <span className={m.marketSession === "open" ? "text-long" : ""}> · {SESSION_LABEL[m.marketSession]}</span>}</div></th>
                 <td data-label="Venue" className="px-5"><VenueMark venue={m.venue} /></td>
                 <td data-label="Type" className="px-5 text-muted">{KIND[m.kind] ?? m.kind}</td>
-                <td data-label="Price" className="tnum px-5 font-mono">{m.price == null ? <span className="text-muted">waiting</span> : m.kind === "outcome" ? fmtPct(String(Number(m.price) * 100), { dp: 1 }) : fmtUsd(m.price)}</td>
+                <td data-label="Price" className="tnum px-5 font-mono">{m.price == null ? <span className="text-muted">waiting</span> : <QuoteNumber value={m.price} unit={m.kind==="outcome"?"percent":"usd"}/>}</td>
                 <td data-label="24h" title={change24hTitle(m.change24hPct, m.change24hSource)} className={`tnum px-5 font-mono ${tone(m.change24hPct)}`}>{fmtPct(m.change24hPct, { sign: true, dp: 1 })}</td>
-                <td className="px-5">{m.spark && m.spark.length > 1 ? <Spark pts={m.spark} w={80} h={22} tone={tone(m.change24hPct) === "text-short" ? "short" : "long"} /> : null}</td>
+                <td className="px-5"><MarketTrend key={m.id} market={m}/></td>
                 <td data-label="Source" className="px-5 text-[12.5px] text-muted">{fmtSource(m.priceSource, m.priceAt, now)}{m.priceStale && <div>{m.priceStaleReason === "market_closed" ? "Market closed · last close" : "Stale"}</div>}</td>
                 <td className="px-5 text-right">
                   {ln && !w && <span className="relative z-10 mr-3 text-[12.5px] text-muted" title={ln}>Restricted <span aria-hidden>ⓘ</span><span className="sr-only">: {ln}</span></span>}
