@@ -31,7 +31,9 @@ export function makeHttpsTransport(o: { deadlineMs?: number; maxBytes?: number; 
   return (u, pinned, headers, body) => new Promise((res, rej) => {
     let done = false; const finish = (f: () => void) => { if (!done) { done = true; clearTimeout(timer); f(); } };
     const ac = new AbortController();
-    const req = httpsRequest({ host: u.hostname, servername: u.hostname.replace(/^\[|\]$/g, "").replace(/\.+$/, ""), port: u.port || 443, path: u.pathname + u.search, method: "POST", headers: { ...headers, "content-length": Buffer.byteLength(body) }, timeout: deadline, signal: ac.signal, ...(o.ca ? { ca: o.ca } : {}),
+    // A shared or environment-proxy agent can resolve a different destination and ignore the vetted IP.
+    // Use a separate socket for each pinned delivery, preserving its Host, SNI and certificate checks.
+    const req = httpsRequest({ agent: false, host: u.hostname, servername: u.hostname.replace(/^\[|\]$/g, "").replace(/\.+$/, ""), port: u.port || 443, path: u.pathname + u.search, method: "POST", headers: { ...headers, "content-length": Buffer.byteLength(body) }, timeout: deadline, signal: ac.signal, ...(o.ca ? { ca: o.ca } : {}),
       // M4.2.1 (gate P1-1): Node >=20 autoSelectFamily calls lookup with {all:true} and expects an array.
       lookup: (_h: string, opt: { all?: boolean } | undefined, cb: (...a: unknown[]) => void) => opt?.all ? cb(null, [{ address: pinned.address, family: pinned.family }]) : cb(null, pinned.address, pinned.family) } as never,
     (r) => { // redirects are not followed; the body is drained up to maxBytes and discarded
