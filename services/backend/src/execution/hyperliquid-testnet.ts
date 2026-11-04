@@ -1,4 +1,4 @@
-/** Narrow Hyperliquid testnet perp wire primitives. All amounts are decimal strings. */
+/** Hyperliquid perpetuals. Venue URLs and signature domains are selected as one unit. */
 import { encode } from "@msgpack/msgpack";
 import {
   concatHex,
@@ -16,8 +16,27 @@ import {
 } from "viem";
 import { z } from "zod";
 
-const ENDPOINT = "https://api.hyperliquid-testnet.xyz";
-const CHAIN_ID = 421614; // Arbitrum Sepolia, as used by the official Python SDK for user-signed actions.
+export type HyperliquidNetwork = "testnet" | "mainnet";
+const NETWORKS = {
+  testnet: {
+    endpoint: "https://api.hyperliquid-testnet.xyz",
+    source: "b",
+    chain: "Testnet",
+    walletChainId: 421614,
+    walletChainHex: "0x66eee",
+  },
+  mainnet: {
+    endpoint: "https://api.hyperliquid.xyz",
+    source: "a",
+    chain: "Mainnet",
+    walletChainId: 42161,
+    walletChainHex: "0xa4b1",
+  },
+} as const;
+function networkConfig(network: HyperliquidNetwork) {
+  if (network !== "testnet" && network !== "mainnet") throw Error("Unknown Hyperliquid network");
+  return NETWORKS[network];
+}
 const ATOMS = 10n ** 18n;
 const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 const cloidId = z.string().regex(/^0x[0-9a-f]{32}$/);
@@ -95,7 +114,16 @@ const WireOrder = z
     p: positiveWire,
     s: positiveWire,
     r: z.boolean(),
-    t: z.object({ limit: z.object({ tif: z.enum(["Ioc", "Gtc"]) }).strict() }).strict(),
+    t: z.union([
+      z.object({ limit: z.object({ tif: z.enum(["Ioc", "Gtc"]) }).strict() }).strict(),
+      z
+        .object({
+          trigger: z
+            .object({ isMarket: z.literal(false), triggerPx: positiveWire, tpsl: z.enum(["tp", "sl"]) })
+            .strict(),
+        })
+        .strict(),
+    ]),
     c: cloidId.optional(), // historical SDK hash vectors omit c; submission always requires it.
   })
   .strict();
@@ -134,7 +162,10 @@ function canonical(action: L1Action): L1Action {
           p: o.p,
           s: o.s,
           r: o.r,
-          t: { limit: { tif: o.t.limit.tif } },
+          t:
+            "limit" in o.t
+              ? { limit: { tif: o.t.limit.tif } }
+              : { trigger: { isMarket: false, triggerPx: o.t.trigger.triggerPx, tpsl: o.t.trigger.tpsl } },
           ...(o.c ? { c: o.c } : {}),
         },
       ],
@@ -209,7 +240,12 @@ export function l1ActionHash(action: L1Action, nonce: number, expiresAfter?: num
   }
   return keccak256(concatBytes(parts));
 }
-export function l1TypedData(action: L1Action, nonce: number, expiresAfter?: number) {
+export function l1TypedData(
+  action: L1Action,
+  nonce: number,
+  expiresAfter?: number,
+  network: HyperliquidNetwork = "testnet",
+) {
   return {
     domain: { name: "Exchange", version: "1", chainId: 1337, verifyingContract: zeroAddress },
     primaryType: "Agent",
@@ -219,14 +255,18 @@ export function l1TypedData(action: L1Action, nonce: number, expiresAfter?: numb
         { name: "connectionId", type: "bytes32" },
       ],
     },
-    message: { source: "b", connectionId: l1ActionHash(action, nonce, expiresAfter) },
+    message: {
+      source: networkConfig(network).source,
+      connectionId: l1ActionHash(action, nonce, expiresAfter),
+    },
   } as const;
 }
 export type Grant = { agent: Address; name: string; nonce: number; validUntil: number };
 const GrantSchema = z
   .object({ agent: address, name: z.string().regex(/^[A-Za-z0-9_-]{1,16}$/), nonce: uint, validUntil: uint })
   .strict();
-export function approvalData(grant: Grant) {
+export function approvalData(grant: Grant, network: HyperliquidNetwork = "testnet") {
+  const config = networkConfig(network);
   GrantSchema.parse(grant);
   if (
     grant.agent.toLowerCase() === zeroAddress ||
@@ -236,7 +276,7 @@ export function approvalData(grant: Grant) {
     throw Error("Invalid named agent or expiry");
   const agentName = grant.name + " valid_until " + grant.validUntil;
   const message = {
-    hyperliquidChain: "Testnet",
+    hyperliquidChain: config.chain,
     agentAddress: grant.agent.toLowerCase() as Address,
     agentName,
     nonce: BigInt(grant.nonce),
@@ -244,7 +284,7 @@ export function approvalData(grant: Grant) {
   const action = {
     type: "approveAgent",
     hyperliquidChain: message.hyperliquidChain,
-    signatureChainId: "0x66eee",
+    signatureChainId: config.walletChainHex,
     agentAddress: message.agentAddress,
     agentName,
     nonce: grant.nonce,
@@ -253,7 +293,7 @@ export function approvalData(grant: Grant) {
     domain: {
       name: "HyperliquidSignTransaction",
       version: "1",
-      chainId: CHAIN_ID,
+      chainId: config.walletChainId,
       verifyingContract: zeroAddress,
     },
     primaryType: "HyperliquidTransaction:ApproveAgent",
@@ -270,10 +310,10 @@ export function approvalData(grant: Grant) {
   return { action, typedData };
 }
 /** Hyperliquid's wire type contains a colon, which generic Solidity identifier validators reject. */
-export function approvalDigest(grant: Grant): Hex {
+export function approvalDigest(grant: Grant, network: HyperliquidNetwork = "testnet"): Hex {
   const {
     typedData: { domain, message },
-  } = approvalData(grant);
+  } = approvalData(grant, network);
   const str = (s: string) => keccak256(stringToHex(s));
   const domainHash = keccak256(
     encodeAbiParameters(
@@ -316,8 +356,8 @@ export function approvalDigest(grant: Grant): Hex {
   return keccak256(concatHex(["0x1901", domainHash, actionHash]));
 }
 /** Serializable EIP-1193 payload for a master-wallet eth_signTypedData_v4 prompt. */
-export function walletApprovalPayload(grant: Grant) {
-  const { typedData } = approvalData(grant);
+export function walletApprovalPayload(grant: Grant, network: HyperliquidNetwork = "testnet") {
+  const { typedData } = approvalData(grant, network);
   const domainFields = [
     { name: "name", type: "string" },
     { name: "version", type: "string" },
@@ -343,9 +383,17 @@ function wireSignature(signature: Hex) {
     throw Error("Invalid signature");
   return { r, s, v: parity };
 }
-export type SignedL1 = { action: L1Action; nonce: number; expiresAfter: number; signature: Hex };
+/** Older persisted envelopes were exclusively testnet. An absent tag can never authorize mainnet. */
+export type SignedL1 = {
+  action: L1Action;
+  nonce: number;
+  expiresAfter: number;
+  signature: Hex;
+  network?: HyperliquidNetwork;
+};
 export type TestnetSigner = (data: ReturnType<typeof l1TypedData>) => Promise<Hex>;
-export async function signTestnet(
+export async function signL1(
+  network: HyperliquidNetwork,
   action: L1Action,
   nonce: number,
   expiresAfter: number,
@@ -359,7 +407,127 @@ export async function signTestnet(
     action: checked,
     nonce,
     expiresAfter,
-    signature: await sign(l1TypedData(checked, nonce, expiresAfter)),
+    network,
+    signature: await sign(l1TypedData(checked, nonce, expiresAfter, network)),
+  };
+}
+
+export function signTestnet(action: L1Action, nonce: number, expiresAfter: number, sign: TestnetSigner) {
+  return signL1("testnet", action, nonce, expiresAfter, sign);
+}
+
+/** Cap a reduce-only IOC to the receipt-confirmed strategy lot and the live position, on its original side. */
+export function reduceOnlyClose(
+  market: Perp,
+  positionSide: "long" | "short",
+  signedVenueSize: string,
+  remainingOwnedSize: string,
+  reference: string,
+  slippageBps: number,
+  cloid: string,
+) {
+  const venue = atoms(signedVenueSize),
+    owned = atoms(remainingOwnedSize);
+  if (
+    (positionSide !== "long" && positionSide !== "short") ||
+    owned <= 0n ||
+    venue === 0n ||
+    venue > 0n !== (positionSide === "long")
+  )
+    throw Error("No matching strategy-owned position to reduce");
+  const available = venue < 0n ? -venue : venue;
+  const quantity = decimal(available < owned ? available : owned);
+  const isBuy = positionSide === "short";
+  const limit = iocLimit(reference, isBuy, slippageBps, market.szDecimals);
+  return {
+    quantity,
+    limit,
+    side: isBuy ? ("B" as const) : ("A" as const),
+    action: perpOrder(market, isBuy, limit, quantity, true, cloid),
+  };
+}
+
+/** A fixed-size, exchange-resident TP/SL limit uses the mark for its trigger and the owner's explicit execution-price bound. */
+export function nativeProtection(
+  market: Perp,
+  positionSide: "long" | "short",
+  signedVenueSize: string,
+  ownedSize: string,
+  triggerPrice: string,
+  maxSlippageBps: number,
+  kind: "tp" | "sl",
+  cloid: string,
+): L1Action {
+  // Round a long threshold upward, a short threshold downward (earlier stop or later profit).
+  const triggerPx = iocLimit(triggerPrice, positionSide === "short", 0, market.szDecimals);
+  const close = reduceOnlyClose(
+    market,
+    positionSide,
+    signedVenueSize,
+    ownedSize,
+    triggerPx,
+    maxSlippageBps,
+    cloid,
+  );
+  if (close.action.type !== "order") throw Error("Invalid protective order");
+  return canonical({
+    type: "order",
+    grouping: "na",
+    orders: [{ ...close.action.orders[0], t: { trigger: { isMarket: false, triggerPx, tpsl: kind } } }],
+  });
+}
+
+/** EIP-1193 wallet form for an explicitly reviewed master order, independent of the network used for wallet login. */
+export function walletL1Payload(
+  action: L1Action,
+  nonce: number,
+  expiresAfter: number,
+  network: HyperliquidNetwork,
+) {
+  const d = l1TypedData(action, nonce, expiresAfter, network);
+  return {
+    ...d,
+    types: {
+      EIP712Domain: [
+        { name: "name", type: "string" },
+        { name: "version", type: "string" },
+        { name: "chainId", type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      ...d.types,
+    },
+  };
+}
+
+/** The protocol deregisters the old named agent on replacement. No signing secret exists in Quiver for the short-lived replacement address. */
+export function revocationReplacement(
+  grant: Grant,
+  owner: Address,
+  nonce: number,
+  network: HyperliquidNetwork = "testnet",
+): Grant {
+  approvalData(grant, network);
+  address.parse(owner);
+  uint.parse(nonce);
+  if (nonce <= grant.nonce) throw Error("Revocation nonce must follow the original grant");
+  const commitment = keccak256(
+    stringToHex(
+      [
+        "Quiver agent deregistration v1",
+        network,
+        owner.toLowerCase(),
+        grant.name,
+        grant.agent.toLowerCase(),
+        String(grant.nonce),
+        String(nonce),
+      ].join("|"),
+    ),
+  );
+  return {
+    agent: ("0x" + commitment.slice(-40)) as Address,
+    name: grant.name,
+    nonce,
+    validUntil: nonce + 60000,
   };
 }
 
@@ -373,6 +541,7 @@ export class VenueFailure extends Error {
   }
 }
 const Meta = z.object({
+  collateralToken: uint.optional(),
   universe: z.array(
     z.object({
       name: z.string(),
@@ -383,15 +552,28 @@ const Meta = z.object({
     }),
   ),
 });
-export class HyperliquidTestnet {
+export class HyperliquidVenue {
+  private readonly endpoint: string;
   constructor(
+    readonly network: HyperliquidNetwork,
     private readonly send: Fetch = fetch,
     private readonly clock: () => number = Date.now,
-  ) {}
+  ) {
+    this.endpoint = networkConfig(network).endpoint;
+  }
+  walletApprovalPayload(grant: Grant) {
+    return walletApprovalPayload(grant, this.network);
+  }
+  walletRevocationPayload(grant: Grant, owner: Address, nonce: number) {
+    return this.walletApprovalPayload(revocationReplacement(grant, owner, nonce, this.network));
+  }
+  sign(action: L1Action, nonce: number, expiresAfter: number, signer: TestnetSigner) {
+    return signL1(this.network, action, nonce, expiresAfter, signer);
+  }
   private async post(path: "/info" | "/exchange", body: unknown): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.send(ENDPOINT + path, {
+      response = await this.send(this.endpoint + path, {
         method: "POST",
         redirect: "error",
         headers: { "content-type": "application/json" },
@@ -401,16 +583,41 @@ export class HyperliquidTestnet {
       if (!response.ok) throw Error();
       return await response.json();
     } catch {
-      throw new VenueFailure("unconfirmed", "No conclusive testnet response; reconcile before retrying.");
+      throw new VenueFailure("unconfirmed", "No conclusive venue response; reconcile before retrying.");
     }
   }
   async account(owner: Address, symbol?: string) {
     address.parse(owner);
     const dex = symbol?.includes(":") ? symbol.split(":")[0] : "";
+    const margin = z.object({
+      accountValue: rawAmount,
+      totalNtlPos: rawAmount.optional(),
+      totalRawUsd: rawAmount.optional(),
+      totalMarginUsed: rawAmount.optional(),
+    });
     const acct = z.object({
       withdrawable: rawAmount,
-      marginSummary: z.object({ accountValue: rawAmount }),
-      assetPositions: z.array(z.object({ position: z.object({ coin: z.string(), szi: rawAmount }) })),
+      marginSummary: margin,
+      crossMarginSummary: margin.optional(),
+      assetPositions: z.array(
+        z.object({
+          position: z.object({
+            coin: coinName,
+            szi: rawAmount,
+            entryPx: rawAmount.nullable().optional(),
+            marginUsed: rawAmount.optional(),
+            unrealizedPnl: rawAmount.optional(),
+            positionValue: rawAmount.optional(),
+            liquidationPx: rawAmount.nullable().optional(),
+            leverage: z
+              .object({ type: z.enum(["cross", "isolated"]), value: uint, rawUsd: rawAmount.optional() })
+              .optional(),
+            cumFunding: z
+              .object({ allTime: rawAmount, sinceOpen: rawAmount, sinceChange: rawAmount })
+              .optional(),
+          }),
+        }),
+      ),
     });
     const [state, open] = await Promise.all([
       this.post("/info", { type: "clearinghouseState", user: owner, ...(dex ? { dex } : {}) }),
@@ -419,13 +626,29 @@ export class HyperliquidTestnet {
     const a = acct.parse(state),
       orders = z.array(z.object({ coin: z.string() })).parse(open);
     return {
+      positions: a.assetPositions.map((p) => p.position).filter((p) => atoms(p.szi) !== 0n),
+      marginSummary: a.marginSummary,
+      crossMarginSummary: a.crossMarginSummary ?? null,
       withdrawable: a.withdrawable,
       equity: a.marginSummary.accountValue,
+      signedPositionSize: symbol
+        ? (a.assetPositions.find((p) => p.position.coin === symbol)?.position.szi ?? "0")
+        : null,
+      symbolOpenOrders: symbol ? orders.filter((o) => o.coin === symbol).length : null,
       occupied:
         !!symbol &&
         (orders.some((x) => x.coin === symbol) ||
           a.assetPositions.some((x) => x.position.coin === symbol && atoms(x.position.szi) !== 0n)),
     };
+  }
+  async takerFeeRate(owner: Address) {
+    address.parse(owner);
+    const v = z
+      .object({ userCrossRate: rawAmount })
+      .parse(await this.post("/info", { type: "userFees", user: owner.toLowerCase() }));
+    if (atoms(v.userCrossRate) < 0n || atoms(v.userCrossRate) > ATOMS / 100n)
+      throw Error("Unverifiable taker fee schedule");
+    return v.userCrossRate;
   }
   async market(symbol: string): Promise<Perp> {
     coinName.parse(symbol);
@@ -436,13 +659,18 @@ export class HyperliquidTestnet {
         .array(z.object({ name: z.string() }).nullable())
         .parse(await this.post("/info", { type: "perpDexs" }));
       const dexIndex = dexs.findIndex((d) => d?.name === dex);
-      if (dexIndex <= 0) throw Error("Unknown testnet perp DEX");
+      if (dexIndex <= 0) throw Error("Unknown perpetual DEX");
       offset = 100000 + dexIndex * 10000;
     }
-    const { universe } = Meta.parse(await this.post("/info", { type: "meta", ...(dex ? { dex } : {}) }));
+    const { universe, collateralToken } = Meta.parse(
+      await this.post("/info", { type: "meta", ...(dex ? { dex } : {}) }),
+    );
+    // The application's margin ledger is denominated in USDC, mainnet spot token index 0.
+    // The original validator-operated dex uses USDC. HIP-3 dexs may use a different collateral.
+    if (this.network === "mainnet" && (collateralToken !== undefined ? collateralToken !== 0 : !!dex))
+      throw Error("This perpetual does not have verified USDC collateral");
     const index = universe.findIndex((m) => m.name === symbol);
-    if (index < 0 || universe[index].isDelisted || index >= 10000)
-      throw Error("Unavailable testnet perpetual");
+    if (index < 0 || universe[index].isDelisted || index >= 10000) throw Error("Unavailable perpetual");
     const m = universe[index];
     return {
       symbol,
@@ -499,7 +727,7 @@ export class HyperliquidTestnet {
   async approve(grant: Grant, signature: Hex, expectedOwner: Address) {
     address.parse(expectedOwner);
     const now = this.clock(),
-      { action, typedData } = approvalData(grant);
+      { action } = approvalData(grant, this.network);
     if (
       grant.nonce > now + 2000 ||
       now - grant.nonce > 300000 ||
@@ -507,7 +735,7 @@ export class HyperliquidTestnet {
       grant.agent.toLowerCase() === expectedOwner.toLowerCase()
     )
       throw Error("Expired or invalid owner challenge");
-    const owner = await recoverAddress({ hash: approvalDigest(grant), signature });
+    const owner = await recoverAddress({ hash: approvalDigest(grant, this.network), signature });
     if (owner.toLowerCase() !== expectedOwner.toLowerCase())
       throw Error("Agent grant signature does not match the linked wallet");
     this.requireDefault(
@@ -518,13 +746,14 @@ export class HyperliquidTestnet {
   async agentBelongsTo(agent: Address, owner: Address): Promise<boolean> {
     address.parse(agent);
     address.parse(owner);
-    const role = z
-      .object({ role: z.string(), data: z.object({ user: address }).optional() })
-      .parse(await this.post("/info", { type: "userRole", user: agent.toLowerCase() }));
-    return role.role === "agent" && role.data?.user.toLowerCase() === owner.toLowerCase();
+    const raw = await this.post("/info", { type: "userRole", user: agent.toLowerCase() });
+    const r = z.object({ role: z.enum(["missing", "user", "agent", "vault", "subAccount"]) }).parse(raw);
+    if (r.role !== "agent") return false;
+    const role = z.object({ data: z.object({ user: address }) }).parse(raw);
+    return role.data.user.toLowerCase() === owner.toLowerCase();
   }
   async activeGrant(grant: Grant, owner: Address): Promise<boolean> {
-    const { action } = approvalData(grant);
+    const { action } = approvalData(grant, this.network);
     address.parse(owner);
     if (grant.validUntil <= this.clock()) return false;
     const [roleOk, raw] = await Promise.all([
@@ -542,6 +771,27 @@ export class HyperliquidTestnet {
       )
     );
   }
+  /** The role and the owner's complete named-agent list must both release the old address. */
+  async revocationConfirmed(grant: Grant, owner: Address) {
+    address.parse(owner);
+    address.parse(grant.agent);
+    const [roleOk, raw] = await Promise.all([
+      this.agentBelongsTo(grant.agent, owner),
+      this.post("/info", { type: "extraAgents", user: owner.toLowerCase() }),
+    ]);
+    const agents = z.array(z.object({ address })).parse(raw);
+    return !roleOk && !agents.some((a) => a.address.toLowerCase() === grant.agent.toLowerCase());
+  }
+  /** Persist the one-time revoke intent and disable the signer before broadcast. Reconcile an uncertain receipt by reading revocationConfirmed. */
+  async revoke(grant: Grant, owner: Address, nonce: number, signature: Hex) {
+    if (await this.revocationConfirmed(grant, owner)) return { status: "revoked" as const };
+    if (!(await this.activeGrant(grant, owner)))
+      throw new VenueFailure("unconfirmed", "The old agent is not identifiable in this named slot.");
+    await this.approve(revocationReplacement(grant, owner, nonce, this.network), signature, owner);
+    return {
+      status: (await this.revocationConfirmed(grant, owner)) ? ("revoked" as const) : ("pending" as const),
+    };
+  }
   private requireDefault(raw: unknown) {
     const res = z.object({ status: z.string(), response: z.unknown() }).parse(raw);
     if (res.status === "err")
@@ -550,19 +800,23 @@ export class HyperliquidTestnet {
         typeof res.response === "string" ? res.response.slice(0, 240) : "Rejected by venue",
       );
     if (res.status !== "ok" || !z.object({ type: z.literal("default") }).safeParse(res.response).success)
-      throw new VenueFailure("unconfirmed", "Unexpected testnet acknowledgement");
+      throw new VenueFailure("unconfirmed", "Unexpected venue acknowledgement");
   }
   async submit(signed: SignedL1, expectedAgent: Address) {
     address.parse(expectedAgent);
+    if ((signed.network ?? "testnet") !== this.network)
+      throw Error("Order signature belongs to a different Hyperliquid network");
     const { nonce, expiresAfter, signature } = signed,
       action = canonical(signed.action),
       now = this.clock();
     if (nonce > now + 2000 || expiresAfter <= nonce || expiresAfter - nonce > 60_000 || now >= expiresAfter)
-      throw Error("Expired or invalid testnet order envelope");
+      throw Error("Expired or invalid venue order envelope");
     if (action.type === "order" && !action.orders[0].c) throw Error("Missing durable client order id");
-    const agent = await recoverTypedDataAddress({ ...l1TypedData(action, nonce, expiresAfter), signature });
-    if (agent.toLowerCase() !== expectedAgent.toLowerCase())
-      throw Error("Unexpected testnet agent signature");
+    const agent = await recoverTypedDataAddress({
+      ...l1TypedData(action, nonce, expiresAfter, this.network),
+      signature,
+    });
+    if (agent.toLowerCase() !== expectedAgent.toLowerCase()) throw Error("Unexpected venue agent signature");
     const raw = await this.post("/exchange", {
       action,
       nonce,
@@ -590,12 +844,14 @@ export class HyperliquidTestnet {
       !response.success ||
       response.data.type !== (action.type === "order" ? "order" : "cancel")
     )
-      throw new VenueFailure("unconfirmed", "Unexpected testnet response");
+      throw new VenueFailure("unconfirmed", "Unexpected venue response");
     const item = response.data.data.statuses[0];
     if (action.type === "cancelByCloid" && item === "success") return { kind: "acknowledged" } as const;
     const problem = z.object({ error: z.string() }).safeParse(item);
     if (problem.success) throw new VenueFailure("venue_error", problem.data.error.slice(0, 240));
     if (action.type === "order") {
+      if ("trigger" in action.orders[0].t && (item === "waitingForTrigger" || item === "waitingForFill"))
+        return { kind: "awaiting_trigger" as const };
       const rest = z.object({ resting: z.object({ oid: uint }) }).safeParse(item);
       if (rest.success) return { kind: "accepted", oid: rest.data.resting.oid } as const;
       const match = z
@@ -604,9 +860,22 @@ export class HyperliquidTestnet {
       if (match.success && atoms(match.data.filled.totalSz) > 0n && atoms(match.data.filled.avgPx) > 0n)
         return { kind: "matched", ...match.data.filled } as const;
     }
-    throw new VenueFailure("unconfirmed", "Unrecognized testnet order acknowledgement");
+    throw new VenueFailure("unconfirmed", "Unrecognized venue order acknowledgement");
   }
-  async reconcile(owner: Address, cloid: string, symbol: string, side: "A" | "B", intendedSize: string) {
+  async reconcile(
+    owner: Address,
+    cloid: string,
+    symbol: string,
+    side: "A" | "B",
+    intendedSize: string,
+    terms?: {
+      limit: string;
+      reduceOnly: boolean;
+      submittedAfter: number;
+      submittedBefore: number;
+      tif?: "Ioc" | "Gtc";
+    },
+  ) {
     address.parse(owner);
     cloidId.parse(cloid);
     coinName.parse(symbol);
@@ -624,6 +893,9 @@ export class HyperliquidTestnet {
             cloid: z.string().nullable().optional(),
             timestamp: uint,
             origSz: rawAmount,
+            limitPx: rawAmount.optional(),
+            reduceOnly: z.boolean().optional(),
+            tif: z.string().nullable().optional(),
             sz: rawAmount,
           }),
           status: z.string(),
@@ -643,6 +915,16 @@ export class HyperliquidTestnet {
       remaining > target
     )
       throw Error("Venue order identity or quantity mismatch");
+    if (
+      terms &&
+      (!order.limitPx ||
+        atoms(order.limitPx) !== atoms(terms.limit) ||
+        order.reduceOnly !== terms.reduceOnly ||
+        order.timestamp < terms.submittedAfter ||
+        order.timestamp > terms.submittedBefore ||
+        (terms.tif && order.tif !== terms.tif))
+    )
+      throw Error("Exchange order terms differ from the bound client order ID");
     const range = {
       type: "userFillsByTime",
       user: owner.toLowerCase(),
@@ -661,6 +943,13 @@ export class HyperliquidTestnet {
       px: rawAmount,
       fee: rawAmount,
       feeToken: z.string().min(1).max(64),
+      closedPnl: rawAmount.optional(),
+      startPosition: rawAmount.optional(),
+      dir: z.string().max(64).optional(),
+      hash: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]{64}$/)
+        .optional(),
     });
     const records = new Map<string, z.infer<typeof F>>();
     const fees = new Map<string, bigint>();
@@ -677,11 +966,22 @@ export class HyperliquidTestnet {
         atoms(f.sz) <= 0n ||
         atoms(f.px) <= 0n
       )
-        throw Error("Inconsistent testnet fill");
+        throw Error("Inconsistent venue fill");
+      if (terms && (side === "B" ? atoms(f.px) > atoms(terms.limit) : atoms(f.px) < atoms(terms.limit)))
+        throw Error("Fill price violates the signed limit");
       const key = [f.time, f.coin, f.tid].join("|"),
         prior = records.get(key);
       if (prior) {
-        if (prior.px !== f.px || prior.sz !== f.sz || prior.fee !== f.fee || prior.feeToken !== f.feeToken)
+        if (
+          prior.px !== f.px ||
+          prior.sz !== f.sz ||
+          prior.fee !== f.fee ||
+          prior.feeToken !== f.feeToken ||
+          prior.closedPnl !== f.closedPnl ||
+          prior.startPosition !== f.startPosition ||
+          prior.dir !== f.dir ||
+          prior.hash !== f.hash
+        )
           throw Error("Conflicting receipts");
         continue;
       }
@@ -720,11 +1020,22 @@ export class HyperliquidTestnet {
       venueStatus: detail.status,
       oid: order.oid,
       filledSize: decimal(filled),
+      executedNotional: decimal(notional / ATOMS),
+      realizedClosedPnl: [...records.values()].every((f) => f.closedPnl !== undefined)
+        ? decimal([...records.values()].reduce((s, f) => s + atoms(f.closedPnl!), 0n))
+        : null,
       requestedSize: decimal(target),
       remainingSize: decimal(target - filled),
       averagePrice: filled ? decimal(notional / filled) : null,
       fees: Object.fromEntries([...fees].map(([t, f]) => [t, decimal(f)])),
       receipts: [...records.values()],
     };
+  }
+}
+
+/** Compatibility adapter for existing paper-beta routes. Its host and signatures always stay on testnet. */
+export class HyperliquidTestnet extends HyperliquidVenue {
+  constructor(send: Fetch = fetch, clock: () => number = Date.now) {
+    super("testnet", send, clock);
   }
 }

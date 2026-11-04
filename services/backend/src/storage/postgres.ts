@@ -1,3 +1,4 @@
+import { restoreLivePrograms } from "../execution/live-storage";
 import { PaperSessionSchema } from "../workflows/session";
 import { restoreLedger,serializeLedger,transition } from "../execution/ledger";
 import { Client } from "pg";
@@ -50,6 +51,7 @@ export function restoreDurable(store: MemStore, data: Record<string, unknown>) {
     const map = store[k] as Map<string, unknown>; map.clear();
     for (const [id, value] of (data[k] ?? []) as [string, unknown][]) map.set(id, value);
   }
+  restoreLivePrograms(store,data.restoreHold===true);
   if(data.restoreHold===true){
     store.refresh.clear();store.idem.clear();
     for(const [id,h] of store.workflowSessions)if(h.session.status==="running"){

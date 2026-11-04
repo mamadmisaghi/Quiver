@@ -1,3 +1,4 @@
+import { robinhoodIssuerCandidate, ROBINHOOD_ISSUER_ASSETS } from "./robinhood-assets";
 import type { Workflow, MarketCandidate } from "../../contracts/src/workflow";
 import { MOCK_INSTRUMENTS, isEquitySymbol } from "../venues/registry";
 
@@ -37,7 +38,7 @@ export function perpetualInfo(type: "meta" | "metaAndAssetCtxs", dex?: string): 
     body: JSON.stringify(dex ? { type, dex } : { type }) };
 }
 
-export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Promise<NonNullable<Asset["resolution"]>> {
+export async function resolveMarket(a: Asset, get: JsonFetch = marketJson, issuerIdentity=true): Promise<NonNullable<Asset["resolution"]>> {
   const checkedAt = new Date().toISOString(), sym = canonicalSymbol(a.query);
   const result = (candidates: MarketCandidate[], message: string, exact = false): NonNullable<Asset["resolution"]> => ({ status: exact && candidates.length === 1 ? "matched" : candidates.length ? "choose" : "not_found", candidates: candidates.slice(0, 8), selectedId: exact && candidates.length === 1 ? candidates[0].id : null, checkedAt, message });
   try {
@@ -73,6 +74,9 @@ export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Prom
         : "No active Hyperliquid perpetual matched " + identity + ". Search an exact market ticker.", true);
     }
     const known = MOCK_INSTRUMENTS.filter((m) => m.symbol === sym && m.venue !== "polymarket" && m.kind !== "perp" && (!a.venue || a.venue === m.venue));
+    if(issuerIdentity && (a.venue==="robinhood"||known[0]?.venue==="robinhood")){
+      try{const token=robinhoodIssuerCandidate(await get(ROBINHOOD_ISSUER_ASSETS),sym);if(token)return result([token],"Verified the stock token on Robinhood Chain mainnet.",true);}catch{}
+    }
     if (known.length && known[0].venue === "robinhood") {
       return result(known.map((m) => ({ id: m.id, name: m.name, symbol: m.symbol, venue: m.venue, kind: m.kind, source: "preview_catalog", address: null, url: null, maxLeverage: 1, endDate: null, outcome: null })), "For paper trading, stock instruments use the underlying US equity price. No token order is routed.", true);
     }
@@ -100,9 +104,9 @@ export async function resolveMarket(a: Asset, get: JsonFetch = marketJson): Prom
   }
 }
 
-export async function resolveWorkflow(w: Workflow, get?: JsonFetch): Promise<Workflow> {
+export async function resolveWorkflow(w: Workflow, get?: JsonFetch, issuerIdentity=true): Promise<Workflow> {
   const assets: Asset[] = [];
   // Bound parallel fanout to four public lookups, and never resolve unused invented assets.
-  for (let i = 0; i < w.assets.length; i += 4) assets.push(...await Promise.all(w.assets.slice(i, i + 4).map(async (a) => ({ ...a, resolution: await resolveMarket(a, get) }))));
+  for (let i = 0; i < w.assets.length; i += 4) assets.push(...await Promise.all(w.assets.slice(i, i + 4).map(async (a) => ({ ...a, resolution: await resolveMarket(a, get, issuerIdentity) }))));
   return { ...w, assets };
 }

@@ -15,7 +15,7 @@ type Phantom = {
   connect: () => Promise<{ publicKey: { toString: () => string } }>;
   signMessage: (m: Uint8Array, enc: string) => Promise<{ signature: Uint8Array }>;
 };
-const live = API_MODE === "live";
+
 const venues = [
   {
     id: "hyperliquid",
@@ -71,6 +71,7 @@ function bs58(b: Uint8Array) {
 }
 const fmt = (a: string) => a.slice(0, 6) + "…" + a.slice(-5);
 export default function ExecutionDesk() {
+  const live=API_MODE==="live";
   const [strategyId, setStrategyId] = useState("");
   useEffect(() => setStrategyId(new URLSearchParams(window.location.search).get("strategy") ?? ""), []);
   const strategy = useQ(
@@ -135,6 +136,7 @@ export default function ExecutionDesk() {
       "mt-1 block w-full rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm text-ink";
   return (
     <Wrap>
+      <Link className="q-action mb-4 inline-flex" href="/app/live">Open live trading ↗</Link>
       <header className="border-b border-line pb-7">
         <div className="mb-3 flex items-center gap-2 text-xs text-accent">
           <Radio size={14} aria-hidden />

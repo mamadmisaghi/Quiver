@@ -1,4 +1,5 @@
 "use client";
+import AccountActivity from "@/components/live/AccountActivity";
 // M4.3: GET /v1/portfolio/runs, /portfolio/allocation?by=, /portfolio/history. Paper mode only in the UI for now.
 import { useState } from "react";
 import Link from "@/components/Link";
@@ -60,7 +61,8 @@ export default function PortfolioView() {
   const t = runs.data?.totals;
   return (
     <Wrap>
-      <PageHeader title="Portfolio" sub="Balances, positions and fills across your paper sessions." />
+      <PageHeader title="Portfolio" sub="Your live positions and venue receipts, followed by balances and fills from paper sessions." />
+      <AccountActivity part="portfolio"/>
       {!local && !!workflows?.sessions.length && <div className="mt-5 flex gap-2" aria-label="Portfolio source">{[false,true].map(old=><button key={String(old)} className="q-action" aria-pressed={classic===old} onClick={()=>setClassic(old)}>{old?"Earlier runs":"Workflow sessions"}</button>)}</div>}
       {!runs.data ? <Loading h={200} q={runs} /> : (<>
         <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="pf-totals">

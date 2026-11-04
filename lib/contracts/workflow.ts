@@ -12,7 +12,7 @@ export const PlanExpr: z.ZodType<PlanExpr> = z.lazy(() => z.union([
 ]));
 export const MarketCandidate = z.object({
   id: z.string().max(160), symbol: z.string().max(40), name: z.string().max(300), venue: Venue,
-  kind: z.enum(["token", "perp", "spot", "outcome"]), source: z.enum(["preview_catalog", "dexscreener", "hyperliquid", "polymarket"]),
+  kind: z.enum(["token", "perp", "spot", "outcome"]), source: z.enum(["preview_catalog", "dexscreener", "hyperliquid", "polymarket", "robinhood_registry"]),
   address: z.string().max(100).nullable(), url: z.string().url().nullable(), maxLeverage: z.number().nullable(),
   endDate: z.string().max(64).nullable(), outcome: z.string().max(80).nullable(),
 });

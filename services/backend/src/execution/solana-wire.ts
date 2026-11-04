@@ -121,6 +121,9 @@ export type WireTx = {
   message: Buffer;
   digest: string;
   programs: string[];
+  writableStatic: boolean[];
+  instructions:{ programIndex:number; indexes:number[]; data:Buffer }[];
+  lookups:{ table:string; writable:number[]; readonly:number[] }[];
 };
 
 class Reader {
@@ -188,25 +191,28 @@ export function decodeWire(text: string): WireTx {
   const blockhash = encode58(r.take(32)),
     ixCount = r.short();
   if (!ixCount || ixCount > bytes.length - r.offset) fail("Invalid instruction count");
-  const programs: string[] = [];
+  const programs: string[] = [], instructions: WireTx["instructions"] = [], lookups: WireTx["lookups"] = [];
   let maxIndex = 0,
     totalKeys = staticCount;
   for (let i = 0; i < ixCount; i++) {
     const program = r.byte();
     if (!program || program >= staticCount) fail("Invalid invoked program index");
     programs.push(accountKeys[program]);
-    for (const idx of r.take(r.short())) maxIndex = Math.max(maxIndex, idx);
-    r.take(r.short());
+    const indexes=[...r.take(r.short())];
+    for (const idx of indexes) maxIndex = Math.max(maxIndex, idx);
+    instructions.push({programIndex:program,indexes,data:Buffer.from(r.take(r.short()))});
   }
   if (version === 0) {
     const tables = r.short();
     if (tables > 256) fail("Invalid lookup count");
     for (let i = 0; i < tables; i++) {
-      r.take(32);
+      const table=encode58(r.take(32));
       const writable = r.take(r.short()),
         readonly = r.take(r.short());
       if (new Set([...writable, ...readonly]).size !== writable.length + readonly.length)
         fail("Repeated lookup index");
+      if(lookups.some(t=>t.table===table))fail("Repeated lookup table");
+      lookups.push({table,writable:[...writable],readonly:[...readonly]});
       totalKeys += writable.length + readonly.length;
     }
   }
@@ -222,6 +228,7 @@ export function decodeWire(text: string): WireTx {
     blockhash,
     message,
     digest: createHash("sha256").update(message).digest("hex"),
-    programs,
+    programs,instructions,lookups,
+    writableStatic:accountKeys.map((_,i)=>i<count?i<count-roSigned:i<staticCount-roUnsigned),
   };
 }

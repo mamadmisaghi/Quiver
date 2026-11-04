@@ -77,10 +77,9 @@ export function orderUrl(intent: SwapIntent): string {
     outputMint: intent.outputMint,
     amount: intent.inputAmount,
     taker: intent.taker,
-    receiver: intent.taker,
     slippageBps: String(intent.maxSlippageBps),
     maxSupportedTransactionVersion: "0",
-    excludeRouters: "jupiterz",
+    excludeRouters: "jupiterz,dflow,okx",
   });
   return "https://api.jup.ag/swap/v2/order?" + q;
 }

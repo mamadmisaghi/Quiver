@@ -190,7 +190,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     const questions = draftQuestions(recurring, req.thesis);
     if (questions.length) { yield { type: "clarification", draft: { workflow: recurring, history: [] }, questions }; return; }
     yield compileProgress("markets", "working", "Checking the requested markets");
-    const workflow = await resolveWorkflow(recurring);
+    const workflow = await resolveWorkflow(recurring,undefined,d.retainWorkflow===true);
     yield compileProgress("markets", "done", marketReport(workflow));
     yield compileProgress("rules", "working", "Connecting conditions and orders");
     const strategy = lowerWorkflow(workflow, req.thesis, d);
@@ -276,7 +276,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
   } catch { yield { type: "error", code: "intent_check_unavailable", message: "The draft could not be checked against your request. Retry; no unverified replacement was saved." }; return; }
   yield compileProgress("audit", "done", "Verified the rules against your instructions", attempt);
   yield compileProgress("markets", "working", "Checking the requested markets");
-  workflow = await resolveWorkflow(workflow);
+  workflow = await resolveWorkflow(workflow,undefined,d.retainWorkflow===true);
   yield compileProgress("markets", "done", marketReport(workflow));
   yield compileProgress("rules", "working", "Connecting conditions, orders and funding");
   const originalThesis = req.baseStrategy && req.instruction ? `${req.baseStrategy.thesis}\nEdit: ${req.instruction}` : req.thesis;

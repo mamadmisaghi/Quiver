@@ -99,6 +99,9 @@ export const RawConfig = z.object({
   VERIFIED_READONLY_PATH: z.string().default("config/verified/4663-readonly.json"),
   /** Optional free-tier EOD vendor key (Tiingo) for MODELED backtest history older than the on-chain feed. Unset = no modeled data. */
   TIINGO_API_KEY: opt,
+  LIVE_EXECUTION_PROFILE: z.enum(["legacy","venue-wallets"]).default("legacy"),
+  QUIVER_EDGE_PUBLIC_KEY: opt,
+  LIVE_PERP_BLOCKED_COUNTRIES: z.string().regex(/^([A-Z]{2})(,[A-Z]{2})*$/).default("US,CU,IR,KP,SY"),
   HL_TESTNET_ORDERS: z.enum(["true","false"]).default("false"),
   SOLANA_READ_RPC: z.string().url().optional(),
   JUPITER_API_KEY: opt,
@@ -151,6 +154,19 @@ export const Config = RawConfig.superRefine((c, ctx) => {
   const need = (ok: unknown, key: string, msg = "required on mainnet") => { if (!ok) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: msg }); };
   need(c.QUIVR_MAINNET_ENABLED, "QUIVR_MAINNET_ENABLED", "must be true to run on chain 4663");
   need(c.CHAIN_ID === 4663, "CHAIN_ID", "mainnet mode requires 4663");
+  if(c.LIVE_EXECUTION_PROFILE==="venue-wallets"){
+    need(c.QUIVR_MODE==="mainnet","QUIVR_MODE");
+    need(c.NODE_ENV?.toLowerCase()==="production","NODE_ENV");
+    need(c.PRIVY_APP_ID&&c.PRIVY_APP_SECRET,"PRIVY_APP_ID");
+    need(c.DATABASE_URL,"DATABASE_URL");
+    need(c.QUIVR_JWT_SECRET&&c.QUIVR_JWT_SECRET.length>=32,"QUIVR_JWT_SECRET");
+    need(c.SECRETS_MASTER_KEY && (/^[0-9a-fA-F]{64}$/.test(c.SECRETS_MASTER_KEY)||/^[a-zA-Z0-9+/_-]{43}=?$/.test(c.SECRETS_MASTER_KEY)),"SECRETS_MASTER_KEY");
+    need(c.SIWE_ORIGIN?.startsWith("https://") && c.CORS_ORIGINS.split(",").includes(c.SIWE_ORIGIN),"SIWE_ORIGIN");
+    need(c.QUIVER_EDGE_PUBLIC_KEY && /^MCowBQYDK2VwAyEA[A-Za-z0-9+/]{43}=$/.test(c.QUIVER_EDGE_PUBLIC_KEY),"QUIVER_EDGE_PUBLIC_KEY");
+    need(!c.DEV_LOGIN_ENABLED,"DEV_LOGIN_ENABLED");
+    need(!c.TERMS_VERSION.startsWith("draft-"),"TERMS_VERSION");
+    return;
+  }
   need(c.QUIVR_TREASURY, "QUIVR_TREASURY");
   need(c.QUIVR_FEE_ROUTER ?? c.QUIVR_TREASURY, "QUIVR_FEE_ROUTER");
   need(c.ALCHEMY_API_KEY, "ALCHEMY_API_KEY");

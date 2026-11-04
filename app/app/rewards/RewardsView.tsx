@@ -1,12 +1,11 @@
 "use client";
-// Rewards from api.rewards() (ext.ts RewardsRes, M3.1). Every number is EXAMPLE data: no program is live.
 import PageHeader from "@/components/PageHeader";
 import Wrap, { Stat, Stats } from "@/components/Wrap";
 import { Card, Pill } from "@/components/ui";
 import Loading from "@/components/Loading";
 import { api } from "@/lib/api";
 import { useQ } from "@/lib/api/useQ";
-const SUB = "Points for building and sharing. How points convert, if at all, is to be confirmed.";
+const SUB = "Points for building, testing and sharing strategies.";
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 const n = (x: number) => x.toLocaleString();
 
@@ -20,14 +19,14 @@ export default function RewardsView() {
     <Card className="mt-6 p-6"><h2 className="font-medium">Reward history</h2><p className="mt-3 text-[14px] text-muted">No rewards yet. Points will appear here when a season opens.</p></Card>
   </Wrap>;
   const open = r.quests.filter((x) => !x.done).reduce((a, x) => a + x.points, 0);
-  const pct = r.totalParticipants > 0 ? Math.max(1, Math.round((r.rank / r.totalParticipants) * 100)) : null;
+  const pct = r.totalParticipants > 0 && r.rank > 0 ? Math.max(1, Math.round((r.rank / r.totalParticipants) * 100)) : null;
   return (
     <Wrap>
       <PageHeader title="Rewards" sub={SUB} />
       {r.notice && <p className="mb-6 mt-3 flex items-start gap-2 text-[12.5px] text-muted"><span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-muted" aria-hidden />{r.notice}</p>}
       <Stats n={4}>
         <Stat k="Points" v={n(r.points)} />
-        <Stat k="Rank" v={`#${n(r.rank)}`} />
+        <Stat k="Rank" v={r.rank ? `#${n(r.rank)}` : "—"} />
         <Stat k="Participants" v={n(r.totalParticipants)} />
         <Stat k="Still to earn" v={n(open)} />
       </Stats>

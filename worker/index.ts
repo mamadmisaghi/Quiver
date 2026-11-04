@@ -1,3 +1,4 @@
+import { withEdgeLocation } from "../lib/edge-attestation";
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
@@ -23,7 +24,8 @@ const worker = {
         },
       };
     }
-    return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    const country=(request as Request & {cf?:{country?:string}}).cf?.country;
+    return withEdgeLocation(country,(env as unknown as {QUIVER_EDGE_SIGNING_KEY?:string}).QUIVER_EDGE_SIGNING_KEY,()=>runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx)));
   },
 };
 

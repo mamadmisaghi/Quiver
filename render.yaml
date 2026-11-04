@@ -1,4 +1,4 @@
-# Quiver paper beta. One engine instance. Frontend remains at the existing published Site.
+# Quiver paper and wallet-authorized live trading. One engine instance behind the existing Workspace Site.
 # The replay disk makes Render stop the old engine before starting the next one.
 # This is required by the PostgreSQL single-writer lock; do not remove it or scale this service.
 services:
@@ -23,19 +23,27 @@ services:
       - key: PORT
         value: "10000"
       - key: QUIVR_MODE
-        value: mock
+        value: mainnet
+      - key: CHAIN_ID
+        value: "4663"
+      - key: LIVE_EXECUTION_PROFILE
+        value: venue-wallets
+      - key: TERMS_VERSION
+        value: live-controls-v1
+      - key: QUIVER_EDGE_PUBLIC_KEY
+        value: "MCowBQYDK2VwAyEAjOiJqGUId+nUOeMIjp003jcckM0jag7qK3apKMIXiTk="
       - key: DEV_LOGIN_ENABLED
         value: "false"
       - key: QUIVR_DEV_PERSIST
         value: "0"
       - key: QUIVR_MAINNET_ENABLED
-        value: "false"
+        value: "true"
       - key: HL_TESTNET_ORDERS
         value: "false"
       - key: LLM_USER_DAILY_COMPILES
         value: "30"
       - key: PRICE_SOURCE
-        value: mock
+        value: mainnet-readonly
       - key: DATABASE_URL
         fromDatabase:
           name: quiver-paper-db

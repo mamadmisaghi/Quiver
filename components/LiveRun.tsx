@@ -282,7 +282,8 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
           <button autoFocus onClick={() => control(run?.status === "paused" ? "resume" : "pause")} disabled={!run || done} className="btn rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bg hover:bg-white disabled:opacity-40">{run?.status === "paused" ? "Resume" : "Pause"}</button>
           <button onClick={() => setConfirm("stop")} disabled={!run || done} className="btn rounded-full border border-short/40 px-4 py-2 text-[13px] text-short hover:bg-short/10 disabled:opacity-40">Stop</button>
           {run && <Link href={`/app/run/${run.id}/replay`} data-testid="replay-link" className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] text-ink-2 hover:border-white/30 hover:bg-white/5">Replay</Link>}
-          <button onClick={() => setConfirm("live")} disabled={!run} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] text-ink-2 hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Go live…</button>
+          {run && <Link href={"/app/live?strategy="+encodeURIComponent(run.strategyId)} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] text-ink-2 hover:bg-white/5">Review live strategy</Link>}
+          {run?.mode === "testnet" && <button onClick={() => setConfirm("live")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] text-ink-2">Testnet key controls</button>}
         </div>
       </div>
 
@@ -307,7 +308,7 @@ export default function LiveRun({ runId: requested }: { runId: string }) {
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <button autoFocus onClick={() => setConfirm(null)} className="btn rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-bg hover:bg-white">Keep paper trading</button>
               <button onClick={goLive} disabled={busy || skUnavailable || (!skey?.active && (!caps || !!prepared))} className="btn disabled:cursor-not-allowed disabled:opacity-50 rounded-full border border-line-2 px-4 py-2 text-[13px] text-ink-2 hover:bg-white/5">{skey?.active ? "Start live run" : busy ? "Preparing…" : "Prepare session key"}</button>
-              <span className="ml-1 text-[12.5px] text-muted">Live and testnet are paper only during the beta.</span>
+              <span className="ml-1 text-[12.5px] text-muted">These controls apply to the testnet account. Open Live trading to review a mainnet order.</span>
             </div>
           </div>
         </Card>)}

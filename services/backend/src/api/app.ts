@@ -1,3 +1,7 @@
+import { workspaceRewards, workspaceRevenue } from "../workflows/participation";
+import { MainnetHost } from "../execution/live-host";
+import { liveRoutes } from "../execution/live-routes";
+import { verifiedEdgeCountry } from "../execution/live-region";
 import { testnetIssues } from "../execution/testnet-workflow";
 import { TestPoolReceipts } from "../execution/testpool-receipts";
 import { paperAccount } from "../workflows/account";
@@ -232,6 +236,7 @@ export function createApp(o: AppOptions) {
   const geoNote = (u: User, st: unknown): ValidationIssue[] => !stockOk(u) && usesStock(st) ? [{ path: "/actions", code: "geo_restricted", severity: "warning", message: "Stock Tokens run in demo/paper only for your region; live execution is not available." }] : [];
   const ipCountry = (c: Context): string | null => {
     // Mock: x-mock-country header (default DE). Testnet/mainnet: GEO_IP_DB_PATH lookup (MaxMind) — not wired yet => null (unknown, fail closed for Stock Tokens).
+    if(cfg.LIVE_EXECUTION_PROFILE==="venue-wallets")return verifiedEdgeCountry(c.req.raw,cfg.SIWE_ORIGIN,cfg.QUIVER_EDGE_PUBLIC_KEY,clock.now());
     if (cfg.QUIVR_MODE !== "mock") return c.req.header("cf-ipcountry")?.toUpperCase() ?? null;
     return (c.req.header("x-mock-country") ?? "DE").toUpperCase();
   };
@@ -243,7 +248,7 @@ export function createApp(o: AppOptions) {
     else { u.eligibility.stockTokens = "allowed"; u.eligibility.reason = null; }
   };
   const meView = (u: User) => ({ id: u.id, createdAt: iso(u.createdAt), displayName: u.displayName, wallets: [{ chain: "robinhood" as const, address: u.wallet, kind: "embedded" as const }],
-    eligibility: u.eligibility, enabledModes: ["paper" as const], quotas: { compilesPerDay: cfg.LLM_USER_DAILY_COMPILES, compilesUsedToday: u.compiles.day === today() ? u.compiles.n : 0 } });
+    eligibility: u.eligibility, enabledModes: cfg.LIVE_EXECUTION_PROFILE==="venue-wallets"&&cfg.QUIVR_MAINNET_ENABLED?["paper" as const,"live" as const]:["paper" as const], quotas: { compilesPerDay: cfg.LLM_USER_DAILY_COMPILES, compilesUsedToday: u.compiles.day === today() ? u.compiles.n : 0 } });
   // M5.28: a decimal string with more than 18 fraction digits fails the AmountStr regex; surface details.reason "too_many_decimals"
   // (details becomes { reason, issues }) so clients see the same reason as the per-asset check. Other failures keep the issue array.
   const valDetails = (issues: z.core.$ZodIssue[], raw: unknown) => { const fi = friendlyIssues(issues);
@@ -369,7 +374,7 @@ export function createApp(o: AppOptions) {
   app.get("/health", (c) => c.json({ ok: true, ready: !warmup.warming, warmup: warmup.view(), notice: warmup.warming ? WARMUP_OBJ : null } satisfies z.infer<typeof O.HealthRes>));
   app.get("/ready", (c) => {
     const ready = !o.isDraining?.() && (!o.durable || o.durable.healthy);
-    return c.json({ ready, storage: o.durable ? (o.durable.healthy ? "postgres" : "unavailable") : "memory", execution: "paper", workflowPrices: "observed", workflowDriver: { lastCycleAt: workflows.lastCompletedAt, failedCycles: workflows.failedCycles }, prices: cfg.PRICE_SOURCE === "mock" ? "synthetic" : "read-only", ai: !!cfg.OPENROUTER_API_KEY, auth: !!cfg.PRIVY_APP_ID, warmup: warmup.view().state }, ready ? 200 : 503);
+    return c.json({ ready, storage: o.durable ? (o.durable.healthy ? "postgres" : "unavailable") : "memory", execution: cfg.LIVE_EXECUTION_PROFILE==="venue-wallets"&&cfg.QUIVR_MAINNET_ENABLED?"paper_and_mainnet":"paper", workflowPrices: "observed", workflowDriver: { lastCycleAt: workflows.lastCompletedAt, failedCycles: workflows.failedCycles }, prices: cfg.PRICE_SOURCE === "mock" ? "synthetic" : "read-only", ai: !!cfg.OPENROUTER_API_KEY, auth: !!cfg.PRIVY_APP_ID, warmup: warmup.view().state }, ready ? 200 : 503);
   });
   app.get("/status", (c) => c.json({ ok: !killSwitch, warmingUp: warmup.warming, mode: cfg.QUIVR_MODE, chainId: cfg.CHAIN_ID, venues: venueInfo(), engineLagSec: 0 }));
   const venueInfo = () => Object.values(adapters).map((a) => ({ id: a.id, name: a.name, status: a.status(), capabilities: a.capabilities, note: a.note }));
@@ -445,13 +450,18 @@ export function createApp(o: AppOptions) {
   const r = new Hono<Env>();
   r.use("*", auth);
   const executionCommit=async()=>{if(o.durable)await o.durable.commit();else persist?.touch();};
+  const mainnetEnabled=()=>cfg.LIVE_EXECUTION_PROFILE==="venue-wallets"&&cfg.QUIVR_MAINNET_ENABLED&&cfg.QUIVR_MODE==="mainnet"&&!killSwitch&&!o.isDraining?.();
+  const liveHost=new MainnetHost({store,config:cfg,vault,now:()=>clock.now(),healthy:()=>!!o.durable?.healthy&&!o.isDraining?.(),enabled:mainnetEnabled,commit:async()=>{if(!o.durable?.healthy)throw new HostError(503,"Durable live storage unavailable.");await o.durable.commit();}});
+  if((o.autoTimers??true)&&o.durable&&(cfg.LIVE_EXECUTION_PROFILE==="venue-wallets"||store.livePrograms.size||store.liveAllowances.size))liveHost.startMonitor();
+  app.get("/live/status",c=>c.json({enabled:mainnetEnabled()&&!!o.durable?.healthy,network:"mainnet",venues:["hyperliquid","solana","robinhood"],termsVersion:cfg.TERMS_VERSION,quiverFeeBps:0,originVerified:!!verifiedEdgeCountry(c.req.raw,cfg.SIWE_ORIGIN,cfg.QUIVER_EDGE_PUBLIC_KEY,clock.now()),lastCycle:liveHost.lastCycle}));
+  r.route("/live",liveRoutes(liveHost,limit));
   const execution=new ExecutionService({store,vault,venue:new HyperliquidTestnet(),now:()=>clock.now(),origin:cfg.SIWE_ORIGIN,
     enabled:()=>cfg.HL_TESTNET_ORDERS==="true" && !killSwitch && !o.isDraining?.(),durable:()=>!!o.durable?.healthy,commit:executionCommit});
   if(o.autoTimers??true)execution.startMonitor();
   r.post("/execution/pause-all",async c=>{
     const u=c.get("user");
     const result=await execution.exclusive(u.id,async()=>{
-      execution.pause(u);
+      execution.pause(u);liveHost.access.pause(u);if(mainnetEnabled())for(const row of liveHost.list(u.id))if(row.status==="running")await liveHost.coord.control(u.id,row.id,"pause").catch(()=>{});
       for(const row of workflows.list(u.id))if(row.session.status==="running" && row.session.provenance==="server")workflows.control(u.id,row.session.id,row.session.controlVersion??0,"pause");
       for(const run of [...store.runs.values()])if(run.ownerId===u.id && run.mode==="paper" && runs.live.has(run.id) && run.status==="running")await runs.control(run.id,"pause");
       return execution.view(u);
@@ -496,6 +506,7 @@ export function createApp(o: AppOptions) {
     const b = await body(c, A.EligibilityDeclareReq); const u = c.get("user");
     if (b.acceptedTermsVersion !== cfg.TERMS_VERSION) throw new ApiErr("validation_failed", `Accept the current terms (${cfg.TERMS_VERSION}).`);
     const country = ipCountry(c);
+    u.declaredResidence=b.countryOfResidence.toUpperCase();
     u.eligibility.selfDeclaredNonUsPerson = true; u.termsVersion = b.acceptedTermsVersion;
     computeElig(u, country);
     if (country && b.countryOfResidence.toUpperCase() !== country) { u.eligibility.stockTokens = "unknown"; u.eligibility.reason = "Declared country doesn't match your network location."; }
@@ -1469,6 +1480,7 @@ export function createApp(o: AppOptions) {
     store.audit.push({ at: t, userId: c.get("user").id, action: "copy.sync", target: `${s.id}:v${latest}` });
     return c.json(copyView(s)); });
   r.get("/rewards", (c) => {
+    if (cfg.LIVE_EXECUTION_PROFILE === "venue-wallets") return c.json(workspaceRewards(store,c.get("user").id,clock.now()));
     const uid = c.get("user").id; const mine = [...store.strategies.values()].filter((s) => s.ownerId === uid);
     const done: Record<string, boolean> = {
       draft: mine.length > 0,
@@ -1483,6 +1495,7 @@ export function createApp(o: AppOptions) {
     return c.json({ mock: true, example: true, notice: NOTICE.rewards, points, season: EXAMPLE_SEASON, rank, totalParticipants, quests, history });
   });
   r.get("/revenue", (c) => {
+    if (cfg.LIVE_EXECUTION_PROFILE === "venue-wallets") return c.json(workspaceRevenue(store,c.get("user").id));
     const uid = c.get("user").id; const mine = [...store.strategies.values()].filter((s) => s.ownerId === uid && s.public);
     const bps = cfg.REVENUE_ACCOUNTING_ENABLED ? cfg.CREATOR_SHARE_BPS : undefined; const on = bps !== undefined;
     // M5.22 paper ledger: fills from OTHER users' paper runs of strategies copied/forked from mine. Integer cents to avoid float drift.
@@ -1508,7 +1521,7 @@ export function createApp(o: AppOptions) {
       limits: { maxActiveRuns: cfg.MAX_ACTIVE_RUNS_PER_USER, maxEventStreams: cfg.MAX_SSE_PER_USER, compilesPerDay: cfg.LLM_USER_DAILY_COMPILES, maxStrategySignals: 24 },
       usage: { activeRuns, strategies, compilesUsedToday: u.compiles.day === today() ? u.compiles.n : 0 },
       sessionKeyDefaults: sk.defaults(),
-      trading: { enabledModes: ["paper"], liveEnabled: false, killSwitch },
+      trading: { enabledModes: mainnetEnabled()?["paper","live"]:["paper"], liveEnabled: mainnetEnabled(), killSwitch },
       alerts: { configured: false, channels: [], note: "Alerts are not available yet: a delivery provider (email / Telegram / webhook) has not been chosen." },
       asOf: iso(clock.now()),
     }));
@@ -1846,6 +1859,6 @@ export function createApp(o: AppOptions) {
     });
   }
 
-  return { app, store, runs, workflows, execution, alerts, autopilot, replays: { processRenders }, secrets: { userRpcFor }, rateLimit: { size: () => rl.size, prune: rlPrune, max: RL_MAX }, persist: persist ? { path: persist.path, flush: () => persist.flush(), stats: persist.stats, stop: () => { if (persistTimer) clearInterval(persistTimer); persist.flushSync(); } } : null, mkt, registry, adapters, setKillSwitch: (v: boolean) => { killSwitch = v; if (v) for (const l of runs.live.values()) runs.haltExternal(l.run.id, "kill_switch", "Trading paused platform-wide."); } };
+  return { app, store, runs, workflows, execution, liveHost, alerts, autopilot, replays: { processRenders }, secrets: { userRpcFor }, rateLimit: { size: () => rl.size, prune: rlPrune, max: RL_MAX }, persist: persist ? { path: persist.path, flush: () => persist.flush(), stats: persist.stats, stop: () => { if (persistTimer) clearInterval(persistTimer); persist.flushSync(); } } : null, mkt, registry, adapters, setKillSwitch: (v: boolean) => { killSwitch = v; if (v) for (const l of runs.live.values()) runs.haltExternal(l.run.id, "kill_switch", "Trading paused platform-wide."); } };
 }
 export type QuiverApp = ReturnType<typeof createApp>;

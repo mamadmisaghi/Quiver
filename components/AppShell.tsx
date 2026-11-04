@@ -12,6 +12,7 @@ const NAV: [string, string, string][] = [
   ["Home", "/app", "M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1z"],
   ["Strategies", "/app/strategies", "M4 5h12M4 10h12M4 15h7"],
   ["Paper trades", "/app/run", "M3 14l4-4 3 3 7-7M13 6h4v4"],
+  ["Live trading", "/app/live", "M2 13l5-6 4 4 7-8M13 3h5v5"],
   ["Approvals", "/app/approvals", "M4 10.5l3.5 3.5L16 5.5"],
   ["Portfolio", "/app/portfolio", "M3 16V9M8 16V4M13 16v-5M18 16V7"],
   ["Autopilot", "/app/autopilot", "M10 3v4M10 13v4M3 10h4M13 10h4M10 10m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"],

@@ -342,3 +342,17 @@ assert.match(rejected.coverage[0].issue!, /symbol mapping/);
 console.log(
   "PASS verified underlying symbol on existing Tiingo interface, owner rate-limit forwarded, out-of-range bars ignored",
 );
+
+// The issuer-backed mainnet token can have a different id to the legacy paper catalogue.
+const issuerEquity = structuredClone(equity);
+const address = "0x" + "41".repeat(20);
+const candidate = issuerEquity.assets[0].resolution!.candidates[0];
+Object.assign(candidate,{id:"robinhood:token:"+address,source:"robinhood_registry",address});
+issuerEquity.assets[0].resolution!.selectedId=candidate.id;
+const issuerDeps = {
+  now, getJson: async () => ({ assets: [{tokenSymbol:"AAPL",status:"ASSET_STATUS_ACTIVE",deployments:[{chainId:4663,contractAddress:address}]}] }),
+  tiingo:{ bars: async () => [start,start+M,start+2*M].map(t=>({t,o:1,c:1,h:1,l:1})) },
+};
+assert.equal((await replayWorkflowHistory(issuerEquity,period,limit,issuerDeps)).coverage[0].observations,3);
+candidate.address = "0x" + "42".repeat(20);
+assert.match((await replayWorkflowHistory(issuerEquity,period,limit,issuerDeps)).coverage[0].issue!,/symbol mapping/);

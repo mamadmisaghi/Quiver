@@ -1,4 +1,5 @@
 "use client";
+import AccountActivity from "@/components/live/AccountActivity";
 // M5.12 feed page: followed traders' publishes/updates plus your own runs and copies (GET /v1/activity).
 import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
@@ -29,6 +30,7 @@ export default function ActivityView() {
   return (
     <Wrap>
       <PageHeader title="Activity" sub="What the traders you follow publish, and your own runs and copies. A trader’s runs are never shown." right={tabs} />
+      <AccountActivity part="activity"/>
       <Card className="mt-8 px-5 py-2" role="tabpanel" id="act-panel" aria-labelledby={`act-tab-${scope}`}>{<PaperActivity key={scope} scope={scope} />}</Card>
     </Wrap>
   );

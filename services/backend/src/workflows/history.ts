@@ -1,6 +1,7 @@
 import { Workflow, canonicalizeWorkflow } from "../../contracts/src/workflow";
 import { Risk } from "../../contracts/src/strategy";
 import { TF_MS, type Tf } from "../engine/indicators";
+import { robinhoodIssuerCandidate, ROBINHOOD_ISSUER_ASSETS } from "../compile/robinhood-assets";
 import { marketJson } from "../compile/markets";
 import type { Registry } from "../venues/registry";
 import type { TiingoHistory } from "../venues/tiingo";
@@ -218,16 +219,17 @@ async function loadSeries(
       }
     } else if (market.venue === "robinhood") {
       source = window.timeframe === "1d" ? "tiingo_adjusted_daily_underlying" : "tiingo_iex_underlying";
-      const instrument = deps.registry?.get(market.id);
-      if (
-        !instrument ||
-        instrument.venue !== "robinhood" ||
-        instrument.symbol !== market.symbol ||
-        !(instrument.assetClass === "equity" || instrument.assetClass === "etf")
-      )
+      const listed = deps.registry?.get(market.id);
+      const issuer = market.source === "robinhood_registry"
+        ? robinhoodIssuerCandidate(await get(ROBINHOOD_ISSUER_ASSETS), market.symbol)
+        : null;
+      const verified = market.source === "robinhood_registry"
+        ? issuer !== null && issuer.id === market.id && issuer.address === market.address?.toLowerCase()
+        : listed?.venue === "robinhood" && listed.symbol === market.symbol && (listed.assetClass === "equity" || listed.assetClass === "etf");
+      if (!verified)
         return unavailable(source, "The selected instrument has no verified equity/ETF symbol mapping.");
       if (!deps.tiingo) return unavailable(source, "Historical underlying equity data is not configured.");
-      const bars = await deps.tiingo.bars(instrument.symbol, ms, from - ms, to, deps.ownerId);
+      const bars = await deps.tiingo.bars(market.symbol, ms, from - ms, to, deps.ownerId);
       if (!bars) return unavailable(source, "The equity history provider did not supply bars.");
       // TiingoHistory fetches entire dates and may return points outside the requested intraday range.
       if (bars.length > 5000) return unavailable(source, "The equity history exceeded the response bound.");

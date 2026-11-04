@@ -1,4 +1,5 @@
 "use client";
+import AccountActivity from "@/components/live/AccountActivity";
 // M4.2: GET /v1/approvals (status filter) + POST /v1/approvals/:id. Runs started with "Ask before each trade" land here.
 import { useState } from "react";
 import Link from "@/components/Link";
@@ -22,7 +23,8 @@ export default function ApprovalsView() {
   const items = q.data?.items ?? [];
   return (
     <Wrap>
-      <PageHeader title="Approvals" sub="Runs set to ask before each trade wait here. Closes and exits never wait." />
+      <PageHeader title="Approvals" sub="Review live orders that need your wallet and paper trades waiting for your approval." />
+      <AccountActivity part="approvals"/>
       <div className="mt-6 flex gap-1.5" role="tablist" aria-label="Filter">
         {TABS.map(([v, l]) => <button key={l} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`btn rounded-full border px-3.5 py-1.5 text-[13px] ${tab === v ? "border-accent/60 text-accent" : "border-line-2 text-ink-2 hover:bg-white/5"}`}>{l}</button>)}
       </div>

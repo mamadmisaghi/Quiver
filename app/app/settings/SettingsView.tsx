@@ -82,7 +82,7 @@ export default function SettingsView() {
           <h2 className="font-medium">Trading</h2>
           <dl className="mt-3 divide-y divide-line">
             <Row k="Modes" v={s.trading.enabledModes.join(", ")} />
-            <Row k="Live trading" v={<span className="text-muted">Not open yet</span>} />
+            <Row k="Live trading" v={<a className="text-accent" href="/app/live">{s.trading.liveEnabled?"Manage live trading":"Open trading desk"} ↗</a>} />
             <Row k="Kill switch" v={s.trading.killSwitch ? <span className="text-short">On — new runs blocked</span> : "Off"} />
           </dl>
         </Card>}

@@ -44,23 +44,22 @@ export const LeaderboardRes = z.object({ window: z.enum(["7d", "30d", "all"]), b
 // ---------- Rewards (MOCK / example only) ----------
 export const Quest = z.object({ id: z.string(), title: z.string(), done: z.boolean() });
 export const RewardsRes = z.object({
-  mock: z.literal(true), notice: z.string(),
-  /** Always true in M3.1: every number below is EXAMPLE data for UI layout, not a live program. */
-  example: z.literal(true),
+  mock: z.boolean(), notice: z.string(),
+  example: z.boolean(),
   points: z.number().int(), season: z.object({ id: z.string(), name: z.string(), startsAt: IsoTime, endsAt: IsoTime }), rank: z.number().int(), totalParticipants: z.number().int(),
   quests: z.array(Quest.extend({ points: z.number().int(), progress: z.number().min(0).max(1) })),
   history: z.array(z.object({ at: IsoTime, points: z.number().int(), reason: z.string() })),
 });
 
 // ---------- Revenue (MOCK / example only) ----------
-export const RevenueRow = z.object({ strategyId: StrategyId, name: z.string(), forks: z.number().int(), followersVolumeUsd: Decimal, earnedUsd: Decimal });
+export const RevenueRow = z.object({ strategyId: StrategyId, name: z.string(), forks: z.number().int(), settledFills: z.number().int().min(0).optional(), followersVolumeUsd: Decimal, earnedUsd: Decimal });
 export const RevenueRes = z.object({
-  mock: z.literal(true), notice: z.string(),
+  mock: z.boolean(), notice: z.string(),
   earnedUsd: Decimal, claimableUsd: Decimal, forks: z.number().int(), creatorSharePct: Decimal.nullable(), // null = to be confirmed
   rows: z.array(RevenueRow), claimEnabled: z.literal(false),
   /** M5.22: "paper_ledger" = followersVolumeUsd/earnedUsd are accrued from real paper fills of other users' copies/forks
    *  (REVENUE_ACCOUNTING_ENABLED + CREATOR_SHARE_BPS). Still paper: nothing is paid or claimable. "off" = zeros as before. */
-  accounting: z.enum(["off", "paper_ledger"]).default("off"),
+  accounting: z.enum(["off", "paper_ledger", "live_ledger"]).default("off"),
 });
 
 // ---------- Skills ----------
