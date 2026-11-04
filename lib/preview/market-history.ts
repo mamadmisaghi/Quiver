@@ -40,11 +40,16 @@ async function spotBars(
   const base = step === steps["4h"] ? steps["1h"] : step;
   const batches: Promise<unknown>[] = [];
   for (let start = from; start < to; start += base * 299) {
-    const query = new URLSearchParams({
-      start: new Date(start).toISOString(),
-      end: new Date(Math.min(to, start + base * 299)).toISOString(),
-      granularity: String(base / 1000),
-    });
+    // The latest 300 buckets fully cover the shorter chart windows. Keep that URL
+    // stable across viewers and filter the completed candles to our window below.
+    const query = new URLSearchParams({ granularity: String(base / 1000) });
+    if ((to - from) / base > 299) {
+      query.set("start", new Date(start).toISOString());
+      query.set(
+        "end",
+        new Date(Math.min(to, start + base * 299)).toISOString(),
+      );
+    }
     batches.push(
       marketJson(
         "https://api.exchange.coinbase.com/products/" +
@@ -101,7 +106,6 @@ async function krakenBars(
     query = new URLSearchParams({
       pair,
       interval: String(step / 60000),
-      since: String(from / 1000 - 1),
     });
   const raw = (await marketJson(
     "https://api.kraken.com/0/public/OHLC?" + query,
@@ -111,15 +115,13 @@ async function krakenBars(
   const rows = raw.result?.[pair];
   if (raw.error?.length || !Array.isArray(rows)) return [];
   return validBars(
-    rows
-      .filter(Array.isArray)
-      .map(([t, o, h, l, c]) => ({
-        t: Number(t) * 1000 + step,
-        o: Number(o),
-        h: Number(h),
-        l: Number(l),
-        c: Number(c),
-      })),
+    rows.filter(Array.isArray).map(([t, o, h, l, c]) => ({
+      t: Number(t) * 1000 + step,
+      o: Number(o),
+      h: Number(h),
+      l: Number(l),
+      c: Number(c),
+    })),
     from,
     to,
   );

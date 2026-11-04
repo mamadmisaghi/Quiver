@@ -60,3 +60,43 @@ test("perpetual history verifies the instrument and interval and uses the comple
     globalThis.fetch = original;
   }
 });
+test("Solana history uses the USD spot reference and discards the current open candle", async () => {
+  const original = globalThis.fetch;
+  const step = 900000,
+    end = Math.floor(Date.now() / step) * step;
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (
+        url !== "https://api.kraken.com/0/public/OHLC?pair=SOLUSD&interval=15"
+      )
+        return new Response(null, { status: 503 });
+      const row = (t: number) => [
+        t / 1000,
+        "100",
+        "103",
+        "99",
+        "102",
+        "101",
+        "8",
+        5,
+      ];
+      return Response.json({
+        error: [],
+        result: { SOLUSD: [row(end - step), row(end)], last: end / 1000 },
+      });
+    };
+    const h = MarketHistoryRes.parse(
+      await readMarketHistory(
+        "sol:token:So11111111111111111111111111111111111111112",
+        "15m",
+        "1d",
+      ),
+    );
+    assert.equal(h.coverage[0].source, "Kraken SOL/USD reference");
+    assert.equal(h.bars.length, 1);
+    assert.equal(h.bars[0].c, "102");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
