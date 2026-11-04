@@ -1,3 +1,5 @@
+import { WorkflowHost } from "../../src/workflows/host";
+import { paperLivePlan } from "../../src/execution/live-review";
 import {
   randomUUID,
   createHash,
@@ -266,6 +268,69 @@ describe("mainnet HTTP boundaries", () => {
     ).toBe(409);
     expect((await req(a.id, "/start", start, true)).status).toBe(201);
     expect(send).toHaveBeenCalledOnce();
+
+    // The saved draft still says $20. The session edited that order to $25.
+    const paper = new WorkflowHost({
+      records: store.workflowSessions,
+      now: () => now,
+      healthy: () => true,
+      commit: async () => {},
+      intervalMs: 20000,
+      maxActive: 5,
+    });
+    const paperId = paper.start(
+      a.id,
+      "paper-review-source",
+      "stg_mainnet",
+      1,
+      plan(),
+      "auto",
+      120,
+    ).session.id;
+    paper.edit(a.id, paperId, 0, [{ key: "entry.size", value: 25 }]);
+    const source = { strategyId: paperId, version: 2 };
+    expect((await req(b.id, "/review", source)).status).toBe(404);
+    expect((await req(a.id, "/review", { ...source, version: 1 })).status).toBe(
+      409,
+    );
+    const checked = (await (await req(a.id, "/review", source)).json()) as {
+      reviewHash: string;
+      stages: { amount: { value: number } }[];
+    };
+    expect(checked.stages[0].amount.value).toBe(25);
+    const launch = {
+      ...start,
+      ...source,
+      key: "paper-fresh-launch",
+      reviewHash: checked.reviewHash,
+    };
+    expect((await req(a.id, "/start", launch, true)).status).toBe(201);
+    expect(
+      send.mock.calls.at(-1)?.[0].strategy.workflow?.stages[0].amount.value,
+    ).toBe(25);
+    paper.edit(a.id, paperId, 1, [{ key: "entry.size", value: 35 }]);
+    expect((await req(a.id, "/start", launch, true)).status).toBe(409);
+    expect(send).toHaveBeenCalledTimes(2);
+    const sample = structuredClone(paper.owned(a.id, paperId).session);
+    const w = sample.strategy.workflow!,
+      entry = w.stages[0];
+    w.stages.push(
+      {
+        ...entry,
+        id: "dependent",
+        after: [{ stageId: entry.id, event: "filled" }],
+      },
+      { ...entry, id: "independent" },
+    );
+    sample.pausedRules = [entry.id];
+    const effective = paperLivePlan(sample, 3);
+    expect(effective.strategy.workflow?.stages.map((s) => s.id)).toEqual([
+      "independent",
+    ]);
+    expect(effective.omitted).toEqual(["entry", "dependent"]);
+    expect(sample.strategy.workflow!.stages).toHaveLength(3);
+    sample.provenance = "imported";
+    expect(() => paperLivePlan(sample, 3)).toThrow(/editable/);
     fail = true;
     expect((await req(a.id, "/start", start, true)).status).toBe(503);
     await host.stop();

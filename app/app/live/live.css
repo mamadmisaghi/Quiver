@@ -571,3 +571,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+.live-home-list { margin-top: .8rem; }
+.live-home-list li + li { border-top: 1px solid var(--lv-line); }
+.live-home-list a { display: flex; align-items: center; justify-content: space-between; gap: .9rem; padding: .8rem 0; font-size: .9rem; }
+.live-home-list small { display: block; color: var(--lv-muted); margin-top: .2rem; }
+.live-first-action, .live-bridge { margin: 1rem 0; border: 1px solid var(--lv-line); border-radius: 10px; padding: 1rem; }
+.live-first-action strong { color: var(--lv-accent); font-size: .85rem; }
+.live-first-action p, .live-bridge p, .live-rule-details p { margin-top: .4rem; line-height: 1.6; font-size: .84rem; }
+.live-rule-details { margin-bottom: 1.25rem; font-size: .82rem; color: var(--lv-muted); }
+.live-rule-details summary { cursor: pointer; color: var(--color-ink); }
+.live-review-page .live-grid > * { min-width: 0; }
+.live-bridge button { margin-top: .75rem; }
+.live-field { display: flex; align-items: center; gap: .75rem; font-size: .85rem; }
+.live-field select { background: var(--lv-bg); border: 1px solid var(--lv-line); padding: .4rem; border-radius: 6px; }

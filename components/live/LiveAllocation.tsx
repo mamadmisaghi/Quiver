@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   NETWORK_DETAILS,
   connected,
@@ -7,21 +7,23 @@ import {
   shortAddress,
   type LiveNetwork,
   type LiveAccount,
-  type Review,
   type RunView,
 } from "@/lib/live-client";
 import SpotAutomation from "./SpotAutomation";
-export type ResolvedReview = Review & {
-  reviewHash?: string;
-  stages: (Review["stages"][number] & { tokenDecimals?: number | null })[];
-};
+import {
+  orderSize,
+  ruleTiming,
+  type LiveReview,
+} from "@/services/backend/src/execution/live-review";
 export default function LiveAllocation({
   review,
   account,
   connectedApi,
   onStart,
+  beforeStart,
 }: {
-  review: ResolvedReview;
+  review: LiveReview;
+  beforeStart?: () => void;
   account: LiveAccount | null;
   connectedApi: boolean;
   onStart: (id: string) => void;
@@ -55,6 +57,8 @@ export default function LiveAllocation({
       (sum, s) => sum + (s.amount.unit === "usd" ? (s.amount.value ?? 0) : 0),
       0,
     );
+    if (networks.length === 1 && stages.length && review.budgetUsd)
+      return String(review.budgetUsd);
     return stages.length
       ? String(
           +Math.min(
@@ -70,12 +74,34 @@ export default function LiveAllocation({
     n === "solana-mainnet"
       ? (account?.solanaWallets ?? [])
       : (account?.evmWallets ?? []);
+  const walletReady =
+    networks.length > 0 &&
+    networks.every((n) =>
+      wallets(n).includes(val(n + "wallet", wallets(n)[0] ?? "")),
+    );
+  const liveReady =
+    connectedApi &&
+    !!account?.consent &&
+    account.consent.version === account.termsVersion &&
+    !account.paused &&
+    walletReady &&
+    !!review.reviewHash &&
+    review.stages.every((s) => s.network);
+  const linkedWallets = JSON.stringify([
+    account?.evmWallets,
+    account?.solanaWallets,
+  ]);
+  useEffect(
+    () => setApproved(false),
+    [linkedWallets, account?.consent?.at, account?.paused, review.reviewHash],
+  );
   async function start() {
-    if (!account || !approved || lock.current || !review.reviewHash) return;
+    if (!liveReady || !approved || lock.current) return;
     lock.current = true;
     setBusy(true);
     setError("");
     try {
+      beforeStart?.();
       const bindings = networks.map((n) => {
         const detail = NETWORK_DETAILS[n],
           wallet = val(n + "wallet", wallets(n)[0] ?? ""),
@@ -134,12 +160,26 @@ export default function LiveAllocation({
         acceptRealOrders: true,
       };
       const signature = JSON.stringify(body);
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(signature),
+      );
+      const storageKey =
+        "quiver.live.pending." +
+        Array.from(new Uint8Array(digest), (b) =>
+          b.toString(16).padStart(2, "0"),
+        ).join("");
       if (key.current?.signature !== signature)
-        key.current = { signature, value: crypto.randomUUID() };
+        key.current = {
+          signature,
+          value: sessionStorage.getItem(storageKey) ?? crypto.randomUUID(),
+        };
+      sessionStorage.setItem(storageKey, key.current.value);
       const r = await connected<RunView>("/start", {
         ...body,
         key: key.current.value,
       });
+      sessionStorage.removeItem(storageKey);
       onStart(r.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start live orders.");
@@ -152,9 +192,7 @@ export default function LiveAllocation({
     <div className="live-allocation">
       <div className="live-card-top">
         <div>
-          <span className="live-kicker">
-            Strategy review · V{review.version}
-          </span>
+          <span className="live-kicker">Reviewed rules</span>
           <h3>{review.name}</h3>
         </div>
         <span className="live-chip">
@@ -171,28 +209,9 @@ export default function LiveAllocation({
                 {s.side.toUpperCase()} {s.symbol}
                 {s.leverage > 1 ? " · " + s.leverage + "×" : ""}
               </strong>
-              <small>
-                {s.after.length
-                  ? "After " +
-                    s.after
-                      .map(
-                        (d) =>
-                          (review.stages.find((p) => p.id === d.stageId)
-                            ?.symbol ?? d.stageId) +
-                          " " +
-                          d.event.replaceAll("_", " "),
-                      )
-                      .join(" and ")
-                  : s.when || "On start"}
-              </small>
+              <small>{ruleTiming(s, review.stages)}</small>
             </div>
-            <span>
-              {s.amount.unit === "usd" ? "$" : ""}
-              {s.amount.value ?? "—"}{" "}
-              {s.amount.unit === "usd"
-                ? ""
-                : s.amount.unit.replaceAll("_", " ")}
-            </span>
+            <span>{orderSize(s.amount)}</span>
           </li>
         ))}
       </ol>
@@ -209,153 +228,231 @@ export default function LiveAllocation({
           Daily loss limit <strong>{review.risk.maxDailyLossPct}%</strong>
         </div>
       </div>
-      {connectedApi && account ? (
-        <>
-          <div className="live-form">
-            {networks.map((n) => {
-              const label = NETWORK_DETAILS[n];
-              return (
-                <fieldset className="span-two live-wallet-funds" key={n}>
-                  <legend>{label.label}</legend>
-                  <label className="span-two">
-                    Funding wallet
-                    <select
-                      value={val(n + "wallet", wallets(n)[0] ?? "")}
-                      onChange={(e) => change(n + "wallet", e.target.value)}
-                    >
-                      <option value="">Choose a linked wallet</option>
-                      {wallets(n).map((a) => (
-                        <option key={a} value={a}>
-                          {shortAddress(a)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+      <div className="live-first-action">
+        <strong>What happens first</strong>
+        {review.stages
+          .filter((s) => !s.after.length)
+          .map((s) => (
+            <p key={s.id}>
+              {s.conditional
+                ? "Watch for " + s.when + ". Once eligible, "
+                : "On the first eligible quote, "}
+              {mode === "auto"
+                ? "use granted permissions or request a signature to "
+                : "ask you to approve an order to "}
+              {s.side === "short" || s.side === "long"
+                ? "open a " +
+                  s.leverage +
+                  "× " +
+                  s.side +
+                  " on " +
+                  s.symbol +
+                  " with " +
+                  orderSize(s.amount) +
+                  " margin"
+                : s.side + " " + orderSize(s.amount) + " of " + s.symbol}
+              .
+            </p>
+          ))}
+      </div>
+      <details className="live-rule-details">
+        <summary>Repeat rules &amp; exits</summary>
+        {review.stages.map((s) => (
+          <p key={s.id}>
+            <strong>{s.symbol}</strong> ·{" "}
+            {s.repeat
+              ? [
+                  s.repeat.intervalMinutes
+                    ? "Every " + s.repeat.intervalMinutes + " min"
+                    : "Each eligible event",
+                  s.repeat.maxTimes
+                    ? "up to " + s.repeat.maxTimes + " fills"
+                    : "within allocation",
+                  s.repeat.conditionMode === "each_time"
+                    ? "recheck each time"
+                    : "after initial trigger",
+                ].join(", ")
+              : "Once"}{" "}
+            ·{" "}
+            {[
+              s.exits.stopLossPct && "Stop loss " + s.exits.stopLossPct + "%",
+              s.exits.takeProfitPct &&
+                "Take profit " + s.exits.takeProfitPct + "%",
+              s.exits.trailingStopPct &&
+                "Trailing stop " + s.exits.trailingStopPct + "%",
+              s.exits.timeExitHours &&
+                "Exit after " + s.exits.timeExitHours + "h",
+              ...s.exits.ladder.map(
+                (x) =>
+                  "At +" +
+                  x.atPct +
+                  "% sell " +
+                  +(100 * x.fraction).toFixed(2) +
+                  "%",
+              ),
+              s.exits.description,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "No automatic exit"}
+          </p>
+        ))}
+      </details>
+      <>
+        <div className="live-form">
+          {networks.map((n) => {
+            const label = NETWORK_DETAILS[n];
+            return (
+              <fieldset className="span-two live-wallet-funds" key={n}>
+                <legend>{label.label}</legend>
+                <label className="span-two">
+                  Funding wallet
+                  <select
+                    disabled={!wallets(n).length}
+                    value={val(n + "wallet", wallets(n)[0] ?? "")}
+                    onChange={(e) => change(n + "wallet", e.target.value)}
+                  >
+                    <option value="">
+                      {wallets(n).length
+                        ? "Choose a linked wallet"
+                        : "Wallet connection required"}
+                    </option>
+                    {wallets(n).map((a) => (
+                      <option key={a} value={a}>
+                        {shortAddress(a)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Allocate · {label.unit}
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={val(n + "usd", suggested(n))}
+                    onChange={(e) => change(n + "usd", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Fee cap per order · {label.feeUnit}
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={val(n + "fee", label.defaultFee)}
+                    onChange={(e) => change(n + "fee", e.target.value)}
+                  />
+                </label>
+                {n !== "hyperliquid-mainnet" && (
                   <label>
-                    Allocate · {label.unit}
+                    Network gas budget · {label.feeUnit}
                     <input
                       type="number"
-                      min="0"
                       step="any"
-                      value={val(n + "usd", suggested(n))}
-                      onChange={(e) => change(n + "usd", e.target.value)}
+                      min="0"
+                      value={val(
+                        n + "gas",
+                        String(
+                          Number(label.defaultFee) *
+                            Math.max(
+                              1,
+                              review.stages.filter((s) => s.network === n)
+                                .length,
+                            ),
+                        ),
+                      )}
+                      onChange={(e) => change(n + "gas", e.target.value)}
                     />
                   </label>
-                  <label>
-                    Fee cap per order · {label.feeUnit}
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={val(n + "fee", label.defaultFee)}
-                      onChange={(e) => change(n + "fee", e.target.value)}
-                    />
-                  </label>
-                  {n !== "hyperliquid-mainnet" && (
-                    <label>
-                      Network gas budget · {label.feeUnit}
+                )}
+                {review.stages
+                  .filter((s) => s.network === n && s.side === "sell")
+                  .map((s) => (
+                    <label key={s.id}>
+                      Allocate {s.symbol} tokens
                       <input
                         type="number"
-                        step="any"
                         min="0"
+                        step="any"
                         value={val(
-                          n + "gas",
-                          String(
-                            Number(label.defaultFee) *
-                              Math.max(
-                                1,
-                                review.stages.filter((s) => s.network === n)
-                                  .length,
-                              ),
-                          ),
+                          s.id + "inventory",
+                          String(s.amount.value ?? ""),
                         )}
-                        onChange={(e) => change(n + "gas", e.target.value)}
+                        onChange={(e) =>
+                          change(s.id + "inventory", e.target.value)
+                        }
                       />
                     </label>
-                  )}
-                  {review.stages
-                    .filter((s) => s.network === n && s.side === "sell")
-                    .map((s) => (
-                      <label key={s.id}>
-                        Allocate {s.symbol} tokens
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={val(
-                            s.id + "inventory",
-                            String(s.amount.value ?? ""),
-                          )}
-                          onChange={(e) =>
-                            change(s.id + "inventory", e.target.value)
-                          }
-                        />
-                      </label>
-                    ))}
-                </fieldset>
-              );
-            })}
-            <label>
-              Order approval
-              <select
-                value={mode}
-                onChange={(e) => {
-                  setMode(e.target.value as typeof mode);
-                  setApproved(false);
-                }}
-              >
-                <option value="confirm_each">Review every order</option>
-                <option value="auto">Use granted permissions</option>
-              </select>
-            </label>
-            <label>
-              Max slippage · basis points
-              <input
-                type="number"
-                min="1"
-                max="500"
-                value={slip}
-                onChange={(e) => {
-                  setSlip(e.target.value);
-                  setApproved(false);
-                }}
-              />
-            </label>
-            <label className="span-two live-check">
-              <input
-                type="checkbox"
-                checked={approved}
-                onChange={(e) => setApproved(e.target.checked)}
-              />
-              I authorize the displayed strategy to trade these real funds
-              within my limits.
-            </label>
-            <button
-              className="q-action q-primary span-two"
-              disabled={
-                !approved ||
-                busy ||
-                !account.consent ||
-                account.paused ||
-                !review.reviewHash
-              }
-              onClick={() => void start()}
+                  ))}
+              </fieldset>
+            );
+          })}
+          <label>
+            Order approval
+            <select
+              value={mode}
+              onChange={(e) => {
+                setMode(e.target.value as typeof mode);
+                setApproved(false);
+              }}
             >
-              {busy ? "Checking funds and permissions…" : "Start live trading"}
-            </button>
-            {(!account.consent || account.paused) && (
-              <small className="span-two">
-                Set your account limits and enable live orders in Wallet
-                permissions below.
-              </small>
-            )}
-            {error && (
-              <p role="alert" className="live-error span-two">
-                {error}
-              </p>
-            )}
-          </div>
-          {networks.includes("solana-mainnet") && (
+              <option value="confirm_each">Review every order</option>
+              <option value="auto">Use granted permissions</option>
+            </select>
+          </label>
+          <label>
+            Max slippage · basis points
+            <input
+              type="number"
+              min="1"
+              max="500"
+              value={slip}
+              onChange={(e) => {
+                setSlip(e.target.value);
+                setApproved(false);
+              }}
+            />
+          </label>
+          <label className="span-two live-check">
+            <input
+              type="checkbox"
+              disabled={!liveReady}
+              checked={approved}
+              onChange={(e) => setApproved(e.target.checked)}
+            />
+            I authorize the displayed strategy to trade these real funds within
+            my limits.
+          </label>
+          <button
+            className="q-action q-primary span-two"
+            disabled={!approved || busy || !liveReady}
+            onClick={() => void start()}
+          >
+            {busy ? "Checking funds and permissions…" : "Start live trading"}
+          </button>
+          {!liveReady && (
+            <small className="span-two">
+              {!connectedApi
+                ? "Real orders become available after production activation."
+                : !account
+                  ? "Sign in to link a funding wallet."
+                  : !review.reviewHash
+                    ? "Verify the exact session rules before authorization."
+                    : !walletReady
+                      ? "Link a funding wallet for each selected venue to continue."
+                      : "Enable trading in Wallet & risk limits to continue."}
+            </small>
+          )}
+          {error && (
+            <p role="alert" className="live-error span-two">
+              {error}
+            </p>
+          )}
+        </div>
+        {connectedApi &&
+          account &&
+          review.reviewHash &&
+          networks.includes("solana-mainnet") && (
             <SpotAutomation
               strategyId={review.strategyId}
               version={review.version}
@@ -369,14 +466,7 @@ export default function LiveAllocation({
                 .map((s) => ({ id: s.id, label: "Buy " + s.symbol }))}
             />
           )}
-        </>
-      ) : (
-        <p className="live-note">
-          {connectedApi
-            ? "Sign in to select funding wallets and authorize a live run."
-            : "The reviewed rules are available on this device. Funding and order authorization use the connected production account."}
-        </p>
-      )}
+      </>
     </div>
   );
 }

@@ -193,6 +193,8 @@ export type LiveOrder = {
   recoveryId: string | null;
 };
 export type LiveStage = {
+  symbol?: string;
+  when?: string;
   id: string;
   assetId: string;
   side: string;
@@ -203,6 +205,7 @@ export type LiveStage = {
   canClose: boolean;
 };
 export type RunView = {
+  name?: string;
   id: string;
   strategyId: string;
   version: number;
@@ -232,32 +235,6 @@ export type HandOff = {
   recoveryId: string;
   expiresAt: number;
   packet: RobinhoodTx;
-};
-export type Review = {
-  name: string;
-  strategyId: string;
-  version: number;
-  budgetUsd: number | null;
-  risk: {
-    maxPositionPct: number;
-    maxTotalExposurePct: number;
-    maxDailyLossPct: number;
-    maxOrdersPerDay: number;
-  };
-  stages: {
-    id: string;
-    symbol: string;
-    network: LiveNetwork | null;
-    address: string | null;
-    assetId: string | null;
-    side: string;
-    amount: { unit: string; value: number | null };
-    leverage: number;
-    when: string;
-    after: { stageId: string; event: string }[];
-    repeat: unknown;
-    exits: unknown;
-  }[];
 };
 export async function connected<T>(
   path: string,

@@ -1,3 +1,4 @@
+import { conditionText } from "../engine/workflow-view";
 import { createHash } from "node:crypto";
 import type { Strategy } from "../../contracts/src/strategy";
 import {
@@ -762,6 +763,7 @@ export class LiveCoordinator {
     const w = p.strategy.workflow!;
     return {
       id: p.id,
+      name: p.strategy.name,
       strategyId: p.strategyId,
       version: p.version,
       revision: p.revision,
@@ -799,6 +801,8 @@ export class LiveCoordinator {
         return {
           id: s.id,
           assetId: s.assetId,
+          symbol: marketFor(w, s).symbol,
+          when: s.when ? conditionText(w, s.when) : "On start",
           side: s.side,
           after: s.after,
           entryOrders: st.entries,

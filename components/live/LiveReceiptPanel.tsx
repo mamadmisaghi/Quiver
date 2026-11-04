@@ -541,7 +541,7 @@ export default function LiveReceiptPanel({ runId, account, onChange }: Props) {
             <ReceiptText size={14} className="text-accent" /> Mainnet receipts
           </div>
           <h2 className="mt-1.5 text-xl font-medium tracking-tight">
-            {account.runs.find((r) => r.id === runId)?.name ?? "Live workflow"}
+            {view?.name ?? account.runs.find((r) => r.id === runId)?.name ?? "Live workflow"}
           </h2>
         </div>
         {view && (
@@ -662,7 +662,7 @@ export default function LiveReceiptPanel({ runId, account, onChange }: Props) {
               <h3 className="text-sm font-medium">Stages</h3>
               <ol className="mt-3 space-y-3">
                 {view.stages.map((s, i) => {
-                  const symbol = view.orders.find((o) => o.stage === s.id)
+                  const symbol = s.symbol ?? view.orders.find((o) => o.stage === s.id)
                     ?.market.symbol;
                   return (
                     <li
@@ -689,7 +689,7 @@ export default function LiveReceiptPanel({ runId, account, onChange }: Props) {
                                     d.event,
                                 )
                                 .join(" and ")
-                            : "Entry condition"}{" "}
+                            : s.when || "Entry condition"}{" "}
                           · {s.entryOrders.length} entry intents
                         </p>
                         {s.holding && (

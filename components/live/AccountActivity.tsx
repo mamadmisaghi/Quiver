@@ -1,4 +1,5 @@
 "use client";
+import { liveRunPath } from "@/lib/live-navigation";
 import { useEffect } from "react";
 import { API_MODE } from "@/lib/api";
 import { useQ } from "@/lib/api/useQ";
@@ -76,7 +77,7 @@ function View({ part }: { part: "approvals" | "portfolio" | "activity" }) {
                     · entry {"$" + p.average.toLocaleString()}
                   </small>
                 </span>
-                <Link href={"/app/live?run=" + p.run} className="text-accent">
+                <Link href={liveRunPath(p.run)} className="text-accent">
                   View position ↗
                 </Link>
               </li>
@@ -101,7 +102,7 @@ function View({ part }: { part: "approvals" | "portfolio" | "activity" }) {
                   {o.status.replaceAll("_", " ")}
                 </small>
               </span>
-              <Link href={"/app/live?run=" + o.run} className="text-accent">
+              <Link href={liveRunPath(o.run)} className="text-accent">
                 {part === "approvals" ? "Review order" : "Open receipt"} ↗
               </Link>
             </li>

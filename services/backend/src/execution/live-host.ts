@@ -1,3 +1,4 @@
+import { describeLiveStrategy, paperLivePlan } from "./live-review";
 import { createHash } from "node:crypto";
 import { formatUnits, getAddress, isAddress, parseUnits } from "viem";
 import { z } from "zod";
@@ -70,14 +71,7 @@ export type MainnetOptions = {
   rh?: RobinhoodMainnet;
 };
 type Asset = Workflow["assets"][number];
-export const networkFor = (v: string) =>
-  v === "robinhood"
-    ? "robinhood-mainnet"
-    : v === "solana"
-      ? "solana-mainnet"
-      : v === "hyperliquid"
-        ? "hyperliquid-mainnet"
-        : null;
+export { networkFor } from "./live-review";
 const stable = (n: Network) =>
   n === "solana-mainnet"
     ? USDC_MINT
@@ -532,22 +526,22 @@ export class MainnetHost {
     this.observed.set(key, { at: this.d.now(), value });
     return value;
   }
+  private sourceStrategy(u: User, id: string, version: number) {
+    if (id.startsWith("srvpaper_")) {
+      const hosted = this.d.store.workflowSessions.get(id);
+      if (!hosted || hosted.owner !== u.id || hosted.session.provenance !== "server")
+        throw new HostError(404, "Paper session not found.");
+      if (version !== (hosted.session.editRevision ?? 0) + 1)
+        throw new HostError(409, "The paper rules changed. Review the latest edit from the session.");
+      return paperLivePlan(hosted.session, version).strategy;
+    }
+    const record = this.d.store.strategies.get(id), latest = record?.versions.at(-1);
+    if (!record || record.ownerId !== u.id || record.archived || latest?.version !== version || !latest.strategy.workflow)
+      throw new HostError(404, "Reopen the latest version of your saved workflow.");
+    return structuredClone(latest.strategy);
+  }
   async reviewed(u: User, id: string, version: number) {
-    const record = this.d.store.strategies.get(id),
-      v = record?.versions.at(-1);
-    if (
-      !record ||
-      record.ownerId !== u.id ||
-      record.archived ||
-      v?.version !== version ||
-      !v.strategy.workflow
-    )
-      throw new HostError(
-        404,
-        "Reopen the latest version of your saved workflow.",
-      );
-    const strategy = structuredClone(v.strategy),
-      w = strategy.workflow!;
+    const strategy = this.sourceStrategy(u, id, version), w = strategy.workflow!;
     const stocks = w.assets.filter((a) => market(a)?.venue === "robinhood");
     if (stocks.length) {
       const issuer = await marketJson(
@@ -624,36 +618,8 @@ export class MainnetHost {
         }),
     );
     return {
+      ...describeLiveStrategy(id, version, s, sizes),
       reviewHash: liveReviewDigest(id, version, s),
-      name: s.name,
-      strategyId: id,
-      version,
-      budgetUsd: w.budgetUsd,
-      risk: { ...s.risk, ...w.risk },
-      stages: w.stages.map((t) => {
-        const a = w.assets.find((a) => a.id === t.assetId),
-          m = a && market(a);
-        return {
-          id: t.id,
-          symbol: m?.symbol ?? a?.query ?? t.assetId,
-          tokenDecimals:
-            m?.venue === "hyperliquid"
-              ? 18
-              : m?.address
-                ? (sizes.get(m.address) ?? null)
-                : null,
-          network: networkFor(m?.venue ?? ""),
-          address: m?.address ?? null,
-          assetId: m?.id ?? null,
-          side: t.side,
-          amount: t.amount,
-          leverage: t.leverage,
-          when: t.conditionText,
-          after: t.after,
-          repeat: t.repeat,
-          exits: t.exits,
-        };
-      }),
     };
   }
   async start(

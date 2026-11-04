@@ -1,4 +1,5 @@
 "use client";
+import { liveReviewPath } from "@/lib/live-navigation";
 import { canonicalizeWorkflow } from "@/lib/contracts";
 import { updateDraftSteps, type DraftStep } from "@/lib/api/draft-progress";
 import DraftProgress, { type DraftPhase, type Clarification } from "./DraftProgress";
@@ -359,11 +360,21 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
             <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || lookingUp || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
-            <button type="button" className="q-action" disabled={saving||starting} onClick={async()=>{
-              if(!strategy?.workflow||dirty){router.push("/app/live");return;}setSaving(true);
-              try{const rec=savedId&&editingRecord?{id:savedId,version:editingRecord.version}:await storeDraft(strategy);setSavedId(rec.id);router.push("/app/live?strategy="+encodeURIComponent(rec.id));}
-              catch(e){setErr(e instanceof Error?e.message:"Could not open the saved strategy.");}finally{setSaving(false);}
-            }}>Live trade</button>
+            <button type="button" className="q-action" disabled={saving || starting || lookingUp || dirty || phase !== "done" || !strategy?.workflow || !!launchProblems.length}
+              onClick={async () => {
+                if (!strategy?.workflow) return;
+                setSaving(true);
+                try {
+                  const rec = savedId && editingRecord ? { id: savedId, version: editingRecord.version } : await storeDraft(strategy);
+                  setSavedId(rec.id);
+                  setEditingRecord({ id: rec.id, version: rec.version });
+                  router.push(liveReviewPath(rec.id, rec.version));
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : "Could not open the saved strategy.");
+                } finally {
+                  setSaving(false);
+                }
+              }}>Review for live trading</button>
             <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={dirty || phase !== "done" || starting || saving || lookingUp} className="q-action q-primary">{lookingUp ? "Checking market…" : starting ? "Opening session…" : phase === "done" && !strategy?.workflow && API_MODE === "mock" ? "Prepare live-quote draft →" : "Run paper trade →"}</button>
           </div>
         </div>
