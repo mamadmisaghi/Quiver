@@ -30,6 +30,10 @@ services:
         value: "0"
       - key: QUIVR_MAINNET_ENABLED
         value: "false"
+      - key: HL_TESTNET_ORDERS
+        value: "false"
+      - key: LLM_USER_DAILY_COMPILES
+        value: "30"
       - key: PRICE_SOURCE
         value: mock
       - key: DATABASE_URL

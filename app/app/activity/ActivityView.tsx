@@ -29,7 +29,7 @@ export default function ActivityView() {
   return (
     <Wrap>
       <PageHeader title="Activity" sub="What the traders you follow publish, and your own runs and copies. A trader’s runs are never shown." right={tabs} />
-      <Card className="mt-8 px-5 py-2" role="tabpanel" id="act-panel" aria-labelledby={`act-tab-${scope}`}>{API_MODE === "mock" ? <PaperActivity key={scope} scope={scope} /> : <ActivityFeed key={scope} scope={scope} />}</Card>
+      <Card className="mt-8 px-5 py-2" role="tabpanel" id="act-panel" aria-labelledby={`act-tab-${scope}`}>{<PaperActivity key={scope} scope={scope} />}</Card>
     </Wrap>
   );
 }

@@ -1,3 +1,17 @@
+import { testnetIssues } from "../execution/testnet-workflow";
+import { TestPoolReceipts } from "../execution/testpool-receipts";
+import { paperAccount } from "../workflows/account";
+import { budgeted } from "../compile";
+import { callOpenRouter } from "../compile/openrouter";
+import { executionRoutes } from "../execution/routes";
+import { ExecutionService } from "../execution/service";
+import { HyperliquidTestnet } from "../execution/hyperliquid-testnet";
+import { replayWorkflowHistory } from "../workflows/history";
+import { editFields } from "../workflows/changes";
+import { simpleChange, EditReply, EDIT_RULES } from "../workflows/edit-instruction";
+import { WorkflowHost, HostError } from "../workflows/host";
+import { PaperSessionSchema } from "../workflows/session";
+import { EditOps } from "../workflows/changes";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { ffmpegRenderer, renderPaths, removeRender } from "../replay/ffmpeg";
 import { statSync as _st, readFileSync as _rf } from "node:fs";
@@ -80,7 +94,7 @@ import { isLowS } from "../auth/lowS";
 
 /** M3.3: verified real token address for an instrument (read-only reference), or null. */
 export type AssetInfo = (m: InstrumentMeta) => { address: string; chainId: number | null; source: string } | null;
-export interface AppOptions { store?: MemStore; durable?: DurableStorage; isDraining?: () => boolean; /** M5.21: background price-history warmup (main.ts); absent = ready. */ warmup?: Warmup; /** M5.18: Tiingo HTTP hook (tests inject mocks); used only when TIINGO_API_KEY is set. */ tiingoHttp?: TiingoHttp; /** M5.23: test-pool reader (tests inject an anvil client + expectChainId 31337); default built from TEST_POOL_RPC_URL, must report 46630. */ testPool?: { reader: PoolReader; expectChainId?: number }; /** M5.7: replay video renderer (default: stub). */ renderer?: ReplayRenderer; /** M5.2: Privy verifier (tests inject); default built from PRIVY_* env. */ privy?: PrivyVerifier; /** M5.0: read-only 46630 reader (tests inject; null = disabled). Default: built when CHAIN_READS_ENABLED. */ chainReader?: ChainReader | null; testnetVerified?: VerifiedReg; assetInfo?: AssetInfo; config: Config; clock?: Clock; market?: MarketData; registry?: Registry; adapters?: Adapters; autoTimers?: boolean; compileDelayMs?: number; /** M4.9.1: stop/flatten bound (tests) */ stopTimeoutMs?: number; /** dev-only JSON snapshot path (mock mode); null/undefined = in-memory only */ persistPath?: string | null; verifiedTargets?: Target[] | null; /** test hook: rate-limit map capacity (default 50k) */ rlMax?: number; /** M3.7: called (after the response) by POST /v1/ops/shutdown; main.ts wires the graceful stop. */ onShutdown?: () => void; /** M4.0 test hooks: DNS resolver + HTTPS transport for webhook alerts */ alertResolver?: Resolver; alertTransport?: Transport; /** M5.13 test hook: pinned JSON-RPC POST for user RPC URLs */ rpcPost?: import("../chain/pinned").RpcPost; /** M5.14 test hooks: chat-channel HTTP + backoff sleep */ channelHttp?: import("../alerts/channels").ChannelHttp; channelSleep?: (ms: number) => Promise<void> }
+export interface AppOptions { workflowQuote?: (a: import("../../contracts/src/workflow").Workflow["assets"][number]) => Promise<import("../workflows/observations").MarketObservation>;  store?: MemStore; durable?: DurableStorage; isDraining?: () => boolean; /** M5.21: background price-history warmup (main.ts); absent = ready. */ warmup?: Warmup; /** M5.18: Tiingo HTTP hook (tests inject mocks); used only when TIINGO_API_KEY is set. */ tiingoHttp?: TiingoHttp; /** M5.23: test-pool reader (tests inject an anvil client + expectChainId 31337); default built from TEST_POOL_RPC_URL, must report 46630. */ testPool?: { reader: PoolReader; expectChainId?: number }; /** M5.7: replay video renderer (default: stub). */ renderer?: ReplayRenderer; /** M5.2: Privy verifier (tests inject); default built from PRIVY_* env. */ privy?: PrivyVerifier; /** M5.0: read-only 46630 reader (tests inject; null = disabled). Default: built when CHAIN_READS_ENABLED. */ chainReader?: ChainReader | null; testnetVerified?: VerifiedReg; assetInfo?: AssetInfo; config: Config; clock?: Clock; market?: MarketData; registry?: Registry; adapters?: Adapters; autoTimers?: boolean; compileDelayMs?: number; /** M4.9.1: stop/flatten bound (tests) */ stopTimeoutMs?: number; /** dev-only JSON snapshot path (mock mode); null/undefined = in-memory only */ persistPath?: string | null; verifiedTargets?: Target[] | null; /** test hook: rate-limit map capacity (default 50k) */ rlMax?: number; /** M3.7: called (after the response) by POST /v1/ops/shutdown; main.ts wires the graceful stop. */ onShutdown?: () => void; /** M4.0 test hooks: DNS resolver + HTTPS transport for webhook alerts */ alertResolver?: Resolver; alertTransport?: Transport; /** M5.13 test hook: pinned JSON-RPC POST for user RPC URLs */ rpcPost?: import("../chain/pinned").RpcPost; /** M5.14 test hooks: chat-channel HTTP + backoff sleep */ channelHttp?: import("../alerts/channels").ChannelHttp; channelSleep?: (ms: number) => Promise<void> }
 
 /** M3.6: tolerated client clock skew for backtest `to` (clamped to server now). */
 /** M5.2 */
@@ -159,6 +173,11 @@ export function createApp(o: AppOptions) {
   }
   const persistTimer = persist ? setInterval(() => { if (runs.live.size) persist.touch(); }, 2000) : null; persistTimer?.unref?.();
 
+  const workflows = new WorkflowHost({ records: store.workflowSessions, quote: o.workflowQuote, now: () => clock.now(),
+    commit: async () => { if (o.durable) await o.durable.commit(); else persist?.touch(); },
+    healthy: () => !killSwitch && !o.isDraining?.() && (!o.durable || o.durable.healthy),
+    intervalMs: Math.max(1000,cfg.ENGINE_CYCLE_MS), maxActive: cfg.MAX_ACTIVE_RUNS_PER_USER, tiingo: cfg.TIINGO_API_KEY });
+  if (o.autoTimers ?? true) workflows.startDriver();
   // M4.9.1 (B1): reserve an estimate before each AI call (max of LLM_EST_CALL_USD and the largest call seen today); settle with the real cost after.
   // A crashed request may have been billed. Recovered reservations count conservatively as spent.
   for (const row of store.llmDaily.values()) { row.usd += row.reserved; row.reserved = 0; }
@@ -289,8 +308,9 @@ export function createApp(o: AppOptions) {
   // M3.4: request size caps (compile allows 2 images ≈ 5.6 MB base64; everything else 64 KB). Enforced on the stream, not just Content-Length.
   const tooLarge = (c: Context<any>) => c.json({ error: { code: "payload_too_large", message: "Request body is too large.", requestId: c.get("requestId") } }, 413);
   const bigLimit = bodyLimit({ maxSize: 6_000_000, onError: tooLarge }), smallLimit = bodyLimit({ maxSize: 65_536, onError: tooLarge });
-  app.use("*", (c, next) => (c.req.path === "/v1/compile" || c.req.path === "/v1/compile/image" ? bigLimit : smallLimit)(c, next));
+  app.use("*", (c, next) => (c.req.path === "/v1/compile" || c.req.path === "/v1/compile/image" || c.req.path === "/v1/workflow-sessions/import" ? bigLimit : smallLimit)(c, next));
   app.onError((e, c) => {
+    if (e instanceof HostError) return c.json({error:{code:({403:"forbidden",404:"not_found",409:"conflict",422:"validation_failed",429:"limit_exceeded",503:"unavailable"} as const)[e.status],message:e.message,requestId:c.get("requestId")}},e.status);
     if (e instanceof ApiErr) {
       const status = HTTP_STATUS[e.code];
       if (REFUNDABLE.has(e.code)) { const led = charged.getStore(); if (led) led.refund = true; }
@@ -349,7 +369,7 @@ export function createApp(o: AppOptions) {
   app.get("/health", (c) => c.json({ ok: true, ready: !warmup.warming, warmup: warmup.view(), notice: warmup.warming ? WARMUP_OBJ : null } satisfies z.infer<typeof O.HealthRes>));
   app.get("/ready", (c) => {
     const ready = !o.isDraining?.() && (!o.durable || o.durable.healthy);
-    return c.json({ ready, storage: o.durable ? (o.durable.healthy ? "postgres" : "unavailable") : "memory", execution: "paper", prices: cfg.PRICE_SOURCE === "mock" ? "synthetic" : "read-only", ai: !!cfg.OPENROUTER_API_KEY, auth: !!cfg.PRIVY_APP_ID, warmup: warmup.view().state }, ready ? 200 : 503);
+    return c.json({ ready, storage: o.durable ? (o.durable.healthy ? "postgres" : "unavailable") : "memory", execution: "paper", workflowPrices: "observed", workflowDriver: { lastCycleAt: workflows.lastCompletedAt, failedCycles: workflows.failedCycles }, prices: cfg.PRICE_SOURCE === "mock" ? "synthetic" : "read-only", ai: !!cfg.OPENROUTER_API_KEY, auth: !!cfg.PRIVY_APP_ID, warmup: warmup.view().state }, ready ? 200 : 503);
   });
   app.get("/status", (c) => c.json({ ok: !killSwitch, warmingUp: warmup.warming, mode: cfg.QUIVR_MODE, chainId: cfg.CHAIN_ID, venues: venueInfo(), engineLagSec: 0 }));
   const venueInfo = () => Object.values(adapters).map((a) => ({ id: a.id, name: a.name, status: a.status(), capabilities: a.capabilities, note: a.note }));
@@ -372,6 +392,9 @@ export function createApp(o: AppOptions) {
           linkedWallets: id.wallets[0] ? [{ address: getAddress(id.wallets[0]), linkedAt: clock.now() }] : [] };
         store.users.set(u.id, u); store.usersByLabel.set(label, u.id);
       }
+      const verifiedSolana=(id.solanaWallets??[]).filter(a=>![...store.users.values()].some(other=>other.id!==u!.id&&other.solanaWallets?.includes(a)));
+      u.solanaWallets=[...new Set([...(u.solanaWallets??[]),...verifiedSolana])].slice(0,5);
+      const linked=u.linkedWallets??=[];for(const a of id.wallets){const address=getAddress(a);if(linked.length<MAX_WALLETS&&!linked.some(w=>w.address.toLowerCase()===a.toLowerCase()))linked.push({address,linkedAt:clock.now()});}
       computeElig(u, ipCountry(c)); store.audit.push({ at: clock.now(), userId: u.id, action: "auth.privy" });
       return c.json({ ...issue(c, u), me: meView(u) });
     }
@@ -411,7 +434,8 @@ export function createApp(o: AppOptions) {
     if (u) { limit(`c:${u.id}`, 6, 60_000); chargeCompile(u); }
     else limit(`g:${ip}:${today()}`, 3, 86_400_000);
     const key = userAiKey(u) ?? cfg.OPENROUTER_API_KEY;
-    const gen = planCompile(b, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
+    const compiler=c.req.query("workflow")==="1" || b.clarification || !key ? planCompile : compile;
+    const gen = compiler(b, { registry, stockTokensAllowed: true, retainWorkflow: c.req.query("workflow")==="1", delayMs: o.compileDelayMs ?? 0,
       openrouter: key ? { apiKey: key, model: cfg.LLM_MODEL ?? "openai/gpt-4.1-mini", budget: llmBudget } : undefined });
     c.header("content-type", "application/x-ndjson"); c.header("cache-control", "no-store");
     return stream(c, async (s) => { for await (const ev of gen) await s.write(JSON.stringify(ev) + "\n"); });
@@ -420,6 +444,53 @@ export function createApp(o: AppOptions) {
   // ---------- authed ----------
   const r = new Hono<Env>();
   r.use("*", auth);
+  const executionCommit=async()=>{if(o.durable)await o.durable.commit();else persist?.touch();};
+  const execution=new ExecutionService({store,vault,venue:new HyperliquidTestnet(),now:()=>clock.now(),origin:cfg.SIWE_ORIGIN,
+    enabled:()=>cfg.HL_TESTNET_ORDERS==="true" && !killSwitch && !o.isDraining?.(),durable:()=>!!o.durable?.healthy,commit:executionCommit});
+  if(o.autoTimers??true)execution.startMonitor();
+  r.post("/execution/pause-all",async c=>{
+    const u=c.get("user");
+    const result=await execution.exclusive(u.id,async()=>{
+      execution.pause(u);
+      for(const row of workflows.list(u.id))if(row.session.status==="running" && row.session.provenance==="server")workflows.control(u.id,row.session.id,row.session.controlVersion??0,"pause");
+      for(const run of [...store.runs.values()])if(run.ownerId===u.id && run.mode==="paper" && runs.live.has(run.id) && run.status==="running")await runs.control(run.id,"pause");
+      return execution.view(u);
+    });return c.json(result);
+  });
+  r.post("/execution/resume-account",async c=>c.json(await execution.exclusive(c.get("user").id,async()=>execution.resume(c.get("user")))));
+  r.get("/execution/workflows/:strategyId/readiness",c=>{
+    const v=ownStrategy(c,c.req.param("strategyId")).versions.at(-1)!;return c.json({version:v.version,issues:testnetIssues(v.strategy)});
+  });
+  r.post("/execution/workflows",async c=>{
+    const q=await body(c,z.object({strategyId:z.string().max(100),version:z.number().int().positive(),mode:z.enum(["confirm_each","auto"]),network:z.literal("hyperliquid-testnet"),allowTestnetOrders:z.literal(true)}));
+    const s=ownStrategy(c,q.strategyId);const v=s.versions.at(-1);
+    if(s.archived||v?.version!==q.version)throw new HostError(409,"Reopen the latest strategy version before arming it.");
+    const u=c.get("user");return c.json(await execution.exclusive(u.id,()=>execution.startProgram(u,s.id,v.version,v.strategy,q.mode)));
+  });
+  r.post("/execution/workflows/:id/stop",async c=>{const u=c.get("user");return c.json(await execution.exclusive(u.id,async()=>execution.stopProgram(u,c.req.param("id"))));});
+  r.route("/execution",executionRoutes(execution,{now:()=>clock.now(),commit:executionCommit,jupiter:cfg.JUPITER_API_KEY,rpc:cfg.SOLANA_READ_RPC}));
+  let historyInflight=0;
+  r.post("/workflow-history",async c=>{
+    const u=c.get("user"),q=await body(c,z.object({strategyId:z.string().max(100),version:z.number().int().positive(),from:z.number().int(),to:z.number().int(),timeframe:z.enum(["1m","5m","15m","1h","4h","1d"])}));
+    const strategy=ownStrategy(c,q.strategyId).versions.find(v=>v.version===q.version)?.strategy;
+    if(!strategy?.workflow)throw new HostError(404,"Workflow version not found.");
+    limit("history:"+u.id,6,60000);if(historyInflight>=4)throw new HostError(429,"Historical replay is busy. Try again shortly.");
+    historyInflight++;try{return c.json(await replayWorkflowHistory(strategy.workflow,q,strategy.risk,{registry,tiingo:tiingo??undefined,ownerId:u.id,signal:c.req.raw.signal,now:clock.now()}));}
+    catch{throw new HostError(422,"The requested history window or workflow could not be evaluated.");}finally{historyInflight--;}
+  });
+  r.post("/workflow-sessions/:id/edit-preview",async c=>{
+    const u=c.get("user"),session=workflows.owned(u.id,c.req.param("id")).session;
+    const q=await body(c,z.object({text:z.string().trim().min(3).max(500),group:z.string().max(160).optional()}));
+    const fields=editFields(session).filter(f=>!q.group||f.group===q.group);
+    if(!fields.length)throw new HostError(422,"Select an editable rule.");
+    const direct=simpleChange(q.text,fields);if(direct){if("message" in direct)throw new HostError(422,direct.message);return c.json(direct);}
+    const key=cfg.OPENROUTER_API_KEY;if(!key)throw new HostError(422,"Name the field and value, for example “Set stop loss to 5%”.");
+    limit("paper-edit:"+u.id,10,60000);
+    const out=await budgeted(llmBudget,()=>callOpenRouter({apiKey:key,model:cfg.LLM_MODEL??"openai/gpt-4.1-mini",maxTokens:Math.min(cfg.LLM_MAX_OUTPUT_TOKENS,2400),system:EDIT_RULES,user:JSON.stringify({text:q.text,fields}),schema:{name:"PaperRuleChange",schema:z.toJSONSchema(EditReply)},signal:AbortSignal.timeout(30000)}));
+    if(!out)throw new HostError(429,"The edit budget is busy.");const p=EditReply.safeParse(out.json);
+    if(!p.success||p.data.question||!p.data.ops.length||p.data.ops.some(op=>!fields.some(f=>f.key===op.key)))throw new HostError(422,p.success && p.data.question || "Name the rule and field to change.");
+    return c.json({ops:p.data.ops});
+  });
   r.get("/me", (c) => c.json(meView(c.get("user"))));
   r.post("/me/eligibility", async (c) => {
     const b = await body(c, A.EligibilityDeclareReq); const u = c.get("user");
@@ -449,7 +520,7 @@ export function createApp(o: AppOptions) {
     chargeCompile(u);
     store.audit.push({ at: clock.now(), userId: u.id, action: "compile.image", target: `${chk.mime}:${chk.width}x${chk.height}:${chk.bytes}:${chk.sha256.slice(0, 16)}` });
     const note = b.note?.replace(/\p{Cc}/gu, " ").trim() || undefined;
-    const gen = planCompile({ clarification: b.clarification, thesis: note ?? "Strategy from a chart screenshot", note, image: { mime: chk.mime, base64: b.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, { registry, stockTokensAllowed: true, delayMs: o.compileDelayMs ?? 0,
+    const gen = planCompile({ clarification: b.clarification, thesis: note ?? "Strategy from a chart screenshot", note, image: { mime: chk.mime, base64: b.imageBase64.replace(/^data:[^;,]+;base64,/, "") } }, { registry, stockTokensAllowed: true, retainWorkflow: c.req.query("workflow")==="1", delayMs: o.compileDelayMs ?? 0,
       openrouter: { apiKey: key, model: cfg.LLM_VISION_MODEL ?? cfg.LLM_MODEL ?? "openai/gpt-4.1-mini", budget: llmBudget } });
     c.header("content-type", "application/x-ndjson"); c.header("cache-control", "no-store");
     return stream(c, async (s) => { let failed = false; for await (const ev of gen) { if (ev.type === "error") failed = true; await s.write(JSON.stringify(ev) + "\n"); }
@@ -535,6 +606,7 @@ export function createApp(o: AppOptions) {
   // ---------- runs ----------
   /** Shared by POST /runs and M4.5 autopilot: every guard (paper-only, validation, per-user cap, one run per strategy) applies to both. */
   const startRunFor = (u: User, b: z.infer<typeof A.StartRunReq>) => {
+    if(store.executionAccounts.get(u.id)?.paused)throw new HostError(409,"Resume this account before starting a run.");
     if (b.mode !== "paper") throw new ApiErr("mode_not_enabled", `${b.mode} runs aren't enabled for your account yet.`);
     const s = store.strategies.get(b.strategyId); if (!s || s.ownerId !== u.id) throw new ApiErr("not_found", "Strategy not found."); if (s.archived) throw new ApiErr("not_found", "Strategy is archived.");
     const ver = b.version ? s.versions.find((x) => x.version === b.version) : s.versions.at(-1); if (!ver) throw new ApiErr("not_found", "Version not found.");
@@ -551,6 +623,32 @@ export function createApp(o: AppOptions) {
     store.audit.push({ at: clock.now(), userId: u.id, action: "run.start", target: run.id });
     return summary;
   };
+  r.get("/workflow-sessions", c => c.json({items:workflows.list(c.get("user").id).map(row=>workflows.view(row).session)}));
+  r.get("/workflow-sessions/:id", c => c.json(workflows.view(workflows.owned(c.get("user").id,c.req.param("id")))));
+  r.post("/workflow-sessions", async c => {
+    const b=await body(c,z.object({strategyId:z.string().max(100),version:z.number().int().positive(),launchKey:z.string().min(12).max(100),approvalTtlSec:z.number().int().min(30).max(3600).default(120),mode:z.enum(["auto","confirm_each"]).default("auto")}).strict());
+    if(store.executionAccounts.get(c.get("user").id)?.paused)throw new HostError(409,"Resume this account before starting a paper session.");
+    const record=ownStrategy(c,b.strategyId), v=record.versions.find(v=>v.version===b.version);
+    if(record.archived || !v)throw new ApiErr("not_found","Strategy version is unavailable.");
+    return c.json(workflows.view(workflows.start(c.get("user").id,b.launchKey,record.id,v.version,v.strategy,b.mode,b.approvalTtlSec)),201);
+  });
+  r.post("/workflow-sessions/import", async c => {
+    const snap=await body(c,PaperSessionSchema);
+    return c.json(workflows.view(workflows.importArchive(c.get("user").id,snap)),201);
+  });
+  r.post("/workflow-sessions/:id/control", async c => {
+    const b=await body(c,z.object({command:z.enum(["pause","resume","stop"]),version:z.number().int().nonnegative()}).strict());
+    if(b.command==="resume" && store.executionAccounts.get(c.get("user").id)?.paused)throw new HostError(409,"Resume this account first.");
+    return c.json(workflows.view(workflows.control(c.get("user").id,c.req.param("id"),b.version,b.command)));
+  });
+  r.post("/workflow-sessions/:id/edit", async c => {
+    const b=await body(c,z.object({ops:EditOps,version:z.number().int().nonnegative()}).strict());
+    return c.json(workflows.view(workflows.edit(c.get("user").id,c.req.param("id"),b.version,b.ops)));
+  });
+  r.post("/workflow-sessions/:id/approval", async c => {
+    const b=await body(c,z.object({id:z.string().max(50),decision:z.enum(["approved","rejected"]),version:z.number().int().nonnegative()}).strict());
+    return c.json(workflows.view(workflows.decide(c.get("user").id,c.req.param("id"),b.version,b.id,b.decision)));
+  });
   r.post("/runs", (c) => idem(c, async () => {
     const b = await body(c, A.StartRunReq); const summary = startRunFor(c.get("user"), b);
     return [summary, 201];
@@ -802,6 +900,8 @@ export function createApp(o: AppOptions) {
       humanReadable: `Send ${b.amount} ${b.asset} on testnet 46630 from ${from} to your Quiver session account ${recipient}.`, testnet: true, preparedAt: iso(clock.now()), notice: DEPOSIT_NOTICE } satisfies TN.DepositPrepareRes);
   });
   // ---------- M5.23 Slice 3: our own test pool on 46630 (read-only quotes; swap = unsigned txs) ----------
+  const rhReceipts=new TestPoolReceipts(store,cfg.TEST_POOL_RPC_URL,cfg.RH_TESTPOOL_PINS,executionCommit);
+  r.post("/testpool/swap/:id/receipt",async c=>{const u=c.get("user");limit("tpr:"+u.id,30,60000);const b=await body(c,z.object({txHash:z.string().regex(/^0x[0-9a-fA-F]{64}$/)}));return c.json(await rhReceipts.check(u.id,c.req.param("id"),b.txHash as `0x${string}`));});
   const tp = testPoolState(cfg); const TP_NOTICE = "Test pool on Robinhood Chain testnet 46630. Test tokens only, no real value. Your wallet signs; Quiver never does.";
   const tpDec = new Map<string, number>();
   const pool = async () => {
@@ -855,7 +955,8 @@ export function createApp(o: AppOptions) {
     txs.push({ kind: "swap", description: `Swap ${qt.amountIn} ${qt.symbolIn} for at least ${formatUnits(minOut, outDec)} ${qt.symbolOut}.`,
       tx: { chainId: 46630, from, to: tp.pool!, value: "0", data: encodeFunctionData({ abi: POOL_ABI, functionName: "swapExactIn", args: [qt.tokenIn as `0x${string}`, units, minOut, from, BigInt(deadline)] }).toLowerCase() } });
     store.audit.push({ at: clock.now(), userId: u.id, action: "testpool.swap.prepare", target: `${b.side}:${b.amount}` });
-    return c.json({ txs, quote: qt, minAmountOut: formatUnits(minOut, outDec), minAmountOutUnits: minOut.toString(), slippageBps: b.slippageBps, deadline, testnet: true, notice: TP_NOTICE } satisfies TN.TestPoolSwapPrepareRes);
+    const receiptId=await rhReceipts.prepare(u.id,from,tp.pool!,qt.tokenIn,qt.tokenOut,qt.amountInUnits,minOut.toString(),deadline,allowance<units);
+    return c.json({ receiptId,txs, quote: qt, minAmountOut: formatUnits(minOut, outDec), minAmountOutUnits: minOut.toString(), slippageBps: b.slippageBps, deadline, testnet: true, notice: TP_NOTICE } satisfies TN.TestPoolSwapPrepareRes);
   });
   // ---------- M5.2: wallet-link scaffold (EIP-191 personal_sign; server only verifies, never signs) ----------
   const linkChallenges = new Map<string, { userId: string; address: string; message: string; exp: number }>();
@@ -1144,14 +1245,24 @@ export function createApp(o: AppOptions) {
   const seedForks = new Map<string, number>();
   const handleOf = (u: User) => publicHandle("@" + u.label); // M5.10: never the raw label (Privy DIDs become a keyed alias)
   const publics = (): Pub[] => [
-    ...SEED_PUBLIC.map((p) => ({ id: p.id, handle: p.handle, ownerId: null, publishedAt: Date.parse(p.publishedAt), strategy: p.strategy, humanized: humanize(p.strategy, registry), forkedFrom: null })),
+    ...(cfg.NODE_ENV?.toLowerCase()==="production"?[]:SEED_PUBLIC).map((p) => ({ id: p.id, handle: p.handle, ownerId: null, publishedAt: Date.parse(p.publishedAt), strategy: p.strategy, humanized: humanize(p.strategy, registry), forkedFrom: null })),
     ...[...store.strategies.values()].filter((s) => s.public && !s.archived).map((s) => { const v = s.versions.at(-1)!; return { id: s.id, handle: handleOf(store.users.get(s.ownerId)!), ownerId: s.ownerId, publishedAt: s.publishedAt ?? s.updatedAt, strategy: v.strategy, humanized: v.humanized, forkedFrom: s.forkedFrom ?? null, row: s }; }),
   ];
   const forksOf = (p: Pub) => p.row ? p.row.forks ?? 0 : seedForks.get(p.id) ?? 0;
   const venuesOf = (st: Pub["strategy"]) => [...new Set([...st.actions.map((a) => registry.get(a.instrument)?.venue), ...st.signals.map((g) => ("instrument" in g.params ? registry.get(g.params.instrument)?.venue : undefined))].filter(Boolean))] as any[];
   const WIN_MS = { "7d": 7 * 86_400_000, "30d": 30 * 86_400_000, all: 90 * 86_400_000 } as const; // "all" = last 90 days in v1
   const perfCache = new Map<string, Promise<{ ret: number; win: number | null; spark: number[]; trades: number; dd: number | null } | null>>();
+  const prodSocial=cfg.NODE_ENV?.toLowerCase()==="production";
   const perf = (p: Pub, w: keyof typeof WIN_MS) => {
+    if(prodSocial){
+      const from=w==="all"?0:clock.now()-WIN_MS[w];
+      for(const h of p.ownerId?workflows.list(p.ownerId):[]){
+        if(h.session.provenance!=="server"||h.session.strategyId!==p.id||h.session.createdAt<from)continue;
+        const a=paperAccount([h.session],clock.now());
+        if(a.totals.returnPct!==null && a.totals.fills>=LB_MIN_TRADES)return Promise.resolve({ret:a.totals.returnPct,win:null,spark:thin(a.history.map(q=>q.equityUsd),20),trades:a.totals.fills,dd:null});
+      }
+      return Promise.resolve(null);
+    }
     const to = Math.floor(clock.now() / 3_600_000) * 3_600_000; const key = `${p.id}:${w}:${to}:${p.row?.versions.length ?? 0}`;
     if (!perfCache.has(key)) perfCache.set(key, runBacktest({ strategy: p.strategy, from: to - WIN_MS[w], to, resolution: w === "7d" ? "1h" : "1h", startingEquity: 10_000, feeModel: "default" }, { mkt, adapters, registry, stockTokensAllowed: true })
       .then((o) => o ? { trades: o.result.trades, dd: o.result.maxDrawdownPct == null ? null : Number(o.result.maxDrawdownPct), ret: Number(o.result.returnPct), win: o.result.winRatePct == null ? null : Number(o.result.winRatePct), spark: thin(o.result.equitySeries.map((e) => Number(e.equityUsd)), 20) } : null).catch(() => null));
@@ -1204,7 +1315,7 @@ export function createApp(o: AppOptions) {
       return { handle: e.handle, isYou: e.isYou, venues: [...new Set(e.pubs.flatMap((p) => venuesOf(p.strategy)))], paperReturnPct: best ? dec(best.ret, 2) : null, winRatePct: wins.length ? dec(wins.reduce((a, b) => a + b, 0) / wins.length, 1) : null, strategies: e.pubs.length, spark: best?.spark ?? [] };
     }));
     rows.sort((a, b) => Number(b.paperReturnPct ?? -1e9) - Number(a.paperReturnPct ?? -1e9));
-    return c.json({ window: q.window, basis: "paper", items: rows.map((x, i) => ({ rank: i + 1, ...x })), asOf: iso(clock.now()), mock: true, notice: NOTICE.leaderboard });
+    return c.json({ window: q.window, basis: "paper", items: rows.filter(x=>!prodSocial||x.paperReturnPct!==null).map((x, i) => ({ rank: i + 1, ...x })), asOf: iso(clock.now()), mock: !prodSocial, notice: prodSocial?"Ranked by the best recorded paper return from an eligible public strategy in this window. Imported sessions and historical replays are excluded.":NOTICE.leaderboard });
   });
   // ---------- M5.5 profiles, follow, paper copy-trading ----------
   const userByHandle = (h: string) => [...store.users.values()].find((x) => handleOf(x) === h) ?? null;
@@ -1242,6 +1353,7 @@ export function createApp(o: AppOptions) {
     // M5.10: unfollow ends copying. Each copy is detached (sync blocked for good) and its paper run is stopped, with an event in the run log.
     for (const s of store.strategies.values()) { if (s.ownerId !== u.id || !s.copyOf || s.copyOf.handle !== h || s.copyOf.detachedAt) continue;
       s.copyOf.detachedAt = clock.now();
+      for(const h of workflows.list(u.id))if(h.session.strategyId===s.id&&h.session.provenance==="server"&&h.session.status!=="completed")workflows.control(u.id,h.session.id,h.session.controlVersion??0,"stop");
       for (const l of [...runs.live.values()].filter((l) => l.run.strategyId === s.id && l.run.status !== "stopped")) {
         runs.warn(l.run.id, "copy_unfollowed", `You unfollowed ${h}; this copy stopped and won't sync again.`); await runs.control(l.run.id, "stop_and_flatten"); }
       store.audit.push({ at: clock.now(), userId: u.id, action: "copy.detach", target: s.id }); }
@@ -1311,8 +1423,9 @@ export function createApp(o: AppOptions) {
   });
   const copyView = (s: StrategyRow) => { const cp = s.copyOf!; const src = publics().find((p) => p.id === cp.publicStrategyId); const latest = src ? pubVersion(src) : null;
     const run = [...store.runs.values()].filter((x) => x.strategyId === s.id).sort((a, b) => b.startedAt - a.startedAt)[0];
+    const hosted=workflows.list(s.ownerId).find(r=>r.session.strategyId===s.id && r.session.provenance==="server")?.session;
     return { strategyId: s.id, publicStrategyId: cp.publicStrategyId, sourceHandle: cp.handle, sourceName: src?.strategy.name ?? s.versions.at(-1)!.strategy.name, sourceVersion: cp.sourceVersion, latestSourceVersion: latest,
-      behind: latest !== null && latest > cp.sourceVersion, detached: !!cp.detachedAt, detachedAt: cp.detachedAt ? iso(cp.detachedAt) : null, mode: "paper" as const, runId: run?.id ?? null, runStatus: run?.status ?? null, copiedAt: iso(cp.copiedAt), syncedAt: iso(cp.syncedAt) } as z.infer<typeof SO.CopyView>; };
+      behind: latest !== null && latest > cp.sourceVersion, detached: !!cp.detachedAt, detachedAt: cp.detachedAt ? iso(cp.detachedAt) : null, mode: "paper" as const, runId: hosted?.id ?? run?.id ?? null, runStatus: hosted?.status ?? run?.status ?? null, copiedAt: iso(cp.copiedAt), syncedAt: iso(cp.syncedAt) } as z.infer<typeof SO.CopyView>; };
   const ownCopy = (c: Context<Env>) => { const s = store.strategies.get(c.req.param("id")!); if (!s || s.ownerId !== c.get("user").id || !s.copyOf) throw new ApiErr("not_found", "Copy not found."); return s; };
   /** M5.10: owners up the copy/fork chain (bounded), so a re-published copy of your own strategy can't be copied back. */
   const lineageOwners = (p: Pub) => { const out = new Set<string>(); let id: string | null | undefined = p.row ? (p.row.copyOf?.publicStrategyId ?? p.row.forkedFrom) : null;
@@ -1330,11 +1443,13 @@ export function createApp(o: AppOptions) {
     if (p.ownerId === u.id || lineageOwners(p).has(u.id)) throw new ApiErr("validation_failed", "That's your own strategy (or a copy of it); run yours directly.");
     if (!u.following?.includes(p.handle)) throw new ApiErr("forbidden", `Follow ${p.handle} first to copy their strategies.`, { handle: p.handle });
     if ([...store.strategies.values()].some((x) => x.ownerId === u.id && !x.archived && x.copyOf?.publicStrategyId === p.id)) throw new ApiErr("conflict", "You already copy this strategy. Sync it instead.");
-    const v = saveVersion(c, p.strategy); const t = clock.now();
+    const source=p.strategy.workflow?{...p.strategy,workflow:{...p.strategy.workflow,budgetUsd:Number(b.data.startingEquityUsd)}}:p.strategy;
+    if(store.executionAccounts.get(u.id)?.paused)throw new HostError(409,"Resume this account first.");
+    const v = saveVersion(c, source); const t = clock.now();
     const row: StrategyRow = { id: newId("stg", t), ownerId: u.id, archived: false, versions: [{ version: 1, ...v }], createdAt: t, updatedAt: t, forkedFrom: p.id, public: false, forks: 0,
       copyOf: { publicStrategyId: p.id, handle: p.handle, sourceVersion: pubVersion(p), copiedAt: t, syncedAt: t } };
     store.strategies.set(row.id, row);
-    try { startRunFor(u, A.StartRunReq.parse({ strategyId: row.id, mode: "paper", approvalMode: b.data.approvalMode, paper: { startingEquityUsd: b.data.startingEquityUsd } })); }
+    try { if(v.strategy.workflow)workflows.start(u.id,"copy:"+row.id,row.id,1,v.strategy,b.data.approvalMode);else startRunFor(u, A.StartRunReq.parse({ strategyId: row.id, mode: "paper", approvalMode: b.data.approvalMode, paper: { startingEquityUsd: b.data.startingEquityUsd } })); }
     catch (e) { store.strategies.delete(row.id); throw e; }
     store.audit.push({ at: t, userId: u.id, action: "copy.start", target: `${p.id}->${row.id}` });
     return [copyView(row), 201];
@@ -1423,7 +1538,7 @@ export function createApp(o: AppOptions) {
       maxDrawdownPct: dec(pts.reduce((m, p) => Math.max(m, Number(p.drawdownPct)), 0), 2),
       fills: fills.length, triggerFires: run.events.filter((e) => e.type === "trigger_fired").length, feesUsd: usd(fills.reduce((a, f) => a + Number(f.feeUsd), 0)),
       spark: thin(pts.map((p) => Number(p.equityUsd)), 30), synthetic: mkt.synthetic,
-      disclaimer: run.mode === "paper" ? `Paper trading${mkt.synthetic ? " on synthetic prices" : ""}. Not real money; past results are not a promise of future returns.` : "Testnet. Not real money; past results are not a promise of future returns.",
+      disclaimer: run.mode === "paper" ? `Paper trading${mkt.synthetic && cfg.NODE_ENV?.toLowerCase()!=="production" ? " on synthetic prices" : ""}. Not real money; past results are not a promise of future returns.` : "Testnet. Not real money; past results are not a promise of future returns.",
     }));
   });
 
@@ -1437,15 +1552,24 @@ export function createApp(o: AppOptions) {
     const rows = await Promise.all(publics().map(async (p) => {
       const base = { handle: publicHandle(p.handle), strategyName: p.strategy.name, publicStrategyId: p.id as z.infer<typeof StrategyIdT>, venues: venuesOf(p.strategy) };
       // paper basis: the owner's most recent paper run of this strategy that started in the period with enough fills
+      const hosted=p.row?workflows.list(p.row.ownerId).filter(r=>r.session.provenance==="server" && r.session.strategyId===p.id && (period==="all"||r.session.createdAt>=since)).map(r=>r.session):[];
+      for(const session of hosted){
+        const a=paperAccount([session],now),t=a.totals;
+        if(t.fills<LB_MIN_TRADES||t.returnPct===null)continue;
+        const curve=a.history.map(x=>x.equityUsd);let peak=t.budget,dd=0;for(const value of curve){peak=Math.max(peak,value);if(peak>0)dd=Math.max(dd,(1-value/peak)*100);}
+        return {...base,basis:"paper" as const,returnPct:dec(t.returnPct,2),maxDrawdownPct:dec(dd,2),winRatePct:null,trades:t.fills,spark:pctSpark(thin(curve,20),t.budget)};
+      }
+      if(cfg.NODE_ENV?.toLowerCase()==="production" && mkt.synthetic)return null;
       const paper = p.row ? [...store.runs.values()].filter((x) => x.ownerId === p.ownerId && x.strategyId === p.id && x.mode === "paper" && (period === "all" || x.startedAt >= since))
         .map((x) => ({ x, fills: x.events.filter((e) => e.type === "fill").length })).filter((y) => y.fills >= LB_MIN_TRADES).sort((a, b) => b.x.startedAt - a.x.startedAt)[0] : undefined;
       if (paper) { const sm = runs.summary(paper.x); const pts = equitySeries(runs.equityCurve(paper.x.id, 200), paper.x.startingEquity);
         return { ...base, basis: "paper" as const, returnPct: sm.pnlPct, maxDrawdownPct: dec(pts.reduce((m, q) => Math.max(m, Number(q.drawdownPct)), 0), 2), winRatePct: null, trades: paper.fills, spark: pctSpark(thin(pts.map((q) => Number(q.equityUsd)), 20), paper.x.startingEquity) }; }
+      if(prodSocial)return null;
       const pf = await perf(p, period); if (!pf || pf.trades < LB_MIN_TRADES) return null;
       return { ...base, basis: "backtest" as const, returnPct: dec(pf.ret, 2), maxDrawdownPct: pf.dd == null ? null : dec(pf.dd, 2), winRatePct: pf.win == null ? null : dec(pf.win, 1), trades: pf.trades, spark: pctSpark(pf.spark, 10_000) };
     }));
     const items = rows.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => Number(b.returnPct) - Number(a.returnPct) || b.trades - a.trades || a.strategyName.localeCompare(b.strategyName)).map((x, i) => ({ rank: i + 1, ...x }));
-    return PB.PublicLeaderboardRes.parse({ period, minTrades: LB_MIN_TRADES, items, asOf: iso(now), synthetic: mkt.synthetic, notice: `Paper and backtest results only${mkt.synthetic ? " on synthetic prices" : ""}. Not real money; past results are not a promise of future returns.` });
+    return PB.PublicLeaderboardRes.parse({ period, minTrades: LB_MIN_TRADES, items, asOf: iso(now), synthetic: mkt.synthetic && cfg.NODE_ENV?.toLowerCase()!=="production", notice: `Paper and backtest results only${mkt.synthetic && cfg.NODE_ENV?.toLowerCase()!=="production" ? " on synthetic prices" : ""}. Not real money; past results are not a promise of future returns.` });
   };
   app.get("/public/leaderboard", async (c) => {
     pubLimit(c, "lb", 30);
@@ -1607,7 +1731,7 @@ export function createApp(o: AppOptions) {
       returnPct: sm.pnlPct, maxDrawdownPct: dec(pts.reduce((m, p) => Math.max(m, Number(p.drawdownPct)), 0), 2),
       trades: run.events.filter((e) => e.type === "fill").length, triggerFires: run.events.filter((e) => e.type === "trigger_fired").length,
       spark: pctSpark(thin(pts.map((p) => Number(p.equityUsd)), 30), run.startingEquity), synthetic: mkt.synthetic, sharedAt: iso(row.createdAt), asOf: iso(clock.now()),
-      disclaimer: run.mode === "paper" ? `Paper trading${mkt.synthetic ? " on synthetic prices" : ""}. Not real money; past results are not a promise of future returns.` : "Testnet. Not real money; past results are not a promise of future returns.",
+      disclaimer: run.mode === "paper" ? `Paper trading${mkt.synthetic && cfg.NODE_ENV?.toLowerCase()!=="production" ? " on synthetic prices" : ""}. Not real money; past results are not a promise of future returns.` : "Testnet. Not real money; past results are not a promise of future returns.",
     }));
   });
 
@@ -1722,6 +1846,6 @@ export function createApp(o: AppOptions) {
     });
   }
 
-  return { app, store, runs, alerts, autopilot, replays: { processRenders }, secrets: { userRpcFor }, rateLimit: { size: () => rl.size, prune: rlPrune, max: RL_MAX }, persist: persist ? { path: persist.path, flush: () => persist.flush(), stats: persist.stats, stop: () => { if (persistTimer) clearInterval(persistTimer); persist.flushSync(); } } : null, mkt, registry, adapters, setKillSwitch: (v: boolean) => { killSwitch = v; if (v) for (const l of runs.live.values()) runs.haltExternal(l.run.id, "kill_switch", "Trading paused platform-wide."); } };
+  return { app, store, runs, workflows, execution, alerts, autopilot, replays: { processRenders }, secrets: { userRpcFor }, rateLimit: { size: () => rl.size, prune: rlPrune, max: RL_MAX }, persist: persist ? { path: persist.path, flush: () => persist.flush(), stats: persist.stats, stop: () => { if (persistTimer) clearInterval(persistTimer); persist.flushSync(); } } : null, mkt, registry, adapters, setKillSwitch: (v: boolean) => { killSwitch = v; if (v) for (const l of runs.live.values()) runs.haltExternal(l.run.id, "kill_switch", "Trading paused platform-wide."); } };
 }
 export type QuiverApp = ReturnType<typeof createApp>;

@@ -22,7 +22,7 @@ export const CopyReq = z.object({
 });
 export const CopyView = z.object({
   strategyId: StrategyId, publicStrategyId: z.string(), sourceHandle: Handle, sourceName: z.string(), sourceVersion: z.number().int(), latestSourceVersion: z.number().int().nullable(), // null = source unpublished
-  behind: z.boolean(), /** M5.10: unfollowed -> run stopped, sync blocked */ detached: z.boolean(), detachedAt: IsoTime.nullable(), mode: z.literal("paper"), runId: RunId.nullable(), runStatus: z.string().nullable(), copiedAt: IsoTime, syncedAt: IsoTime,
+  behind: z.boolean(), /** M5.10: unfollowed -> run stopped, sync blocked */ detached: z.boolean(), detachedAt: IsoTime.nullable(), mode: z.literal("paper"), runId: z.union([RunId,z.string().regex(/^srvpaper_[a-zA-Z0-9-]+$/)]).nullable(), runStatus: z.string().nullable(), copiedAt: IsoTime, syncedAt: IsoTime,
 });
 export const CopyListRes = z.object({ items: z.array(CopyView), notice: z.string() });
 

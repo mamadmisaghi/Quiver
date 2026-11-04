@@ -30,7 +30,8 @@ function Draft({ compact }: { compact?: boolean }) {
 
 export default function HomeView() {
   const local = API_MODE === "mock";
-  const account = usePaperAccount(local);
+  const workflows = usePaperAccount(true);
+  const account = local || workflows?.sessions.length ? workflows : null;
   const watchlist = useQ(() => api.markets());
   const q = useQ(async () => {
     const [portfolio, strategies, runs] = await Promise.all([local ? null : api.portfolio("paper"), api.strategies(), api.runs()]);

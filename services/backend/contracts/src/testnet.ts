@@ -63,6 +63,7 @@ export const TestPoolSwapPrepareReq = z.object({
   deadlineSec: z.number().int().min(60).max(1800).default(600),
 }).strict();
 export const TestPoolSwapPrepareRes = z.object({
+  receiptId: z.string().regex(/^[0-9a-f]{32}$/).optional(),
   txs: z.array(z.object({ kind: z.enum(["approve", "swap"]), tx: UnsignedTx, description: z.string() }).strict()).min(1).max(2),
   quote: TestPoolQuoteRes, minAmountOut: z.string(), minAmountOutUnits: UintStr, slippageBps: z.number().int(), deadline: z.number().int(),
   testnet: z.literal(true), notice: z.string(),

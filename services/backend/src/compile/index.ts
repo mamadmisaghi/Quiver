@@ -65,7 +65,7 @@ export async function* compile(req: { thesis: string; clarification?: DraftConti
     if (fallbackWhy) { strategy = null; issues = []; }
   }
   if (fallbackWhy) {
-    if (d.openrouter) { yield { type: "error", code: "ai_draft_unavailable", message: "The AI could not produce a verified strategy. Retry; no substitute rules were generated." }; return; }
+    if (d.openrouter) { yield { type: "error", code: "ai_draft_unavailable", message: fallbackWhy==="busy" ? "The AI compiler is busy. Retry the draft shortly." : "The AI could not verify these rules. Retry the draft." }; return; }
     compiler = "demo";
     notice = fallbackWhy === "no_key" ? DEMO_NOTICE : `${fallbackWhy === "timeout" ? "The AI compiler timed out" : fallbackWhy === "busy" ? "The AI compiler is busy" : fallbackWhy === "invalid" ? "The AI compiler couldn't produce valid rules" : "The AI compiler is unavailable"}, so this is a ${DEMO_NOTICE[0].toLowerCase()}${DEMO_NOTICE.slice(1)}`;
     yield compileProgress("interpret", "working", "Matching your markets and order instructions"); await wait();

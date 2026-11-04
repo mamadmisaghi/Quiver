@@ -81,6 +81,7 @@ export const RawConfig = z.object({
   /** M5.22: paper revenue ledger (creator share of copy/fork paper fees). Off by default; never pays anything. */
   REVENUE_ACCOUNTING_ENABLED: bool.default(false),
   /** M5.23: our own test venue on 46630 (SIGNOFF §9.1). Off unless enabled AND all three addresses are set. */
+  RH_TESTPOOL_PINS: opt,
   TEST_POOL_ENABLED: bool.default(false),
   TEST_POOL_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   TEST_USDG_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
@@ -98,6 +99,8 @@ export const RawConfig = z.object({
   VERIFIED_READONLY_PATH: z.string().default("config/verified/4663-readonly.json"),
   /** Optional free-tier EOD vendor key (Tiingo) for MODELED backtest history older than the on-chain feed. Unset = no modeled data. */
   TIINGO_API_KEY: opt,
+  HL_TESTNET_ORDERS: z.enum(["true","false"]).default("false"),
+  SOLANA_READ_RPC: z.string().url().optional(),
   JUPITER_API_KEY: opt,
   JUPITER_PRICE_API_URL: z.string().url().default("https://api.jup.ag/price/v3"),
   /** SSE heartbeat interval and per-subscriber queue bound (backpressure). */

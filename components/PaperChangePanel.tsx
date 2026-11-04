@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
+import { raw } from "@/lib/api/live";
 import type { PaperSession } from "@/lib/paper/sessions";
 import { editFields, EditOps, preparePaperEdit } from "@/lib/paper/changes";
 
@@ -24,7 +25,7 @@ export default function PaperChangePanel({ session, onApply }: { session: PaperS
     const controller = new AbortController(); request.current = controller; setBusy("preview");
     try {
       const options = group ? fields.filter(f => f.group === group) : fields;
-      const res = await fetch("/api/preview/paper-change", { method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal, body: JSON.stringify({ text: text.trim(), fields: options }) });
+      const res = session.id.startsWith("srvpaper_") ? await raw("/workflow-sessions/"+encodeURIComponent(session.id)+"/edit-preview",{method:"POST",signal:controller.signal,body:JSON.stringify({text:text.trim(),group})}) : await fetch("/api/preview/paper-change", { method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal, body: JSON.stringify({ text: text.trim(), fields: options }) });
       const body = await res.json() as { message?: string; ops?: unknown };
       if (!res.ok) throw Error(body.message || "Could not preview the change.");
       const ops = EditOps.parse(body.ops);

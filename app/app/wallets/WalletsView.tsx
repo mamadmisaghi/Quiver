@@ -1,6 +1,7 @@
 "use client";
 import PageHeader from "@/components/PageHeader";
 import VenueMark from "@/components/VenueMark";
+import Link from "@/components/Link";
 import Wrap from "@/components/Wrap";
 import { Card, Pill } from "@/components/ui";
 import Loading from "@/components/Loading";
@@ -17,12 +18,12 @@ const SUB = "You're in paper mode. Connect a wallet only when you go to testnet 
 export default function WalletsView() {
   const q = useQ(() => Promise.all([api.me(), api.venues(), api.sessionKeys()]));
   // Signed out: show the linked-wallets section's own sign-in ("Sign in to link a wallet") instead of the generic gate.
-  if (!q.data && q.auth) return <Wrap><PageHeader title="Wallets" sub={SUB} /><h2 className="mt-8 text-[15px] font-medium" id="linked">Linked wallets</h2><Card className="mt-4 p-6"><LinkedWallets /></Card></Wrap>;
-  if (!q.data) return <Wrap><PageHeader title="Wallets" sub={SUB} /><Loading h={420} q={q} /></Wrap>;
+  if (!q.data && q.auth) return <Wrap><PageHeader title="Wallets" sub={SUB} /><Link href="/app/execution" className="q-action mt-4 inline-flex">Execution setup ↗</Link><h2 className="mt-8 text-[15px] font-medium" id="linked">Linked wallets</h2><Card className="mt-4 p-6"><LinkedWallets /></Card></Wrap>;
+  if (!q.data) return <Wrap><PageHeader title="Wallets" sub={SUB} /><Link href="/app/execution" className="q-action mt-4 inline-flex">Execution setup ↗</Link><Loading h={420} q={q} /></Wrap>;
   const [me, venues, keys] = q.data;
   return (
     <Wrap>
-      <PageHeader title="Wallets" sub={SUB} />
+      <PageHeader title="Wallets" sub={SUB} /><Link href="/app/execution" className="q-action mt-4 inline-flex">Execution setup ↗</Link>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         {venues.map((v) => { const w = me.wallets.find((x) => x.chain === v.id); const readOnly = !v.capabilities.some((c) => c !== "read"); return (
           <Card key={v.id} className="p-6">

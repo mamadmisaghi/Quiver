@@ -55,7 +55,7 @@ describe("M3.1 demo compiler (deterministic, no AI)", () => {
     expect(JSON.stringify(ok(t))).toBe(JSON.stringify(ok(t)));
     const t0 = performance.now(); const ev = await collect(compile({ thesis: t }, { registry, stockTokensAllowed: true })); const ms = performance.now() - t0;
     expect(ms).toBeLessThan(200); for (const e of ev) CompileEvent.parse(e);
-    const r = ev.at(-1); expect(r).toMatchObject({ type: "result", compiler: "demo" }); expect(r.notice).toMatch(/Demo compile/);
+    const r = ev.at(-1); expect(r).toMatchObject({ type: "result", compiler: "demo" }); expect(r.notice).toMatch(/Rules were matched from your description/);
   });
 });
 

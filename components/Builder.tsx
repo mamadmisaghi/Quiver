@@ -17,8 +17,11 @@ import { API_MODE, api, ApiErr, reasonOf, errOf, strategyEdges, demoNodes, type 
 import { onSession } from "@/lib/api/session";
 // QA P2 LCP: the backtest panel only renders after a draft, so keep it out of the initial chunk
 import { readPaperDefaults } from "@/lib/api/browser-settings";
+import { launchHosted } from "@/lib/paper/hosted";
+import { randomHex } from "@/lib/api/live";
 import { createPaperSession } from "@/lib/paper/sessions";
 import { paperProblems } from "@/services/backend/src/workflows/paper";
+const WorkflowHistoryPanel = dynamic(() => import("./WorkflowHistory"), { ssr:false });
 const BacktestPanel = dynamic(() => import("./BacktestPanel"), { ssr: false });
 import SignInButton from "./SignInButton";
 import { SAMPLE_PROMPT, SUGGESTIONS } from "@/lib/copy";
@@ -101,6 +104,7 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
   const reviewRef = useRef<HTMLDivElement | null>(null);
   const [confirmEach, setConfirmEach] = useState(false); // M4.2 approvalMode
   const [ttl, setTtl] = useState(300);
+  const launchRequest = useRef<{ signature:string; key:string } | null>(null);
   const startingRef = useRef(false);
   const launchProblems = [...new Set([
     ...(strategy?.workflow ? paperProblems(strategy.workflow, true) : []),
@@ -135,7 +139,9 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       if (savedId && editingRecord && rec.version !== editingRecord.version) throw new Error("This draft changed in another tab. Reopen it before starting a session.");
       setEditingRecord({ id: rec.id, version: rec.version, activeRunId: rec.activeRunId }); setSavedId(rec.id);
       if (strategy.workflow) {
-        const session = createPaperSession(rec);
+        const signature = [rec.id, rec.version, confirmEach, ttl].join(":");
+        if (launchRequest.current?.signature !== signature) launchRequest.current = { signature, key: randomHex(32) };
+        const session = API_MODE === "live" ? (await launchHosted(rec.id, rec.version, confirmEach, launchRequest.current.key, ttl)).session : createPaperSession(rec);
         window.location.assign(`/app/run/${session.id}`);
       } else {
         const r = await api.startRun({ strategyId: rec.id, mode: "paper", ...(confirmEach ? { approvalMode: "confirm_each" as const, approvalTtlSec: ttl } : {}) }); router.push(`/app/run/${r.id}`);
@@ -332,6 +338,10 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
       {strategy && phase === "done" && !dirty && <RefineBar onRefine={(t) => run(t)} />}
       <div data-reserve="after" className="min-h-[160px] md:min-h-[96px]">
       {issues.length > 0 && <ul className="mt-4 space-y-1 text-[13px]">{issues.map((i) => <li key={i.path + i.code} className={i.severity === "error" ? "text-short" : "text-muted"}>{i.severity === "error" ? "" : "Note: "}{i.message}</li>)}</ul>}
+      {phase === "done" && strategy?.workflow && !dirty && <WorkflowHistoryPanel strategy={strategy} save={async()=>{
+        if(savedId && editingRecord)return {id:savedId,version:editingRecord.version};
+        const rec=await storeDraft(strategy);setSavedId(rec.id);setEditingRecord({id:rec.id,version:rec.version,activeRunId:rec.activeRunId});return rec;
+      }}/>}
       {phase === "done" && strategy && !strategy.workflow && (API_MODE === "mock" ? <div className="q-card mt-6 border border-line bg-card p-5"><h3 className="text-[14px] font-medium">Prepare this saved draft for live quotes</h3><p className="mt-2 text-[13px] text-muted">This draft uses an earlier rule format. Review its markets and rules before starting a new paper session.</p></div> : <div className="mt-6"><BacktestPanel key={JSON.stringify(strategy)} strategy={strategy} /></div>)}
       </div>
       <p className="mt-6 pb-6 text-[12px] text-muted">Paper orders use virtual funds. Stock tokens are not available to US persons. Trading can lose money.</p>
@@ -342,14 +352,18 @@ export default function Builder({ initialPrompt }: { initialPrompt?: string } = 
           <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted">{venues.map((v) => <VenueMark key={v} venue={v} />)}<span className="ml-1">{phase === "done" ? dirty ? "Redraft to apply your changes" : strategy?.workflow ? launchProblems.length ? `${launchProblems.length} ${launchProblems.length === 1 ? "detail" : "details"} to complete` : "Ready · live quotes, virtual funds" : API_MODE === "mock" ? "Review markets for live quotes" : "Ready for paper trading" : drafting ? "Drafting…" : ""}</span></span>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {err && phase === "done" && <span role="status" className="text-[12.5px] text-short">{err}</span>}
-            {phase === "done" && !strategy?.workflow && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
-              <label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={confirmEach} onChange={(e) => setConfirmEach(e.target.checked)} className="accent-[var(--color-accent)]" data-testid="confirm-each" />Ask before each trade</label>
+            {phase === "done" && API_MODE !== "mock" && <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
+              <label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={confirmEach} onChange={(e) => setConfirmEach(e.target.checked)} className="accent-[var(--color-accent)]" data-testid="confirm-each" />{strategy?.workflow?"Review entries; protective exits stay active":"Ask before each trade"}</label>
               {confirmEach && <label className="flex items-center gap-1 text-muted"><span className="sr-only">Approval window</span><select value={ttl} onChange={(e) => setTtl(Number(e.target.value))} className="rounded-[6px] border border-line-2 bg-bg px-1 py-0.5 text-ink-2">{[[60, "1 min"], [300, "5 min"], [900, "15 min"], [3600, "1 hour"]].map(([v, l]) => <option key={v} value={v}>{l} to answer</option>)}</select></label>}
             </span>}
             <button type="button" onClick={() => run()} disabled={drafting || !text.trim()} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 hover:bg-white/5 disabled:opacity-40">Redraft</button>
             <button type="button" onClick={saveDraft} disabled={phase !== "done" || dirty || saving || starting || lookingUp || !!savedId || issues.some((i) => i.severity === "error")} className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] hover:border-white/30 disabled:opacity-40">{saving ? "Saving…" : savedId ? "Saved" : "Save draft"}</button>
             {savedId && <Link href="/app/strategies" className="text-[13px] text-accent underline underline-offset-4">View drafts</Link>}
-            <button type="button" disabled title="Live trading is not connected yet" aria-label="Live trade, not connected" className="q-action">Live trade</button>
+            <button type="button" className="q-action" disabled={saving||starting} onClick={async()=>{
+              if(!strategy?.workflow||dirty){router.push("/app/execution");return;}setSaving(true);
+              try{const rec=savedId&&editingRecord?{id:savedId,version:editingRecord.version}:await storeDraft(strategy);setSavedId(rec.id);router.push("/app/execution?strategy="+encodeURIComponent(rec.id));}
+              catch(e){setErr(e instanceof Error?e.message:"Could not open the saved strategy.");}finally{setSaving(false);}
+            }}>Execution setup</button>
             <button type="button" onClick={() => void paperTrade()} aria-describedby={strategy?.workflow && launchProblems.length ? "paper-setup-status" : undefined} disabled={dirty || phase !== "done" || starting || saving || lookingUp} className="q-action q-primary">{lookingUp ? "Checking market…" : starting ? "Opening session…" : phase === "done" && !strategy?.workflow && API_MODE === "mock" ? "Prepare live-quote draft →" : "Run paper trade →"}</button>
           </div>
         </div>

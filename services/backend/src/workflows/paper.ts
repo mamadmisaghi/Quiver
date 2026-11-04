@@ -12,6 +12,7 @@ type StageState = { fills: number; lastFillAt: number | null; active: boolean; l
 export type ConditionCheck = { met: number; total: number; unknown: number; result: boolean | null };
 export type PaperState = { readings?: Record<string, number | boolean | null>; checks?: Record<string, ConditionCheck>; version: 1; startedAt: number; lastAt: number; budget: number; principal: number; pools: Record<string, number>; positions: Record<string, Position>; stages: Record<string, StageState>; anchors: Record<string, number>; history: Record<string, [number, number][]>; previous: Record<string, number | boolean | null>; quotes: Record<string, PaperQuote>; fees: number; realized: number; day: string; dayStart: number; dayOrders: number; events: { at: number; stageId: string; kind: "buy" | "sell" | "exit" | "settle"; amount: number; price: number; fee: number; detail: string }[]; curve: [number, number][] };
 // Transient observations for a single committed tick. They never enter a checkpoint.
+export type EntryIntent = { key: string; stageId: string; amount: number; price: number };
 export type PaperStepEvent =
   | { kind: "condition"; stageId: string; signals: string[] }
   | { kind: "fill"; stageId: string; newDependencies: boolean }
@@ -97,7 +98,7 @@ export function paperDependencyMet(state: PaperState, dep: PlanStage["after"][nu
 }
 
 /** Pure, checkpointable paper execution. The same evaluator can be driven by a browser or a server worker. */
-export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({}), trace?: PaperStepEvent[], pausedRules: readonly string[] = []): PaperState {
+export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[], at: number, risk = Risk.parse({}), trace?: PaperStepEvent[], pausedRules: readonly string[] = [], authorize?: (intent: EntryIntent) => boolean, unavailable: ReadonlySet<string> = new Set()): PaperState {
   w = canonicalizeWorkflow(w);
   const s = structuredClone(state); if (at <= s.lastAt) return s; s.lastAt = at;
   for (const q of incoming) if (w.assets.some((a) => a.id === q.assetId) && freshPaperQuote(q, at) && (q.price > 0 || q.settled)) {
@@ -113,7 +114,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     const q = signal.assetId ? s.quotes[signal.assetId] : undefined, h = signal.assetId ? s.history[signal.assetId] ?? [] : [];
     let v: number | boolean | null = null;
     if (signal.kind === "timer" && signal.schedule) { try { v = cronMatches(signal.schedule.cron, signal.schedule.tz, at); } catch {} }
-    else if (freshPaperQuote(q, at)) {
+    else if (freshPaperQuote(q, at) && (!signal.assetId || !unavailable.has(signal.assetId))) {
       if (signal.kind === "price" || signal.kind === "odds") v = q!.price;
       else if (signal.kind === "funding") v = q!.fundingHourly ?? null;
       else if (signal.kind === "drawdown" && signal.drawdown && signal.drawdown.reference !== "needs_choice") {
@@ -147,7 +148,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
   }
   // Exits happen before downstream dependencies. Unrealized gains never create profit pools.
   for (const stage of w.stages) {
-    const p = s.positions[stage.id], q = s.quotes[stage.assetId]; if (!p || !freshPaperQuote(q, at)) continue;
+    const p = s.positions[stage.id], q = s.quotes[stage.assetId]; if (!p || unavailable.has(stage.assetId) || !freshPaperQuote(q, at)) continue;
     const pct = (q.price / p.entry - 1) * p.side * 100, x = stage.exits; p.peakPct = Math.max(p.peakPct, pct);
     if (q.settled && q.payout !== undefined) exitPosition(s, stage.id, at, q.payout, p.qty, "settle", "Outcome settled; proceeds are now available.", trace);
     else if (pct <= -100 / p.leverage || (x.stopLossPct && pct <= -x.stopLossPct) || (x.takeProfitPct && pct >= x.takeProfitPct) || (x.trailingStopPct && p.peakPct - pct >= x.trailingStopPct) || (x.timeExitHours && at - p.openedAt >= x.timeExitHours * 3_600_000)) exitPosition(s, stage.id, at, q.price, p.qty, "exit", "Position exit condition met.", trace);
@@ -176,7 +177,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
       s.checks[stage.id] = { result: yes, total: results.length, met: results.filter(v => v === true).length, unknown: results.filter(v => v === null).length };
     }
     const st = s.stages[stage.id], q = s.quotes[stage.assetId];
-    if (!freshPaperQuote(q, at) || !q || q.price <= 0 || q.settled) { st.status = "Waiting for fresh market data"; continue; }
+    if (unavailable.has(stage.assetId) || !freshPaperQuote(q, at) || !q || q.price <= 0 || q.settled) { st.status = "Waiting for fresh market data"; continue; }
     const dependencies = stage.after.every(dep => paperDependencyMet(s, dep));
     if (!dependencies) { st.status = "Waiting for predecessor / realized profit"; continue; }
     const was = st.active; if (yes !== null) st.active = yes;
@@ -203,10 +204,17 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     if (risk.tradingHours) { const h = risk.tradingHours; const date = new Intl.DateTimeFormat("en-US", { timeZone: h.tz, hourCycle: "h23", hour: "2-digit", minute: "2-digit", weekday: "short" }).formatToParts(new Date(at)); const time = `${date.find((p) => p.type === "hour")?.value}:${date.find((p) => p.type === "minute")?.value}`, dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(date.find((p) => p.type === "weekday")?.value ?? ""); const inside = h.from < h.to ? time >= h.from && time < h.to : time >= h.from || time < h.to; if (!inside || !h.days.includes((["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const)[dow])) { st.status = "Outside allowed trading hours"; continue; } }
     const amount = stage.amount.value!; const available = stage.funding.kind === "budget" ? s.principal : stage.funding.from.reduce((n, id) => n + (s.pools[id] ?? 0), 0);
     const usd = stage.amount.unit === "usd" ? amount : stage.amount.unit === "native" ? amount * q.price / stage.leverage : stage.amount.unit === "pct_equity" ? paperEquity(s) * amount / 100 : stage.amount.unit === "pct_profits" ? available * amount / 100 : 0;
+    const permitted = (amount: number) => {
+      if (!authorize || authorize({ key: stage.id + ":" + st.fills, stageId: stage.id, amount, price: q.price })) return true;
+      st.active = was;
+      st.status = "Waiting for entry approval";
+      return false;
+    };
     if (stage.side === "sell" || stage.amount.unit === "pct_position") {
       const positions = Object.entries(s.positions).filter(([, p]) => p.assetId === stage.assetId && p.side === 1);
       if (!positions.length) { st.status = "Waiting for a position to reduce"; continue; }
       let left = stage.amount.unit === "pct_position" ? positions.reduce((n, [, p]) => n + p.qty, 0) * amount / 100 : stage.amount.unit === "native" ? amount : usd / q.price;
+      if (!permitted(Math.min(left, positions.reduce((n, [,p]) => n + p.qty, 0)) * q.price)) continue;
       for (const [id, p] of positions) { const n = Math.min(left, p.qty), before = s.realized, oldPool = s.pools[id] ?? 0; exitPosition(s, id, at, q.price, n, "exit", `Reduced by stage ${stage.id}`, trace); if (id !== stage.id) { st.realized += s.realized - before; const earned = Math.max(0, (s.pools[id] ?? 0) - oldPool); s.pools[id] = (s.pools[id] ?? 0) - earned; s.pools[stage.id] = (s.pools[stage.id] ?? 0) + earned; } left -= n; if (left <= EPS) break; }
       trace?.push({ kind: "fill", stageId: stage.id, newDependencies: st.consumedDependency !== dependencyStamp });
       st.fills++; st.lastFillAt = at; st.closed = true; st.consumedDependency = dependencyStamp; st.status = "Reduced position"; continue;
@@ -221,6 +229,7 @@ export function stepPaper(w: Workflow, state: PaperState, incoming: PaperQuote[]
     const positionExposure = Object.values(s.positions).filter(position => assetKey(position.assetId) === key)
       .reduce((sum, position) => sum + position.qty * (s.quotes[position.assetId]?.price ?? position.entry), 0);
     if (!(usd > 0) || usd * stage.leverage + positionExposure > eq * risk.maxPositionPct / 100 + EPS || exposure + usd * stage.leverage > eq * risk.maxTotalExposurePct / 100 + EPS) { st.status = "Order blocked by exposure limit"; continue; }
+    if (!permitted(usd)) continue;
     const fee = usd * stage.leverage * feeRate, allocation = takeCash(s, stage, usd + fee);
     if (!allocation) { st.status = stage.funding.kind === "profits" ? "Waiting for enough realized profit" : "Budget cannot cover the next full order and fees"; continue; }
     const qty = usd * stage.leverage / q.price;

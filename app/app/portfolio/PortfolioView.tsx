@@ -37,7 +37,9 @@ function History({ h }: { h: { points: { ts: string; equityUsd: string; pnlUsd: 
 export default function PortfolioView() {
   const [by, setBy] = useState<AllocationBy>("venue");
   const local = API_MODE === "mock";
-  const account = usePaperAccount(local);
+  const workflows = usePaperAccount(true);
+  const [classic, setClassic] = useState(false);
+  const account = local || (!classic && workflows?.sessions.length) ? workflows : null;
   const serverRuns = useQ(() => local ? Promise.resolve(null) : api.portfolioRuns({ mode: "paper", status: "all" }));
   const serverHistory = useQ(() => local ? Promise.resolve(null) : api.portfolioHistory({ mode: "paper", points: 200 }));
   const serverPositions = useQ(() => local ? Promise.resolve(null) : api.positions({ mode: "paper" }));
@@ -59,6 +61,7 @@ export default function PortfolioView() {
   return (
     <Wrap>
       <PageHeader title="Portfolio" sub="Balances, positions and fills across your paper sessions." />
+      {!local && !!workflows?.sessions.length && <div className="mt-5 flex gap-2" aria-label="Portfolio source">{[false,true].map(old=><button key={String(old)} className="q-action" aria-pressed={classic===old} onClick={()=>setClassic(old)}>{old?"Earlier runs":"Workflow sessions"}</button>)}</div>}
       {!runs.data ? <Loading h={200} q={runs} /> : (<>
         <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="pf-totals">
           {([["Equity", fmtUsd(t!.equityUsd), ""], ["P&L", `${fmtUsd(t!.pnlUsd, { sign: true })}`, tone(t!.pnlUsd)], ["Return", fmtPct(t!.pnlPct, { sign: true }), tone(t!.pnlPct)], ["Realized", fmtUsd(t!.realizedPnlUsd, { sign: true }), tone(t!.realizedPnlUsd)], ["Unrealized", fmtUsd(t!.unrealizedPnlUsd, { sign: true }), tone(t!.unrealizedPnlUsd)], ["Fees", fmtUsd(t!.feesUsd), "text-ink-2"]] as const).map(([k, v, c]) => (

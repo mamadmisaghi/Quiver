@@ -1,3 +1,5 @@
+import { PaperSessionSchema } from "../workflows/session";
+import { restoreLedger,serializeLedger,transition } from "../execution/ledger";
 import { Client } from "pg";
 import { snapshot, restore, isValidSnapshot } from "../persist";
 import type { MemStore } from "../store";
@@ -37,9 +39,30 @@ export function restoreDurable(store: MemStore, data: Record<string, unknown>) {
     if (rows !== undefined && (!Array.isArray(rows) || rows.some((x) => !Array.isArray(x) || x.length !== 2 || typeof x[0] !== "string"))) throw new Error("Invalid database state");
   }
   restore(store, data);
+  for(const [id,row] of store.workflowSessions){
+    const s=PaperSessionSchema.parse(row.session);
+    if(s.id!==id||!row.owner||!row.requestKey||!Number.isSafeInteger(row.serial)||!s.strategy.workflow||!["server","imported"].includes(s.provenance??"")||s.provenance==="server"&&!s.state||s.provenance==="imported"&&s.status!=="completed")throw Error("Invalid hosted workflow checkpoint");
+    row.session=s;
+  }
+  for(const account of store.executionAccounts.values())for(const order of account.orders)order.ledger=restoreLedger(serializeLedger(order.ledger));
+
   for (const k of EXTRA_MAPS) {
     const map = store[k] as Map<string, unknown>; map.clear();
     for (const [id, value] of (data[k] ?? []) as [string, unknown][]) map.set(id, value);
+  }
+  if(data.restoreHold===true){
+    store.refresh.clear();store.idem.clear();
+    for(const [id,h] of store.workflowSessions)if(h.session.status==="running"){
+      h.session.status="paused";h.approvals=[];h.trace=[];h.serial++;h.session.controlVersion=(h.session.controlVersion??0)+1;
+      store.workflowSessions.set(id,h);
+    }
+    for(const r of store.runs.values())if(["starting","running"].includes(r.status))r.status="paused";
+    for(const a of store.executionAccounts.values()){
+      a.paused=true;delete a.challenge;
+      if(a.agent){a.agent.sealed="";a.agent.state="disabled";}
+      for(const p of a.programs??[]){p.status="stopped";p.pendingReason="Backup restored. Reconcile existing exchange orders before authorizing a new workflow.";}
+      for(const o of a.orders)if(!o.ledger.orders[0].dispatched)o.ledger=transition(o.ledger,{kind:"revoke",id:o.terms.id}).next;
+    }
   }
 }
 

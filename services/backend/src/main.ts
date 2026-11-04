@@ -52,10 +52,10 @@ async function boot() {
   const persistPath = !durable && config.QUIVR_MODE === "mock" && process.env.QUIVR_DEV_PERSIST !== "0" ? (process.env.QUIVR_DEV_PERSIST_PATH ?? ".data/dev-store.json") : null;
   let gracefulStop: (r: "ops") => unknown = () => {};
   const warmup = new Warmup(Date.now, !!warmLoad);
-  const { app, runs, persist } = createApp({ config, store, durable, isDraining: () => draining, market, warmup, registry, persistPath, assetInfo, onShutdown: () => gracefulStop("ops") });
+  const { app, runs, workflows, execution, persist } = createApp({ config, store, durable, isDraining: () => draining, market, warmup, registry, persistPath, assetInfo, onShutdown: () => gracefulStop("ops") });
   if (durable) {
     durable.beforeCommit = async () => { for (const [id, cp] of await runs.checkpoints()) store.runCheckpoints.set(id, cp); };
-    durable.onFailure = () => { draining = true; runs.shutdown(); console.error(JSON.stringify({ level: "error", msg: "Durable storage lost; engine stopped. Restart required." })); };
+    durable.onFailure = () => { draining = true; runs.shutdown(); void workflows.stopDriver(); void execution.stopMonitor(); console.error(JSON.stringify({ level: "error", msg: "Durable storage lost; engine stopped. Restart required." })); };
     await durable.commit();
   }
   // Saves timer-driven events even when no browser is connected.
@@ -73,7 +73,7 @@ async function boot() {
   const stop = makeGracefulStop({
     extra: () => { draining = true; if (timer) clearInterval(timer); if (jupTimer) clearInterval(jupTimer); if (durableTimer) clearInterval(durableTimer); },
     stopRuns: () => runs.shutdown(),
-    flush: async () => { persist?.stop(); if (durable) { await durable.commit(); await durable.close(); } },
+    flush: async () => { await Promise.all([workflows.stopDriver(),execution.stopMonitor()]); persist?.stop(); if (durable) { await durable.commit(); await durable.close(); } },
     timeoutMs: 20_000,
     closeServer: (done) => { server.close(() => done()); (server as { closeAllConnections?: () => void }).closeAllConnections?.(); },
   });

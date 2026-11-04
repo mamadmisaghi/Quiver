@@ -1,28 +1,11 @@
-import { ActivityRow, fillNote, type ActivityNote } from "./observations";
+import type { ActivityNote } from "./observations";
+import { activeSessionMs, appendActivity, Checkpoint, PaperSessionSchema, type PaperSession } from "@/services/backend/src/workflows/session";
+export { activeSessionMs, sessionActivity, PaperSessionSchema, type PaperSession } from "@/services/backend/src/workflows/session";
 import { notifyPaperEvent } from "@/lib/api/preview-alerts";
 import { z } from "zod";
 import { Strategy, BacktestRes } from "@/lib/contracts";
 import type { StrategyRecord } from "@/lib/api/types";
-import { PaperQuote, paperProblems, type PaperState } from "@/services/backend/src/workflows/paper";
-const number = z.number().finite(), positive = number.nonnegative();
-const dict = <T extends z.ZodType>(value: T) => z.record(z.string(), value);
-const Checkpoint = z.object({
-  readings: dict(z.union([number, z.boolean(), z.null()])).optional(),
-  checks: dict(z.object({ met: positive, total: positive, unknown: positive, result: z.boolean().nullable() })).optional(),
-  version: z.literal(1), startedAt: number, lastAt: number, budget: positive, principal: number, pools: dict(number),
-  positions: dict(z.object({ assetId: z.string(), qty: positive, baseQty: positive, entry: positive, margin: positive, entryFee: positive, side: z.union([z.literal(1), z.literal(-1)]), leverage: positive, openedAt: number, peakPct: number, rungs: z.array(number), allocation: z.array(z.object({ source: z.string(), value: number })) })),
-  stages: dict(z.object({ fills: positive, lastFillAt: number.nullable(), active: z.boolean(), latched: z.boolean(), closed: z.boolean(), resolved: z.boolean(), realized: number, status: z.string(), consumedDependency: z.string().optional() })),
-  anchors: dict(number), history: dict(z.array(z.tuple([number, number]))), previous: dict(z.union([number, z.boolean(), z.null()])), quotes: dict(PaperQuote), fees: positive, realized: number, day: z.string(), dayStart: number, dayOrders: positive,
-  events: z.array(z.object({ at: number, stageId: z.string(), kind: z.enum(["buy", "sell", "exit", "settle"]), amount: number, price: number, fee: number, detail: z.string() })), curve: z.array(z.tuple([number, number])),
-});
-export const PaperSessionSchema = z.object({
-  version: z.literal(1), id: z.string().regex(/^paper_[a-zA-Z0-9-]+$/), strategyId: z.string(), strategyVersion: z.number().int().positive(), name: z.string(), strategy: Strategy,
-  mode: z.enum(["scenario", "quotes"]), status: z.enum(["ready", "running", "paused", "completed"]), createdAt: number, updatedAt: number, state: Checkpoint.nullable(),
-  activity: z.array(ActivityRow).max(100).optional(), editRevision: z.number().int().nonnegative().optional(), rulesChangedAt: number.optional(), pausedRules: z.array(z.string()).optional(),
-  activeMs: positive.optional(), // Time accrued through updatedAt. Older records have no measured duration.
-  startingBalance: z.number().finite().positive().optional(), legacyResult: BacktestRes.optional(),
-});
-export type PaperSession = z.infer<typeof PaperSessionSchema>;
+import { paperProblems, type PaperState } from "@/services/backend/src/workflows/paper";
 const prefix = "quiver.paper-session.v1.";
 export const PAPER_SESSION_EVENT = "quiver:paper-sessions";
 export function readPaperSession(id: string, storage: Storage = localStorage): PaperSession | null {
@@ -32,33 +15,6 @@ export function listPaperSessions(storage: Storage = localStorage) {
   const sessions: PaperSession[] = [];
   for (let i = 0; i < storage.length; i++) { const key = storage.key(i); if (key?.startsWith(prefix)) { const s = readPaperSession(key.slice(prefix.length), storage); if (s) sessions.push(s); } }
   return sessions.sort((a, b) => b.createdAt - a.createdAt);
-}
-// Consecutive identical polls share one row. Intervening quotes, fills or edits always keep their place.
-function compactChecks(rows: ActivityRow[]) {
-  const out: ActivityRow[] = [];
-  for (const row of rows) {
-    const last = out.at(-1);
-    if (last && row.kind === "check" && last.kind === "check" && row.label === last.label && row.detail === last.detail) {
-      out[out.length - 1] = { ...last, at: row.at, since: last.since ?? last.at, count: (last.count ?? 1) + (row.count ?? 1) };
-    } else out.push(row);
-  }
-  return out.slice(-100);
-}
-/** Project only history that older checkpoints actually recorded. */
-export function sessionActivity(session: PaperSession): ActivityRow[] {
-  if (session.activity) return compactChecks(session.activity);
-  const notes: ActivityNote[] = [{ at: session.createdAt, kind: "session", label: "Session created", detail: session.name }];
-  if (session.strategy.workflow) for (const fill of session.state?.events ?? []) notes.push(fillNote(session.strategy.workflow, fill));
-  if (session.state && session.state.lastAt >= session.state.startedAt) {
-    notes.push({ at: session.state.lastAt, kind: "check", label: "Last recorded check", detail: "Restored from this session’s saved observations." });
-  }
-  if (session.status === "paused") notes.push({ at: session.updatedAt, kind: "session", label: "Session paused", detail: "Observation paused in this browser." });
-  return notes.sort((a, b) => a.at - b.at).map((row, seq) => ({ ...row, seq })).slice(-100);
-}
-function appendActivity(session: PaperSession, notes: ActivityNote[]) {
-  const rows = sessionActivity(session);
-  let seq = rows.at(-1)?.seq ?? 0;
-  return compactChecks([...rows, ...notes.map(row => ({ ...row, seq: ++seq }))]);
 }
 function write(session: PaperSession, storage: Storage) {
   try { storage.setItem(prefix + session.id, JSON.stringify(session)); }
@@ -73,11 +29,6 @@ export function createPaperSession(record: StrategyRecord, storage: Storage = lo
   if (problems.length) throw new Error(problems[0]);
   const now = Date.now();
   return write(PaperSessionSchema.parse({ version: 1, id: `paper_${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")}`, strategyId: record.id, strategyVersion: record.version, name: record.name, strategy, mode: "quotes", status: "ready", activeMs: 0, createdAt: now, updatedAt: now, state: null }), storage);
-}
-/** Count an interval exactly once, only while a driver owns this session. */
-export function activeSessionMs(session: PaperSession, now: number, observing: boolean) {
-  const measured = session.activeMs ?? 0;
-  return measured + (observing && session.activeMs !== undefined && session.status === "running" ? Math.max(0, now - session.updatedAt) : 0);
 }
 export function checkpointPaperSession(id: string, state: PaperState | null, status: PaperSession["status"], storage: Storage = localStorage, resume = false, driverActive = true, notes: ActivityNote[] = [], expectedEdit?: number) {
   const session = readPaperSession(id, storage); if (!session) throw new Error("This paper session is no longer available in this browser.");
@@ -117,7 +68,7 @@ export function savePaperEdit(id: string, expectedEdit: number, change: (current
     activity: appendActivity(session, [row]) }, storage);
 }
 export function sessionStatus(session: PaperSession) {
-  return session.status === "running" && Date.now() - session.updatedAt > 60_000 ? "paused" : session.status;
+  return session.provenance !== "server" && session.status === "running" && Date.now() - session.updatedAt > 60_000 ? "paused" : session.status;
 }
 
 export function completeLegacySession(id: string, result: z.infer<typeof BacktestRes>, storage: Storage = localStorage) {

@@ -112,7 +112,7 @@ export function fetchAuthConfig() {
     return (await contracts()).AuthConfigRes.parse(await r.json());
   })().catch((e) => { cfg = null; throw e; }));
 }
-async function raw(path: string, init: RequestInit = {}, retry = true, guest = false): Promise<Response> {
+export async function raw(path: string, init: RequestInit = {}, retry = true, guest = false): Promise<Response> {
   // guest: endpoint also works signed-out (/compile) — send no bearer rather than failing.
   try { await ensureAuth(); } catch (e) { if (!guest || !(e instanceof ApiErr) || e.code !== "unauthorized") throw e; }
   const r = await fetch(BASE + path, { ...init, credentials: "include", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers } });
@@ -147,7 +147,7 @@ async function sse(r: Response, on: (ev: string, data: string) => void) {
 
 // M5.6: /compile and /compile/image share the NDJSON CompileEvent reader.
 async function ndjson(path: string, body: unknown, onEvent: (e: CT.CompileEvent) => void, signal?: AbortSignal) {
-  const [r, C] = await Promise.all([raw(path, { ...post(body), signal }, true, true), contracts()]);
+  const [r, C] = await Promise.all([raw(path+"?workflow=1", { ...post(body), signal }, true, true), contracts()]);
   const rd = r.body!.pipeThrough(new TextDecoderStream()).getReader(); let buf = "";
   for (;;) { const { value, done } = await rd.read(); if (done) break; buf += value; const lines = buf.split("\n"); buf = lines.pop()!; lines.filter(Boolean).forEach((l) => onEvent(C.CompileEvent.parse(JSON.parse(l)))); }
 }
