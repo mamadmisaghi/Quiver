@@ -104,6 +104,30 @@ export default function HistoryChart({
         ? left + ((t - first.t) / span) * (right - left)
         : (left + right) / 2,
     y = (v: number) => bottom - ((v - low) / (high - low)) * (bottom - top);
+  const increment = (high - low) / 3;
+  const scale = 10 ** Math.floor(Math.log10(increment));
+  const gridStep =
+    ([1, 2, 2.5, 5, 10].find((n) => n >= increment / scale) ?? 10) * scale;
+  const firstGrid = Math.ceil(low / gridStep) * gridStep;
+  const yTicks = Array.from(
+    { length: Math.max(1, Math.floor((high - firstGrid) / gridStep) + 1) },
+    (_, i) => firstGrid + i * gridStep,
+  );
+  const target = span / (width < 400 ? 3 : 4);
+  const timeStep =
+    ([
+      1, 5, 15, 30, 60, 300, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400,
+      172800, 604800, 1209600, 2592000, 7776000, 31536000,
+    ].find((n) => n * 1000 >= target) ?? 31536000) * 1000;
+  const startTick = Math.ceil(first.t / timeStep) * timeStep;
+  const xTicks = span
+    ? Array.from(
+        {
+          length: Math.max(0, Math.floor((last.t - startTick) / timeStep) + 1),
+        },
+        (_, i) => startTick + i * timeStep,
+      )
+    : [first.t];
   const idx =
       hover === null ? data.length - 1 : Math.min(hover, data.length - 1),
     selected = data[idx],
@@ -261,9 +285,8 @@ export default function HistoryChart({
             <stop offset="100%" stopColor="var(--accent)" stopOpacity=".005" />
           </linearGradient>
         </defs>
-        {[0, 1, 2, 3].map((i) => {
-          const v = high - ((high - low) * i) / 3,
-            yy = y(v);
+        {yTicks.map((v, i) => {
+          const yy = y(v);
           return (
             <g key={i}>
               <line
@@ -317,19 +340,18 @@ export default function HistoryChart({
             />
           </>
         )}
-        {(span
-          ? width < 400
-            ? [0, 0.5, 1]
-            : [0, 0.25, 0.5, 0.75, 1]
-          : [0.5]
-        ).map((k) => (
+        {xTicks.map((t) => (
           <text
-            key={k}
-            x={left + k * (right - left)}
+            key={t}
+            x={x(t)}
             y={h - 3}
-            textAnchor={k === 0 ? "start" : k === 1 ? "end" : "middle"}
+            textAnchor={
+              x(t) < left + 18 ? "start" : x(t) > right - 18 ? "end" : "middle"
+            }
           >
-            {date(first.t + k * span, span <= dayMs * 1.3)}
+            {span > 0 && span < 120000
+              ? new Date(t).toISOString().slice(11, 19)
+              : date(t, span <= dayMs * 1.3)}
           </text>
         ))}
         {hover !== null && (

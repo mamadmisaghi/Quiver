@@ -627,3 +627,9 @@
   .desk-market-panel[data-state=active] > section { animation:q-market-tab-in 135ms ease-out both; }
   @keyframes q-market-tab-in { from { opacity:.78; transform:translateY(2px); } to { opacity:1; transform:none; } }
 }
+/* Keep a market quote on one baseline, including while individual digits move. */
+.desk-market { container-type:inline-size; }
+.trading-desk .live-quote-grid { flex-wrap:wrap; }
+.trading-desk .live-quote-grid > div:first-child { flex:1 0 max-content; }
+.trading-desk .live-price { font-size:clamp(30px,9cqi,43px); font-weight:500; }
+.trading-desk .live-depth { width:27%; margin-left:auto; }
