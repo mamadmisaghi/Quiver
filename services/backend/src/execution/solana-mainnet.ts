@@ -1,3 +1,4 @@
+import { priceAtSlot } from "../venues/solana-price";
 import { createHash } from "node:crypto";
 import { compileMetisV0, type JupiterBuild } from "./solana-build-wire";
 import { ed25519 } from "@noble/curves/ed25519";
@@ -834,21 +835,7 @@ export class SolanaMainnet {
     const out: Record<string, { usd: number; slot: number; decimals: number }> =
       {};
     for (const mint of mints) {
-      const m = prices[mint];
-      ensure(
-        m &&
-          Number.isFinite(m.usdPrice) &&
-          m.usdPrice > 0 &&
-          m.usdPrice < 1e12 &&
-          Number.isInteger(m.decimals) &&
-          m.decimals >= 0 &&
-          m.decimals <= 18 &&
-          Number.isSafeInteger(m.blockId) &&
-          m.blockId <= slot + 64 &&
-          slot - m.blockId <= 450,
-        "Missing or stale independent USD price for the selected mint",
-      );
-      out[mint] = { usd: m.usdPrice, slot: m.blockId, decimals: m.decimals };
+      out[mint] = priceAtSlot(prices[mint], slot);
     }
     return out;
   }

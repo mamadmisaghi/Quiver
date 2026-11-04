@@ -1,3 +1,7 @@
+import {
+  spotObservation,
+  wrappedSol,
+} from "@/services/backend/src/venues/solana-price";
 import { marketJson } from "@/services/backend/src/compile/markets";
 import {
   robinhoodIssuerCandidate,
@@ -64,34 +68,38 @@ export async function GET(request: Request) {
       });
     }
     if (venue === "solana") {
-      const mint = "So11111111111111111111111111111111111111112";
-      const v = await marketJson(
-        "https://api.dexscreener.com/tokens/v1/solana/" + mint,
-        undefined,
-        12000,
-      );
-      if (!Array.isArray(v)) throw Error();
-      const p = v
-        .filter(
-          (p) =>
-            p?.chainId === "solana" &&
-            p.baseToken?.address === mint &&
-            positive(p.priceUsd),
+      if (symbol !== "SOL")
+        return previewJson({ message: "Unknown spot market." }, 422);
+      const observation = await spotObservation(wrappedSol, (url, init) =>
+        marketJson(url, init, 8000),
+      ).catch(async () => {
+        // A labeled external reference is only for the watch panel. It cannot trigger or settle a trade.
+        const ticker = (await marketJson(
+          "https://api.exchange.coinbase.com/products/SOL-USD/ticker",
+          undefined,
+          6000,
+        )) as { price: string; time: string; trade_id: number };
+        const at = Date.parse(ticker.time);
+        if (
+          !positive(ticker.price) ||
+          !(ticker.trade_id > 0) ||
+          !Number.isFinite(at) ||
+          distance(at) > 90000 ||
+          distance(at) < -3000
         )
-        .sort(
-          (a, b) =>
-            Number(b.liquidity?.usd ?? 0) - Number(a.liquidity?.usd ?? 0),
-        )[0];
-      if (!p) throw Error();
+          throw Error("Stale reference");
+        return {
+          price: Number(ticker.price),
+          at,
+          source: "Coinbase SOL/USD reference",
+          referencePair: "SOL/USD",
+        };
+      });
       return previewJson({
         venue,
-        symbol: "SOL",
-        at: Date.now(),
-        source: "Dexscreener pool observation",
-        price: Number(p.priceUsd),
-        liquidity: Number(p.liquidity?.usd) || null,
-        volume: Number(p.volume?.h24) || null,
-        address: mint,
+        symbol,
+        address: wrappedSol,
+        ...observation,
       });
     }
     if (venue === "robinhood") {

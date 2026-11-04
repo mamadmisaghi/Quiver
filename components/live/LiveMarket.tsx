@@ -12,6 +12,8 @@ type Price = {
   address?: string;
   liquidity?: number;
   volume?: number;
+  slot?: number;
+  referencePair?: string;
   levels?: { price: number; size: number }[][];
 };
 const fmt = (n: number, d = 2) =>
@@ -79,7 +81,7 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
   const max = book
     ? Math.max(...book.map((s) => s.reduce((v, l) => v + l.size, 0)), 1)
     : 1;
-  const currency = stock ? "USD" : perp ? "USD" : "USD";
+  const currency = "USD";
   const stats = perp
     ? [
         ["Best bid", record?.bid ? "$" + fmt(record.bid) : "—"],
@@ -90,16 +92,26 @@ export default function LiveMarket({ net }: { net: LiveNetwork }) {
           ["Network", "Chain 4663"],
           ["Token", record?.address ? shortAddress(record.address) : "—"],
         ]
-      : [
-          [
-            "Pool liquidity",
-            record?.liquidity ? "$" + fmt(record.liquidity, 0) : "—",
-          ],
-          [
-            "24h pool volume",
-            record?.volume ? "$" + fmt(record.volume, 0) : "—",
-          ],
-        ];
+      : record?.referencePair
+        ? [
+            ["Reference pair", record.referencePair],
+            ["Mint", shortAddress(record.address ?? "")],
+          ]
+        : record?.slot
+          ? [
+              ["Observed slot", String(record.slot)],
+              ["Mint", shortAddress(record.address ?? "")],
+            ]
+          : [
+              [
+                "Pool liquidity",
+                record?.liquidity ? "$" + fmt(record.liquidity, 0) : "—",
+              ],
+              [
+                "24h pool volume",
+                record?.volume ? "$" + fmt(record.volume, 0) : "—",
+              ],
+            ];
   return (
     <div className="live-market">
       <div className="live-market-head">

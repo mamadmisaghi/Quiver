@@ -1,3 +1,4 @@
+import { spotObservation } from "../venues/solana-price";
 import type { Workflow } from "../../contracts/src/workflow";
 import { marketJson, perpetualInfo } from "../compile/markets";
 import type { PaperQuote } from "./paper";
@@ -14,9 +15,8 @@ export async function quoteAsset(a: Asset, get: Get = getDefault, tiingoKey?: st
     let price: number, observedAt = Date.now(), source = "", fundingHourly: number | undefined;
     if (c.venue === "solana") {
       if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(c.address ?? "") || c.id !== `sol:token:${c.address}`) throw new Error("identity");
-      const raw = await get(`https://api.dexscreener.com/tokens/v1/solana/${c.address}`);
-      const pairs = (Array.isArray(raw) ? raw : []).filter((p) => p.chainId === "solana" && p.baseToken?.address === c.address && positive(p.priceUsd)).sort((a, b) => Number(b.liquidity?.usd ?? 0) - Number(a.liquidity?.usd ?? 0));
-      if (!pairs.length) throw new Error("no_quote"); price = Number(pairs[0].priceUsd); source = "dexscreener · pool indicative price";
+      const observation=await spotObservation(c.address!,get);
+      price=observation.price; observedAt=observation.at; source=observation.source;
     } else if (c.venue === "hyperliquid") {
       if (!/^(?:[a-z0-9]{1,16}:)?[A-Za-z0-9@._-]{1,24}$/.test(c.symbol) || c.id !== `hl:perp:${c.symbol}`) throw new Error("identity");
       const dex = c.symbol.includes(":") ? c.symbol.split(":")[0] : undefined;
