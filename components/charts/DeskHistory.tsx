@@ -70,7 +70,8 @@ export default function DeskHistory({
         <HistoryChart
           key={key}
           points={chartBars(hist)}
-          title="Closing price"
+          title="Recorded prices"
+          readout={false}
           source={hist.coverage[0]?.source}
           short
           step={sel.step}
@@ -79,6 +80,7 @@ export default function DeskHistory({
       ) : (error === key || hist) && observed.length ? (
         <HistoryChart
           title="Observed this session"
+          readout={false}
           source={source}
           points={observed}
           short

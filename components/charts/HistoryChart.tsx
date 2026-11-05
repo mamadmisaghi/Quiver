@@ -48,6 +48,7 @@ export default function HistoryChart({
   candles = false,
   short = false,
   step,
+  readout = true,
 }: {
   points: ChartPoint[];
   title: string;
@@ -56,6 +57,7 @@ export default function HistoryChart({
   candles?: boolean;
   short?: boolean;
   step?: number;
+  readout?: boolean;
 }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, ""),
     host = useRef<HTMLDivElement>(null);
@@ -196,19 +198,21 @@ export default function HistoryChart({
   const tooltipTime =
     date(selected.t) + " · " + date(selected.t, true) + " UTC";
   return (
-    <div ref={host} className="q-history-chart">
+    <div ref={host} className="q-history-chart" data-readout={readout}>
       <div className="q-history-head">
         <div>
           <span className="q-chart-label">{title}</span>
-          <div className="q-chart-readout">
-            <strong className="q-number">{fmt(selected.v)}</strong>
-            {delta !== null && (
-              <small className={delta < 0 ? "q-down" : "q-up"}>
-                {delta > 0 ? "+" : ""}
-                {delta.toFixed(2)}%
-              </small>
-            )}
-          </div>
+          {readout && (
+            <div className="q-chart-readout">
+              <strong className="q-number">{fmt(selected.v)}</strong>
+              {delta !== null && (
+                <small className={delta < 0 ? "q-down" : "q-up"}>
+                  {delta > 0 ? "+" : ""}
+                  {delta.toFixed(2)}%
+                </small>
+              )}
+            </div>
+          )}
         </div>
         {candles && (
           <div className="q-chart-switch" aria-label="Chart style">
@@ -235,145 +239,167 @@ export default function HistoryChart({
           </span>
         )}
       </div>
-      <svg
-        viewBox={"0 0 " + width + " " + h}
-        height={h}
-        width="100%"
-        tabIndex={0}
-        role="group"
-        aria-label={
-          title + " chart. Use left and right arrows to inspect observations."
-        }
-        onPointerDown={(e) => selectAt(e.clientX, e.currentTarget)}
-        onPointerMove={(e) => {
-          if (e.pointerType !== "touch" || e.buttons)
-            selectAt(e.clientX, e.currentTarget);
-        }}
-        onPointerLeave={() => setHover(null)}
-        onBlur={() => setHover(null)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            setHover(null);
-            return;
-          }
-          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key))
-            return;
-          e.preventDefault();
-          setHover(
-            e.key === "Home"
-              ? 0
-              : e.key === "End"
-                ? data.length - 1
-                : Math.max(
-                    0,
-                    Math.min(
-                      data.length - 1,
-                      idx + (e.key === "ArrowLeft" ? -1 : 1),
-                    ),
-                  ),
-          );
-        }}
-      >
-        <defs>
-          <linearGradient
-            id={id + "fill"}
-            x2="0"
-            y2="1"
-            gradientUnits="objectBoundingBox"
+      <div className="q-plot-surface">
+        {!readout && hover !== null && (
+          <div
+            className="q-plot-tooltip"
+            style={{
+              left:
+                (Math.max(90, Math.min(width - 90, sx)) / width) * 100 + "%",
+            }}
           >
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity=".19" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity=".005" />
-          </linearGradient>
-        </defs>
-        {yTicks.map((v, i) => {
-          const yy = y(v);
-          return (
-            <g key={i}>
-              <line
-                x1={left}
-                x2={right}
-                y1={yy}
-                y2={yy}
-                className="q-plot-grid"
+            <strong className="q-number">{fmt(selected.v)}</strong>
+            <time>{tooltipTime}</time>
+          </div>
+        )}
+        <svg
+          viewBox={"0 0 " + width + " " + h}
+          height={h}
+          width="100%"
+          tabIndex={0}
+          role="group"
+          aria-label={
+            title + " chart. Use left and right arrows to inspect observations."
+          }
+          onPointerDown={(e) => selectAt(e.clientX, e.currentTarget)}
+          onPointerMove={(e) => {
+            if (e.pointerType !== "touch" || e.buttons)
+              selectAt(e.clientX, e.currentTarget);
+          }}
+          onPointerLeave={() => setHover(null)}
+          onBlur={() => setHover(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setHover(null);
+              return;
+            }
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key))
+              return;
+            e.preventDefault();
+            setHover(
+              e.key === "Home"
+                ? 0
+                : e.key === "End"
+                  ? data.length - 1
+                  : Math.max(
+                      0,
+                      Math.min(
+                        data.length - 1,
+                        idx + (e.key === "ArrowLeft" ? -1 : 1),
+                      ),
+                    ),
+            );
+          }}
+        >
+          <defs>
+            <linearGradient
+              id={id + "fill"}
+              x2="0"
+              y2="1"
+              gradientUnits="objectBoundingBox"
+            >
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity=".19" />
+              <stop
+                offset="100%"
+                stopColor="var(--accent)"
+                stopOpacity=".005"
               />
-              <text x={right + 8} y={yy + 4}>
-                {fmt(v)}
-              </text>
-            </g>
-          );
-        })}
-        {candle ? (
-          data.map((p, i) => {
-            const o = p.o ?? p.v,
-              px = x(p.t),
-              color = p.v >= o ? "var(--q-up)" : "var(--q-down)";
+            </linearGradient>
+          </defs>
+          {yTicks.map((v, i) => {
+            const yy = y(v);
             return (
-              <g key={i} stroke={color}>
-                <line x1={px} x2={px} y1={y(p.h ?? p.v)} y2={y(p.l ?? p.v)} />
-                <rect
-                  x={px - size / 2}
-                  width={size}
-                  y={Math.min(y(o), y(p.v))}
-                  height={Math.max(1, Math.abs(y(o) - y(p.v)))}
-                  fill={color}
-                  stroke="none"
+              <g key={i}>
+                <line
+                  x1={left}
+                  x2={right}
+                  y1={yy}
+                  y2={yy}
+                  className="q-plot-grid"
                 />
+                <text x={right + 8} y={yy + 4}>
+                  {fmt(v)}
+                </text>
               </g>
             );
-          })
-        ) : (
-          <>
-            <path d={areas.join(" ")} fill={"url(#" + id + "fill)"} />
-            <path
-              d={chunks.join(" ")}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            <circle
-              cx={x(last.t)}
-              cy={y(last.v)}
-              r={3.5}
-              fill="var(--accent)"
-            />
-          </>
-        )}
-        {xTicks.map((t) => (
-          <text
-            key={t}
-            x={x(t)}
-            y={h - 3}
-            textAnchor={
-              x(t) < left + 18 ? "start" : x(t) > right - 18 ? "end" : "middle"
-            }
-          >
-            {span > 0 && span < 120000
-              ? new Date(t).toISOString().slice(11, 19)
-              : date(t, span <= dayMs * 1.3)}
-          </text>
-        ))}
-        {hover !== null && (
-          <g pointerEvents="none">
-            <line
-              className="q-plot-cursor"
-              x1={sx}
-              x2={sx}
-              y1={top}
-              y2={bottom}
-            />
-            <circle
-              cx={sx}
-              cy={sy}
-              r="5"
-              fill="var(--accent)"
-              stroke="var(--card)"
-              strokeWidth="2"
-            />
-          </g>
-        )}
-      </svg>
+          })}
+          {candle ? (
+            data.map((p, i) => {
+              const o = p.o ?? p.v,
+                px = x(p.t),
+                color = p.v >= o ? "var(--q-up)" : "var(--q-down)";
+              return (
+                <g key={i} stroke={color}>
+                  <line x1={px} x2={px} y1={y(p.h ?? p.v)} y2={y(p.l ?? p.v)} />
+                  <rect
+                    x={px - size / 2}
+                    width={size}
+                    y={Math.min(y(o), y(p.v))}
+                    height={Math.max(1, Math.abs(y(o) - y(p.v)))}
+                    fill={color}
+                    stroke="none"
+                  />
+                </g>
+              );
+            })
+          ) : (
+            <>
+              <path d={areas.join(" ")} fill={"url(#" + id + "fill)"} />
+              <path
+                d={chunks.join(" ")}
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+              <circle
+                cx={x(last.t)}
+                cy={y(last.v)}
+                r={3.5}
+                fill="var(--accent)"
+              />
+            </>
+          )}
+          {xTicks.map((t) => (
+            <text
+              key={t}
+              x={x(t)}
+              y={h - 3}
+              textAnchor={
+                x(t) < left + 18
+                  ? "start"
+                  : x(t) > right - 18
+                    ? "end"
+                    : "middle"
+              }
+            >
+              {span > 0 && span < 120000
+                ? new Date(t).toISOString().slice(11, 19)
+                : date(t, span <= dayMs * 1.3)}
+            </text>
+          ))}
+          {hover !== null && (
+            <g pointerEvents="none">
+              <line
+                className="q-plot-cursor"
+                x1={sx}
+                x2={sx}
+                y1={top}
+                y2={bottom}
+              />
+              <circle
+                cx={sx}
+                cy={sy}
+                r="5"
+                fill="var(--accent)"
+                stroke="var(--card)"
+                strokeWidth="2"
+              />
+            </g>
+          )}
+        </svg>
+      </div>
       <span className="sr-only" aria-live="polite">
         {hover !== null ? tooltipTime + " " + fmt(selected.v) : ""}
       </span>

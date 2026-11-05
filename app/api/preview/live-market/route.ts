@@ -8,6 +8,7 @@ import {
   ROBINHOOD_ISSUER_ASSETS,
 } from "@/services/backend/src/compile/robinhood-assets";
 import pins from "@/services/backend/config/verified/4663-readonly.json";
+import { hyperliquidBook } from "@/lib/live-market-data";
 import { previewJson } from "@/lib/preview/server";
 export const dynamic = "force-dynamic";
 const positive = (v: unknown) => Number.isFinite(Number(v)) && Number(v) > 0;
@@ -38,34 +39,9 @@ export async function GET(request: Request) {
         time: number;
         levels: { px: string; sz: string }[][];
       };
-      const levels = b.levels?.slice(0, 2).map((side) =>
-        side
-          .slice(0, 10)
-          .map((l) => ({ price: Number(l.px), size: Number(l.sz) }))
-          .filter((l) => positive(l.price) && positive(l.size)),
-      );
-      const bid = levels?.[0]?.[0]?.price,
-        ask = levels?.[1]?.[0]?.price;
-      if (
-        b.coin !== symbol ||
-        !positive(bid) ||
-        !positive(ask) ||
-        ask < bid ||
-        !Number.isSafeInteger(b.time) ||
-        distance(b.time) > 30000 ||
-        distance(b.time) < -3000
-      )
-        throw Error();
-      return previewJson({
-        venue,
-        symbol,
-        at: b.time,
-        source: "Hyperliquid order book",
-        price: (bid + ask) / 2,
-        bid,
-        ask,
-        levels,
-      });
+      const book = hyperliquidBook(b, symbol);
+      if (!book) throw Error("Invalid venue order book");
+      return previewJson({ venue, ...book });
     }
     if (venue === "solana") {
       if (symbol !== "SOL")

@@ -391,9 +391,25 @@ html[data-design="c"] { --q-shadow-focus:none; }
 .q-app-shell a[data-route-pending=true] { color:var(--accent); }
 @media (hover:hover) { .q-chart-switch button:hover { color:var(--ink); } }
 @media (prefers-reduced-motion:no-preference) {
-  .q-digit-changed { display:inline-block; animation:q-figure-tick 165ms ease-out both; }
-  @keyframes q-figure-tick { from { opacity:.55; transform:translateY(.12em); } to { opacity:1; transform:none; } }
   .q-app-shell :is([role=tab],.q-chart-switch button,a.q-nav-item,.q-action) { transition:background-color .14s ease-out,color .14s ease-out,border-color .14s ease-out; }
   .q-app-shell :is([role=tab],.q-chart-switch button,.q-action):active { translate:0 1px; }
 }
 .q-quote-number { display:inline-block; white-space:nowrap; vertical-align:baseline; }
+
+.q-odometer { display:inline-flex; align-items:baseline; vertical-align:baseline; }
+.q-odometer-digit { display:inline-block; position:relative; width:1ch; height:1.05em; overflow:hidden; vertical-align:baseline; }
+.q-odometer-roll { display:block; position:relative; width:100%; }
+.q-odometer-roll>span,.q-odometer-still { display:block; width:100%; height:1.05em; line-height:1.05em; }
+.q-odometer-up { transform:translateY(-50%); }
+.q-odometer-down { transform:translateY(0); }
+@media (prefers-reduced-motion:no-preference) {
+  .q-odometer-up { animation:q-odometer-up 280ms cubic-bezier(.22,.72,.28,1) both; }
+  .q-odometer-down { animation:q-odometer-down 280ms cubic-bezier(.22,.72,.28,1) both; }
+  @keyframes q-odometer-up { from { transform:translateY(0); } to { transform:translateY(-50%); } }
+  @keyframes q-odometer-down { from { transform:translateY(-50%); } to { transform:translateY(0); } }
+}
+.q-chart-readout strong { font-weight:500; }
+.q-plot-surface { position:relative; }
+.q-plot-tooltip { position:absolute; top:0; z-index:2; display:grid; gap:3px; padding:7px 9px; border:1px solid var(--line-2); border-radius:6px; background:var(--raised); color:var(--ink); transform:translate(-50%,-20%); pointer-events:none; box-shadow:0 3px 14px #0003; }
+.q-plot-tooltip strong { font-size:15px; font-weight:500; white-space:nowrap; }
+.q-plot-tooltip time { font:10px var(--font-geist-sans); white-space:nowrap; color:var(--muted); }

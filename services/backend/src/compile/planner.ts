@@ -17,6 +17,7 @@ import { basketDraft, checkBoundClauses } from "./basket";
 import { compileProgress, correctionLabel } from "./progress";
 import { drawdownDraft } from "./drawdown";
 import { linkedEntry } from "./linked-entry";
+import { oddsEntry } from "./odds-entry";
 import { recurringDraft } from "./recurring";
 
 // Both model passes must use the same venue vocabulary as the execution schema.
@@ -49,7 +50,7 @@ export function intentProblems(w: Workflow, original: string, base?: Strategy): 
   const errors = workflowProblems(w).filter((p) => !p.startsWith("Choose a drawdown reference") && !p.startsWith("Set a lookback period"));
   for (const a of w.assets) {
     if (!source.includes(normalize(a.sourceText))) errors.push(`Asset ${a.query} must be grounded in an exact name from the user's text.`);
-    if (a.kind !== "outcome" && a.venue !== "polymarket" && canonicalSymbol(a.sourceText) !== canonicalSymbol(a.query)) errors.push(`Do not replace ${a.sourceText} with ${a.query}. Preserve the asset or its verified alias.`);
+    if (a.kind !== "outcome" && a.venue !== "polymarket" && canonicalSymbol(a.sourceText.replace(/^([a-z][a-z0-9.]{0,31})\s+(?:stock token|perpetual futures?|perps?|tokens?|shares?)$/i, "$1")) !== canonicalSymbol(a.query)) errors.push(`Do not replace ${a.sourceText} with ${a.query}. Preserve the asset or its verified alias.`);
   }
   for (const s of w.stages) {
     if (!source.includes(normalize(s.sourceText))) errors.push(`Stage ${s.id} needs the original action clause, not an invented quote.`);
@@ -182,7 +183,7 @@ export async function* planCompile(req: Parameters<typeof compile>[0], d: Compil
     if (!d.openrouter) { yield { type: "error", code: "ai_required", message: "Sign in for this refinement. Your current strategy has not been changed." }; return; }
   }
   if (!continued && !req.baseStrategy && isEditRequest(req.thesis)) { yield { type: "error", code: "needs_strategy", message: "Open the strategy you want to edit, then use Refine this draft. No unrelated strategy was created." }; return; }
-  const template = !req.baseStrategy && !req.image ? basketDraft(req.thesis) ?? drawdownDraft(req.thesis) ?? recurringDraft(req.thesis) ?? (d.retainWorkflow ? linkedEntry(req.thesis) : null) : null;
+  const template = !req.baseStrategy && !req.image ? basketDraft(req.thesis) ?? drawdownDraft(req.thesis) ?? recurringDraft(req.thesis) ?? oddsEntry(req.thesis) ?? (d.retainWorkflow ? linkedEntry(req.thesis) : null) : null;
   const recurring = !continued ? template : template && req.clarification && matchesExactDraft(template, req.clarification, req.thesis)
     ? continued.draft.workflow : null;
   if (recurring) {
