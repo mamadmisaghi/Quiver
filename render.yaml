@@ -1,4 +1,4 @@
-# Quiver paper beta. One engine instance. Frontend remains at the existing published Site.
+# Quiver paper and wallet-authorized live trading. One engine instance behind the existing Workspace Site.
 # The replay disk makes Render stop the old engine before starting the next one.
 # This is required by the PostgreSQL single-writer lock; do not remove it or scale this service.
 services:
@@ -23,15 +23,27 @@ services:
       - key: PORT
         value: "10000"
       - key: QUIVR_MODE
-        value: mock
+        value: mainnet
+      - key: CHAIN_ID
+        value: "4663"
+      - key: LIVE_EXECUTION_PROFILE
+        value: venue-wallets
+      - key: TERMS_VERSION
+        value: live-controls-v1
+      - key: QUIVER_EDGE_PUBLIC_KEY
+        value: "MCowBQYDK2VwAyEAjOiJqGUId+nUOeMIjp003jcckM0jag7qK3apKMIXiTk="
       - key: DEV_LOGIN_ENABLED
         value: "false"
       - key: QUIVR_DEV_PERSIST
         value: "0"
       - key: QUIVR_MAINNET_ENABLED
+        value: "true"
+      - key: HL_TESTNET_ORDERS
         value: "false"
+      - key: LLM_USER_DAILY_COMPILES
+        value: "30"
       - key: PRICE_SOURCE
-        value: mock
+        value: mainnet-readonly
       - key: DATABASE_URL
         fromDatabase:
           name: quiver-paper-db
@@ -43,9 +55,9 @@ services:
       - key: OPS_TOKEN
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://quiver-studio.gofivahootan.chatgpt.site
+        value: https://quiver-workspace.gofivahootan.chatgpt.site
       - key: SIWE_ORIGIN
-        value: https://quiver-studio.gofivahootan.chatgpt.site
+        value: https://quiver-workspace.gofivahootan.chatgpt.site
       - key: PRIVY_APP_ID
         sync: false
       - key: PRIVY_APP_SECRET
@@ -53,15 +65,15 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: LLM_MODEL
-        value: openai/gpt-4.1-mini
+        value: openai/gpt-5.6-sol
       - key: LLM_VISION_MODEL
         value: openai/gpt-4.1-mini
       - key: LLM_PRICE_IN_PER_MTOK
-        value: "0.4"
+        value: "4"
       - key: LLM_PRICE_OUT_PER_MTOK
-        value: "1.6"
+        value: "20"
       - key: LLM_MAX_OUTPUT_TOKENS
-        value: "4000"
+        value: "6000"
       - key: LLM_MAX_INFLIGHT
         value: "3"
       - key: LLM_DAILY_BUDGET_USD

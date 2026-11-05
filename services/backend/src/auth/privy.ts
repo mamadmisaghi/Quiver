@@ -1,3 +1,4 @@
+import { read58 } from "../execution/solana-wire";
 /**
  * M5.2: server-side Privy identity-token verification (ES256 JWT). No SDK, node:crypto only.
  * Fails closed: no app id/secret → PrivyUnavailable; any check failing → PrivyInvalid.
@@ -8,7 +9,7 @@ type JsonWebKey = { kty?: string; crv?: string; x?: string; y?: string; [k: stri
 
 export class PrivyUnavailable extends Error {}
 export class PrivyInvalid extends Error {}
-export interface PrivyIdentity { sub: string; wallets: string[]; email: string | null }
+export interface PrivyIdentity { sub: string; wallets: string[]; solanaWallets?: string[]; email: string | null }
 export type JwksFetch = (url: string) => Promise<{ keys: (JsonWebKey & { kid?: string })[] }>;
 export interface PrivyOpts { appId?: string; appSecret?: string; verificationKeyPem?: string; jwksUrl?: string; fetchJwks?: JwksFetch; now?: () => number; /** M5.24c: min ms between JWKS fetches (default 30 s). */ jwksMinIntervalMs?: number }
 
@@ -74,7 +75,8 @@ export class PrivyVerifier {
     try { la = typeof p.linked_accounts === "string" ? JSON.parse(p.linked_accounts) : Array.isArray(p.linked_accounts) ? (p.linked_accounts as typeof la) : []; } catch { la = []; }
     const wallets = la.filter((a) => a.type === "wallet" && (a.chain_type ?? "ethereum") === "ethereum" && /^0x[0-9a-fA-F]{40}$/.test(a.address ?? "")).map((a) => a.address!);
     const email = (la.find((a) => a.type === "email") as { address?: string } | undefined)?.address ?? null;
-    return { sub: p.sub, wallets, email };
+    const solanaWallets=la.filter(a=>a.type==="wallet"&&a.chain_type==="solana"&&typeof a.address==="string").flatMap(a=>{try{read58(a.address!,32);return [a.address!];}catch{return [];}});
+    return { sub:p.sub,wallets,email,...(solanaWallets.length?{solanaWallets}: {}) };
   }
 }
 

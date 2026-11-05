@@ -1,14 +1,13 @@
 /* Quiver motion (Ellis). Everything is opt-in via data-motion; transform / opacity / clip-path only.
    Three tiers (reworks 2c52ff0):
    1. ENTER  — entrances, ticks, draw-ins, crossfades: run whenever reduced motion is off, touch included.
-   2. POINTER — hover / pointer-driven effects: fine pointers with hover only (flight-field bend + comets are JS,
+   2. POINTER — hover / pointer-driven effects: fine pointers with hover only (the flight-field bend is JS,
       gated by useFineMotion).
    3. REDUCED — static end states; no keyframes at all (state changes simply swap).
    Entrances start at opacity .001, not 0: Chrome skips opacity-0 paints as LCP candidates (cost ~800ms LCP).
-   House ease = var(--ease); Weft-matched timings: rise .8s, node .55s stagger 60ms, edge .75s, swap .32s. */
+   House ease = var(--ease); Weft-matched timings: rise .8s, swap .32s. Event-driven graph motion lives in app/design.css. */
 @keyframes q-rise { from { opacity: .001; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes q-up { from { opacity: .001; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes q-node { from { opacity: .001; transform: scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes q-fade { from { opacity: .001; } to { opacity: 1; } }
 @keyframes q-tick { from { opacity: .001; transform: translateY(45%); } to { opacity: 1; transform: none; } }
 @keyframes q-tick-dn { from { opacity: .001; transform: translateY(-45%); } to { opacity: 1; transform: none; } }
@@ -50,15 +49,6 @@
   [data-motion="rules"] > :nth-child(2) li { animation-delay: 70ms; }
   [data-motion="rules"] > :nth-child(3) li { animation-delay: 140ms; }
   [data-motion="rules"] > :nth-child(4) li { animation-delay: 210ms; }
-  [data-motion="node-in"] { animation: q-node .55s var(--ease) both; transform-origin: 50% 40%; }
-  [data-motion="graph"] > :nth-child(3) { animation-delay: 60ms; }
-  [data-motion="graph"] > :nth-child(4) { animation-delay: 120ms; }
-  [data-motion="graph"] > :nth-child(5) { animation-delay: 180ms; }
-  [data-motion="graph"] > :nth-child(6) { animation-delay: 240ms; }
-  [data-motion="graph"] > :nth-child(7) { animation-delay: 300ms; }
-  [data-motion="graph"] > :nth-child(n+8) { animation-delay: 360ms; }
-  [data-motion="graph-edge"] { animation: q-wipe .75s var(--ease) .18s both; }
-
   /* numbers: keyed remount = odometer-style roll in */
   [data-motion="tick"] { animation: q-tick .32s var(--ease) both; }
   [data-motion="price-tick"][data-dir="up"] { animation: q-tick .36s var(--ease) both; }

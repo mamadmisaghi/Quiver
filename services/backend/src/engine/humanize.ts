@@ -1,5 +1,6 @@
 import type { Expr, Signal, Strategy } from "../../contracts/src/strategy";
 import type { Registry } from "../venues/registry";
+import { workflowView } from "./workflow-view";
 
 const VENUE: Record<string, string> = { robinhood: "Robinhood Chain", hyperliquid: "Hyperliquid", solana: "Solana", polymarket: "Polymarket" };
 const OPS: Record<string, string> = { lt: "is below", lte: "is at or below", gt: "is above", gte: "is at or above", eq: "is", neq: "is not", crosses_above: "crosses above", crosses_below: "crosses below" };
@@ -7,6 +8,7 @@ const money = (v: string) => "$" + Number(v).toLocaleString("en-US", { maximumFr
 
 /** Deterministic, model-free English rendering (Watch / When / Do / Exit). */
 export function humanize(s: Strategy, reg: Registry) {
+  if (s.workflow) return workflowView(s.workflow).humanized;
   const sym = (id: string) => reg.get(id)?.symbol ?? id;
   const sigs = new Map(s.signals.map((x) => [x.id, x]));
   const sigName = (sig: Signal): string => {
@@ -61,6 +63,7 @@ export function humanize(s: Strategy, reg: Registry) {
     if (x.stopLoss) parts.push(`stop at ${x.stopLoss.unit === "pct" ? "−" + x.stopLoss.value + "%" : money(x.stopLoss.value)}`);
     if (x.trailingStopPct) parts.push(`trail ${x.trailingStopPct}%`);
     if (x.timeExitHours) parts.push(`exit after ${x.timeExitHours}h`);
+    if (x.takeProfits?.length) parts.push(...x.takeProfits.map((r) => `sell ${(Number(r.sellFraction) * 100).toFixed(2)}% of the original position at +${r.atPct}%`));
     if (parts.length) exit.push(`${n}: ${parts.join(", ")}`);
   }
   const r = s.risk;

@@ -1,10 +1,11 @@
 "use client";
 // M3.8: landing sections backed by GET /v1/public/landing (guest). Mock mode reads Sage's ext.landing.json fixture.
 // One shared request per page load; sections render skeletons until it lands and an honest error if it fails.
-// The API's `notice` is always rendered (LandingNotice) — it is the disclaimer for every number below it.
 import Link from "@/components/Link";
 import { useEffect, useState } from "react";
-import { api, fmtPct, fmtUsd, type Landing } from "@/lib/api";
+import { api, API_MODE, fmtPct, fmtUsd, type Landing } from "@/lib/api";
+import { ArrowRight, GitBranch } from "lucide-react";
+import { usePaperAccount, decimal } from "@/lib/paper/use-paper-account";
 import VenueMark from "../VenueMark";
 import { BtnPrimary, Card, Eyebrow, H2, Lead, Pill, Section, Spark } from "../ui";
 
@@ -19,20 +20,8 @@ function useLanding() {
   return s;
 }
 const Skel = ({ className = "" }: { className?: string }) => <div aria-hidden="true" className={`animate-pulse rounded-[10px] bg-white/[.04] motion-reduce:animate-none ${className}`} />;
-const Failed = () => <p role="status" className="rounded-[12px] border border-line p-5 text-[13.5px] text-muted">Couldn’t load example data right now. Try again in a minute.</p>;
+const Failed = () => <p role="status" className="rounded-[12px] border border-line p-5 text-[13.5px] text-muted">Couldn’t load this section. Please try again.</p>;
 const tag = (n: number) => String(n).padStart(2, "0");
-
-export function LandingNotice() {
-  const { d } = useLanding();
-  if (!d?.notice) return null;
-  return (
-    <div role="note" data-testid="landing-notice" className="absolute inset-x-0 top-0 z-10 border-b border-line bg-[#14120c]">
-      <p className="mx-auto max-w-[1200px] px-5 py-2 text-[12.5px] leading-snug text-ink-2 sm:px-8">
-        <span aria-hidden="true" className="mr-2 inline-block h-1.5 w-1.5 -translate-y-px rounded-full bg-warn" />{d.notice}
-      </p>
-    </div>
-  );
-}
 
 export function WhatItTrades() {
   const { d, err } = useLanding();
@@ -44,24 +33,24 @@ export function WhatItTrades() {
           <H2 className="mt-5">One graph, four markets.</H2>
           <Lead className="mt-6">Signals and actions can sit on different venues. Odds on Polymarket can open a position on Hyperliquid and buy a stock token on Robinhood Chain in the same run.</Lead>
           {d && (
-            <ul className="mt-8 grid gap-2 font-mono text-[12px]" aria-label="Venue status">
+            <ul className="mt-8 grid gap-2 font-mono text-[12px]" aria-label="Venue capabilities">
               {d.venues.map((v) => (
                 <li key={v.id} className="flex items-center gap-2 text-muted">
-                  <span className={`h-1.5 w-1.5 rounded-full ${v.status === "up" ? "bg-long" : v.status === "degraded" ? "bg-warn" : "bg-short"}`} aria-hidden="true" />
-                  <span className="text-ink-2">{v.name}</span><span>· {v.capabilities.join(", ")}</span><span className="sr-only">status {v.status}</span>
+                  {API_MODE === "live" && <span className={`h-1.5 w-1.5 rounded-full ${v.status === "up" ? "bg-long" : v.status === "degraded" ? "bg-warn" : "bg-short"}`} aria-hidden="true" />}
+                  <span className="text-ink-2">{v.name}</span><span>· {v.capabilities.join(", ")}</span>{API_MODE === "live" && <span className="sr-only">status {v.status}</span>}
                 </li>
               ))}
             </ul>
           )}
         </div>
         {err ? <Failed /> : (
-          <ul className="divide-y divide-line border-y border-line" aria-busy={!d}>
+          <ul className="min-w-0 divide-y divide-line border-y border-line" aria-busy={!d}>
             {d ? d.trades.map((t, i) => (
-              <li key={t.id} className="group grid grid-cols-[2.5rem_1fr_auto] items-center gap-4 py-6 sm:grid-cols-[2.5rem_14rem_1fr_auto]">
-                <span className="tnum font-mono text-[12px] text-muted">{tag(i + 1)}</span>
-                <div className="text-[18px] font-medium tracking-[-0.02em]">{t.label}</div>
-                <div className="col-start-2 text-[13.5px] text-muted sm:col-start-auto">{t.example}</div>
-                <div className="col-start-3 row-start-1 flex items-center gap-2 sm:col-start-auto">
+              <li key={t.id} className="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 py-6 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto] xl:grid-cols-[2.5rem_14rem_minmax(0,1fr)_auto]">
+                <span className="tnum col-start-1 row-start-1 font-mono text-[12px] text-muted">{tag(i + 1)}</span>
+                <div className="col-start-2 row-start-1 min-w-0 text-[18px] font-medium tracking-[-0.02em]">{t.label}</div>
+                <div className="col-start-2 col-end-4 row-start-2 min-w-0 text-[13.5px] text-muted xl:col-start-3 xl:row-start-1">{t.example}</div>
+                <div className="col-start-3 row-start-1 flex items-center gap-2 xl:col-start-4">
                   <span className="hidden gap-1 md:flex">{t.venues.map((v) => <VenueMark key={v} venue={v} />)}</span>
                   <Pill tone={t.status === "paper" ? "long" : "muted"}>{t.status === "paper" ? "Paper" : "Watch only"}</Pill>
                 </div>
@@ -75,6 +64,20 @@ export function WhatItTrades() {
 }
 
 const clock = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+function WorkspacePaperCard() {
+  const account = usePaperAccount(true);
+  const latest = account?.sessions[0];
+  return <Card className="q-paper-ledger">
+    <header><span><GitBranch aria-hidden="true" size={17} />Paper session</span><span>{latest?.status ?? "Trade log"}</span></header>
+    {latest ? <div className="q-ledger-content"><h3>{latest.strategyName}</h3>
+      <dl>{[["Equity", fmtUsd(decimal(latest.equity))], ["Cash", fmtUsd(decimal(latest.cash))], ["Fills", latest.fills]].map(([label, value]) =>
+        <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <Link className="q-text-link" href={latest.href}>View session <ArrowRight size={14} /></Link>
+    </div> : <div className="q-ledger-content"><h3>Your first paper trade</h3><p>Start a session to see its fills, fees and available balance here.</p>
+      <div className="q-ledger-columns" aria-hidden="true"><span>Time</span><span>Order</span><span>Fill price</span></div>
+      <div className="q-ledger-empty">No trades recorded</div></div>}
+  </Card>;
+}
 export function PaperPreview() {
   const { d, err } = useLanding();
   const p = d?.preview ?? null;
@@ -82,7 +85,7 @@ export function PaperPreview() {
   return (
     <Section id="paper">
       <div className="grid items-center gap-16 lg:grid-cols-[1.15fr_1fr]">
-        {err ? <Failed /> : d && !p ? <Card className="bg-bg-2 p-6 text-[13.5px] text-muted">No preview run yet.</Card> : (
+        {API_MODE === "mock" ? <WorkspacePaperCard /> : err ? <Failed /> : d && !p ? <Card className="bg-bg-2 p-6 text-[13.5px] text-muted">No published paper session yet.</Card> : (
           <Card className="overflow-hidden bg-bg-2">
             <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
               <div className="flex min-w-0 items-center gap-2.5"><span data-motion="pulse-dot" className="relative h-1.5 w-1.5 shrink-0 rounded-full bg-long" /><span className="truncate text-[13.5px] font-medium">{p ? p.name : <Skel className="h-4 w-40" />}</span></div>
@@ -104,9 +107,9 @@ export function PaperPreview() {
         )}
         <div>
           <Eyebrow accent>Paper trading</Eyebrow>
-          <H2 className="mt-5 max-w-[13ch]">Watch it think, live.</H2>
+          <H2 className="mt-5 max-w-[13ch]">Follow every fill.</H2>
           <Lead className="mt-6">Every check, trigger and fill streams in as it happens, with modelled slippage and fees. You see exactly why it traded — or why it didn&apos;t.</Lead>
-          <div className="mt-9"><BtnPrimary href="/app/run/demo">Open a live run</BtnPrimary></div>
+          <div className="mt-9"><BtnPrimary href="/app/run">Open paper trades</BtnPrimary></div>
         </div>
       </div>
     </Section>
@@ -115,6 +118,7 @@ export function PaperPreview() {
 
 export function Fork() {
   const { d, err } = useLanding();
+  if (API_MODE === "mock" || (d && !d.featured.length)) return null;
   return (
     <Section>
       <div className="flex items-end justify-between gap-6">
@@ -127,7 +131,7 @@ export function Fork() {
             const r = Number(s.paperReturn30dPct ?? 0);
             return (
               <Card key={s.id} className="p-6">
-                <div className="flex items-center justify-between"><div className="flex gap-1">{s.venues.map((v) => <VenueMark key={v} venue={v} />)}</div>{s.mock && <Pill>Demo</Pill>}</div>
+                <div className="flex items-center justify-between"><div className="flex gap-1">{s.venues.map((v) => <VenueMark key={v} venue={v} />)}</div></div>
                 <div className="mt-8 text-[17px] font-medium tracking-[-0.02em]">{s.name}</div>
                 <div className="mt-1 font-mono text-[12px] text-muted">{s.author.handle} · {s.forks} {s.forks === 1 ? "fork" : "forks"}</div>
                 <div className="mt-5 flex items-end justify-between">

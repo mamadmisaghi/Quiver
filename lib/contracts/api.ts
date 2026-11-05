@@ -1,5 +1,6 @@
 // Request/response bodies for every REST endpoint. Base URL: /v1. Auth: `Authorization: Bearer <access JWT>`.
 import { z } from "zod";
+import { DraftContinuation } from "./clarification";
 import { BacktestId, CompileId, Decimal, EquityUsd, EvmAddress, IsoTime, Page, PageQuery, RunId, RunMode, SessionKeyId, StrategyId, TxHash, UserId, Venue, WarmupNotice } from "./common";
 import { Humanized, Instrument, InstrumentId, Strategy, ValidationIssue } from "./strategy";
 import { RunEvent, TriggerStateItem } from "./events";
@@ -42,7 +43,8 @@ export const UpdateStrategyReq = z.object({ strategy: Strategy, expectedVersion:
 
 // ---------- Compile (NL -> strategy) ----------
 export const CompileReq = z.object({
-  thesis: z.string().min(8).max(2000),
+  clarification: DraftContinuation.optional(),
+  thesis: z.string().trim().min(1).max(2000),
   baseStrategy: Strategy.optional(), // present => refine
   instruction: z.string().max(500).optional(), // refine chip text, e.g. "Add a weekend-only filter"
   images: z.array(z.object({ mediaType: z.enum(["image/png", "image/jpeg", "image/webp"]), dataBase64: z.string().max(2_800_000) })).max(2).optional(),
@@ -248,6 +250,7 @@ export const FillsQuery = PageQuery.extend({ runId: RunId.optional(), mode: RunM
 
 /** M5.6: compile from a chart screenshot (signed-in only). Response is the same NDJSON stream as /compile. */
 export const CompileImageReq = z.object({
+  clarification: DraftContinuation.optional(),
   mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
   imageBase64: z.string().min(16).max(3_000_000), // decoded must be ≤ 2 MB (413 payload_too_large past that); a data: URL prefix is accepted
   note: z.string().max(500).optional(), // optional hint, e.g. "SOL perp, long the breakout, $200"

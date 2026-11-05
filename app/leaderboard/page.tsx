@@ -5,14 +5,13 @@ import { cacheLife } from "next/cache";
 import * as C from "@/lib/contracts";
 import type { PublicBoard } from "@/lib/api";
 import { serverFetch } from "@/lib/server-api";
-import fixture from "@/lib/api/fixtures/m4/public.leaderboard.json";
 import LeaderboardView from "./LeaderboardView";
 
 /** W3: server-rendered first view (7d) so the table + notice show without JS. Cached ~60 s; null → client fetch. */
 async function initialBoard(): Promise<PublicBoard | null> {
   "use cache";
   cacheLife({ stale: 30, revalidate: 60, expire: 600 });
-  if (process.env.NEXT_PUBLIC_API_MODE !== "live") return C.PublicLeaderboardRes.parse(fixture); // MOCK
+  if (process.env.NEXT_PUBLIC_API_MODE !== "live") return null;
   try {
     const r = await serverFetch(`/public/leaderboard?period=7d&limit=50`, { signal: AbortSignal.timeout(4000) });
     return r.ok ? C.PublicLeaderboardRes.parse(await r.json()) : null;

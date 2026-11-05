@@ -2,10 +2,10 @@
 import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
-import { createServer } from "node:https";
+import { createServer, globalAgent } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AlertService, makeHttpsTransport, webhookProvider, type Transport } from "../../src/alerts/service";
 import { checkUrlShape, isBlockedIp, resolvePublic } from "../../src/alerts/ssrf";
 import { createApp } from "../../src/api/app";
@@ -44,6 +44,17 @@ describe("M4.2.1 P1-1 real TLS transport (Node >=20 lookup all:true)", () => {
     mode = "ok";
     const r = await makeHttpsTransport({ ca: cert })(new URL(`https://hooks.test:${port}/`), { address: "127.0.0.1", family: 4 }, {}, "{}").then(String, (e) => "ERR " + e.message);
     expect(r).toBe("204");
+  });
+  it("keeps the vetted IP when the global HTTPS agent has been replaced", async () => {
+    mode = "ok";
+    const shared = vi.spyOn(globalAgent, "createConnection").mockImplementation(() => {
+      throw new Error("The shared agent must not reroute a pinned delivery");
+    });
+    try {
+      const status = await makeHttpsTransport({ ca: cert })(new URL(`https://hooks.test:${port}/h`), { address: "127.0.0.1", family: 4 }, {}, "{}");
+      expect(status).toBe(204);
+      expect(shared).not.toHaveBeenCalled();
+    } finally { shared.mockRestore(); }
   });
   it("end-to-end provider with test-only allowance: signed, stable delivery id across retries", async () => {
     mode = "ok"; got.length = 0;

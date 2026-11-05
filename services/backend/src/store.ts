@@ -3,7 +3,7 @@ import type { BacktestRes, Eligibility, SessionKeyPolicy } from "../contracts/sr
 import type { RunEvent } from "../contracts/src/events";
 import type { Humanized, Strategy, ValidationIssue } from "../contracts/src/strategy";
 
-export interface User { bio?: string | null; following?: string[]; /* M5.5 */ id: string; createdAt: number; displayName: string | null; label: string; wallet: string; eligibility: z.infer<typeof Eligibility>; termsVersion: string | null; compiles: { day: string; n: number }; /** M5.2 */ linkedWallets?: { address: string; linkedAt: number }[] }
+export interface User { declaredResidence?:string; solanaWallets?: string[]; bio?: string | null; following?: string[]; /* M5.5 */ id: string; createdAt: number; displayName: string | null; label: string; wallet: string; eligibility: z.infer<typeof Eligibility>; termsVersion: string | null; compiles: { day: string; n: number }; /** M5.2 */ linkedWallets?: { address: string; linkedAt: number }[] }
 export interface StrategyVersion { version: number; strategy: Strategy; humanized: z.infer<typeof Humanized>; issues: ValidationIssue[]; createdAt: number }
 export interface StrategyRow { copyOf?: { publicStrategyId: string; handle: string; sourceVersion: number; copiedAt: number; syncedAt: number; /** M5.10: set on unfollow; sync is blocked for good */ detachedAt?: number }; /* M5.5 */ id: string; ownerId: string; archived: boolean; versions: StrategyVersion[]; createdAt: number; updatedAt: number; compileId?: string; public?: boolean; publishedAt?: number; forkedFrom?: string | null; forks?: number }
 export interface RunRow { id: string; ownerId: string; strategyId: string; strategyVersion: number; mode: "paper" | "testnet" | "live"; status: "starting" | "running" | "paused" | "stopped" | "halted"; startedAt: number; stoppedAt: number | null; startingEquity: number; sessionKeyId?: string; events: RunEvent[]; approvalMode?: "auto" | "confirm_each"; approvalTtlSec?: number }
@@ -12,6 +12,13 @@ export interface SessionKeyRow { id: string; ownerId: string; status: "pending" 
 
 /** In-memory store for mock mode (ARCHITECTURE §3 tables map 1:1; Postgres adapter lands with testnet persistence). */
 export class MemStore {
+  liveAccess = new Map<string,import("./execution/live-authority").LiveAccess>();
+  livePrograms = new Map<string,import("./execution/live-program").LiveProgram>();
+  liveAllowances = new Map<string,import("./execution/live-approvals").AllowanceRequest>();
+  privySpotGrants = new Map<string,import("./execution/privy-spot-signer").PrivySpotGrant>();
+  testPoolReceipts = new Map<string,import("./execution/testpool-receipts").PreparedReceipt>();
+  executionAccounts = new Map<string, import("./execution/service").ExecutionAccount>();
+  workflowSessions = new Map<string, import("./workflows/host").Hosted>();
   llmDaily = new Map<string, { day: string; usd: number; reserved: number; maxCall: number }>();
   /** Completed paper-engine checkpoints; never contains a signing key. */
   runCheckpoints = new Map<string, import("./runs/checkpoint").RunCheckpoint>();

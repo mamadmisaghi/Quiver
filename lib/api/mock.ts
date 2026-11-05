@@ -1,16 +1,23 @@
-import { previewCompile } from "./preview-compile";
+import { publicChartHistory } from "./chart-history";
+import { readKeyDefaults } from "./browser-settings";
+import { listPaperSessions, sessionStatus } from "@/lib/paper/sessions";
+import { isQuoteSession } from "@/lib/paper/account";
+import { previewCompile, previewCompileImage } from "./preview-compile";
 import { previewBacktest } from "./preview-backtest";
-import { previewDrafts, savePreviewDraft } from "./preview-drafts";
-import { mockDetail, mockHistory } from "./market-mock";
+import { listPreviewDrafts, persistPreviewDraft, updatePreviewDraft } from "./preview-workspace";
+
 // MOCK adapter: implements QuiverApi from contract fixtures. Swap for live.ts via NEXT_PUBLIC_API_MODE=live.
 import * as C from "@/lib/contracts";
-import skDefaultsJson from "./fixtures/session-key.defaults.json";
+
 import * as F from "./fixtures";
 import { mockExt } from "./ext-mock";
 import { mockSocial } from "./social-mock";
 import { mockShare } from "./share-mock";
 import { mockChannels } from "./channel-mock";
-import { mockSecrets } from "./secrets-mock";
+
+
+import { previewAlerts } from "./preview-alerts";
+import { previewConnections } from "./preview-connections";
 import { mockTestnet } from "./testnet-mock";
 import alertSettings from "./fixtures/m4/alerts.settings.json"; // MOCK fixtures (M4)
 import alertRule from "./fixtures/m4/alerts.rule.json";
@@ -30,6 +37,8 @@ import instructApply from "./fixtures/m4/runs.instruct-apply.json";
 import autopilotState from "./fixtures/m4/autopilot.state.json";
 import autopilotLog from "./fixtures/m4/autopilot.log.json";
 const M4 = { alertSettings, alertRule, alertDeliveries, positionClose, approvalsPending, portfolioRuns, portfolioAllocation, portfolioHistory, runReplay, autopilotState, autopilotLog, positionsPaper };
+const emptyAutopilot = { ...autopilotState, configured: false, enabled: false, strategyIds: [],
+  state: { currentRunId: null, currentStrategyId: null, currentStrategyName: null, nextRotationAt: null, rotationsToday: 0, dayPnlUsd: "0", platformKillSwitch: false, lastDecision: null } };
 let mockAp: unknown = null; // MOCK autopilot state (in-memory)
 let mockKillTried = false; // MOCK
 import { ApiErr, type QuiverApi, type RunEvent, type Run, type StrategyRecord } from "./types";
@@ -38,46 +47,54 @@ F.PARTIAL_NODES.forEach((node) => C.CompileEvent.parse({ type: "partial", node }
 C.Humanized.parse(F.HUMANIZED);
 
 const parse = <T>(schema: { parse: (x: unknown) => T }, x: unknown): T => schema.parse(x); // drift fails loudly
-const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((res, rej) => {
-  const t = setTimeout(res, ms);
-  signal?.addEventListener("abort", () => { clearTimeout(t); rej(new DOMException("aborted", "AbortError")); });
-});
-const strategy = parse(C.Strategy, F.STRATEGY_RAW);
-const runs = F.RUNS.map((r) => parse(C.Run, r));
-const runState = new Map<string, Run>(runs.map((r) => [r.id, r]));
+const unavailableRun = () => new ApiErr("not_found", "This paper session is unavailable. Open a session from Paper trades.", 404);
+const runOf = async (_id: string): Promise<Run> => { throw unavailableRun(); };
 
-function record(id: string): StrategyRecord {
-  const s = F.STRATEGIES.find((x) => x.id === id) ?? F.STRATEGIES[0];
-  return parse(C.StrategyRecord, {
-    id: s.id, ownerId: F.USER_ID, name: s.name, version: s.version, status: s.status,
-    strategy: { ...strategy, name: s.name }, humanized: F.HUMANIZED, issues: [], venues: s.venues,
-    createdAt: "2026-10-27T09:00:00Z", updatedAt: s.updatedAt, activeRunId: s.activeRunId, nodes: F.PARTIAL_NODES,
-  });
+let marketRequest: Promise<ReturnType<typeof C.Market.parse>[]> | null = null;
+let marketRequestAt = 0;
+function observedMarkets() {
+  if (!marketRequest || Date.now() - marketRequestAt > 30_000) {
+    marketRequestAt = Date.now();
+    marketRequest = fetch("/api/preview/markets").then(async response => {
+      if (!response.ok) throw new Error("Market directory unavailable.");
+      return C.Page(C.Market).parse(await response.json()).items;
+    }).catch(error => { marketRequest = null; throw error; });
+  }
+  return marketRequest;
 }
-
-// QA P1: only "demo" maps to the demo run; any other unknown id is not_found (same as live).
-const runOf = async (id: string) => { const r = id === "demo" ? runState.get(F.RUN_ID) : runState.get(id); if (!r) throw new ApiErr("not_found", "Run not found.", 404); return r; };
 const mockLink: { pending: { nonce: string; address: string } | null; items: { address: string; linkedAt: string; primary: boolean }[] } = { pending: null, items: [] }; // MOCK
 // MOCK M5.4: deterministic plan over the user's mock strategies.
 async function mockPlan(req: import("./types").AutopilotPlanReq, on?: (f: import("./types").PlanFrame) => void, signal?: AbortSignal) {
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const goal = req.goal ?? "balanced", lookbackDays = req.lookbackDays ?? 7;
-  const list = (await mockApi.strategies()).items.slice(0, 10);
-  on?.({ event: "status", data: { stage: "loading", message: `Loading ${list.length} strategies` } }); await wait(250);
-  on?.({ event: "status", data: { stage: "scoring", message: `Backtesting the last ${lookbackDays} days on 1h bars` } });
+  const list = (await mockApi.strategies()).items.filter(s => !req.strategyIds || req.strategyIds.includes(s.id)).slice(0, 10);
+  const sessions = typeof window === "undefined" ? [] : listPaperSessions().filter(isQuoteSession);
+  const from = Date.now() - lookbackDays * 86_400_000;
+  on?.({ event: "status", data: { stage: "loading", message: `Loading ${list.length} strategies` } });
+  on?.({ event: "status", data: { stage: "scoring", message: `Reading recorded paper sessions from the last ${lookbackDays} days` } });
   const cands = [] as import("./types").AutopilotPlanCandidate[];
   for (const [i, st] of list.entries()) {
     if (signal?.aborted) return null;
-    const h = [...st.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
-    const ret = ((h % 1800) / 100 - 4).toFixed(2), dd = ((h >> 5) % 2200 / 100 + 2).toFixed(2), trades = (h >> 9) % 14;
-    const ok = trades > 0 && Number(dd) <= 25;
-    const c = { strategyId: st.id, name: st.name, index: i, total: list.length, ok, error: null, metrics: { returnPct: ret, maxDrawdownPct: dd, sharpe: (Number(ret) / Math.max(1, Number(dd))).toFixed(2), trades }, score: ok ? Math.round((Number(ret) - Number(dd) / 2) * 100) / 100 : null };
-    cands.push(c); on?.({ event: "candidate", data: c }); await wait(300);
+    const session = sessions.find(s => s.strategyId === st.id && s.strategyVersion === st.version && s.state?.curve.some(([t]) => t >= from));
+    const state = session?.state;
+    const earlier = state?.curve.filter(([t]) => t < from).at(-1);
+    const baseline = earlier?.[1] ?? (state && state.startedAt >= from ? state.budget : null);
+    const curve = state?.curve.filter(([t]) => t >= from) ?? [];
+    const trades = state?.events.filter(e => e.at >= from).length ?? 0;
+    let metrics = null;
+    if (baseline !== null && baseline > 0 && curve.length && trades) {
+      let peak = baseline, maxDrawdown = 0;
+      for (const [, equity] of curve) { peak = Math.max(peak, equity); maxDrawdown = Math.max(maxDrawdown, 100 * (peak - equity) / peak); }
+      metrics = { returnPct: ((curve[curve.length - 1][1] / baseline - 1) * 100).toFixed(2), maxDrawdownPct: maxDrawdown.toFixed(2), trades, sharpe: null };
+    }
+    const ok = !!metrics && Number(metrics.maxDrawdownPct) <= 25;
+    const score = ok && metrics ? Number((Number(metrics.returnPct) - Number(metrics.maxDrawdownPct) / 2).toFixed(2)) : null;
+    const c = { strategyId: st.id, name: st.name, index: i, total: list.length, ok, error: metrics ? null : "No recorded fills and equity for this period.", metrics, score };
+    cands.push(c); on?.({ event: "candidate", data: c });
   }
-  on?.({ event: "status", data: { stage: "ranking", message: "Ranking" } }); await wait(200);
+  on?.({ event: "status", data: { stage: "ranking", message: "Ranking recorded results" } });
   const ranked = cands.filter((c) => c.ok).sort((a, b) => (b.score! - a.score!) || a.strategyId.localeCompare(b.strategyId)).slice(0, 5);
   const worst = Math.max(0, ...ranked.map((c) => Number(c.metrics!.maxDrawdownPct)));
-  const plan = parse(C.AutopilotPlan, { goal, lookbackDays, ranked, excluded: cands.filter((c) => !ranked.includes(c)), source: "deterministic", synthetic: true, notice: "Example data — backtests run on synthetic bars.",
+  const plan = parse(C.AutopilotPlan, { goal, lookbackDays, ranked, excluded: cands.filter((c) => !ranked.includes(c)), source: "deterministic", synthetic: false, notice: "Uses the latest recorded quote session for each strategy version.",
     rationale: ranked.length ? [`Kept ${ranked.length} of ${cands.length} that traded and stayed under 25% drawdown.`, `Rotate every ${{ balanced: 120, return: 60, low_risk: 240 }[goal]} minutes.`] : ["None of your strategies qualified."],
     proposal: ranked.length ? { enabled: false, mode: "paper", strategyIds: ranked.map((c) => c.strategyId), rotateEveryMin: { balanced: 120, return: 60, low_risk: 240 }[goal], startingEquityUsd: req.startingEquityUsd ?? "10000", approvalMode: "auto", acknowledgeKill: false,
       guardrails: { maxDrawdownPct: Math.min(50, Math.max(5, Math.round(worst * 1.5))), maxDailyLossUsd: Number(req.startingEquityUsd ?? 10000) * (goal === "low_risk" ? 0.02 : 0.05), maxRotationsPerDay: 12 } } : null });
@@ -104,100 +121,68 @@ export const mockApi: QuiverApi = {
     const i = mockLink.items.findIndex((w) => w.address === a.toLowerCase()); if (i < 0) throw new ApiErr("not_found", "That wallet isn’t linked.", 404);
     mockLink.items.splice(i, 1); return parse(C.LinkedWalletsRes, { items: mockLink.items });
   },
-  // M5.1: deterministic MOCK of GET /markets/:id/detail and /history (same shapes, parsed by the contracts).
   async marketDetail(id) {
-    const m = (await mockApi.markets()).items.find((x) => x.id === id);
-    if (!m) throw new ApiErr("not_found", "That market isn’t listed.", 404);
-    return parse(C.MarketDetailRes, mockDetail(m));
+    const market = (await observedMarkets()).find(m => m.id === id);
+    if (!market) throw new ApiErr("not_found", "That market isn’t listed.", 404);
+    return { market, returns: { "1d": null, "7d": null, "30d": null }, high30d: null, low30d: null, volatility30dPct: null, synthetic: false, notice: null };
   },
-  async marketHistory(id, q) {
-    const m = (await mockApi.markets()).items.find((x) => x.id === id);
-    if (!m) throw new ApiErr("not_found", "That market isn’t listed.", 404);
-    return parse(C.MarketHistoryRes, mockHistory(m, q.tf, q.range));
-  },
+  marketHistory(id, { tf, range }) { return publicChartHistory(id,tf,range); },
   ...mockExt(runOf),
   ...mockSocial,
   ...mockShare,
   ...mockChannels,
-  ...mockSecrets,
+  ...previewConnections,
   ...mockTestnet,
+  async settings() {
+    const settings = await mockExt(runOf).settings();
+    const sessions = typeof window !== "undefined" ? listPaperSessions() : [];
+    const drafts = await listPreviewDrafts();
+    return {
+      ...settings, asOf: new Date().toISOString(), sessionKeyDefaults: readKeyDefaults(),
+      usage: { ...settings.usage, strategies: drafts.length, activeRuns: sessions.filter(s => sessionStatus(s) === "running").length },
+    };
+  },
   async me() { return parse(C.Me, F.ME); },
   async venues() { return F.VENUES.map((v) => parse(C.VenueInfo, v)); },
   async markets(q = {}) {
-    const items = F.MARKETS.map((m) => parse(C.Market, m)).filter((m) =>
+    const items = (await observedMarkets()).filter((m) =>
       (!q.venue || m.venue === q.venue) && (!q.assetClass || m.assetClass === q.assetClass) &&
       (!q.q || (m.symbol + m.name).toLowerCase().includes(q.q.toLowerCase())));
     return parse(C.Page(C.Market), { items, nextCursor: null });
   },
   async strategies(q = {}) {
-    return parse(C.ListStrategiesRes, { items: [...previewDrafts(), ...F.STRATEGIES].filter((s) => !q.status || s.status === q.status), nextCursor: null });
+    const drafts = await listPreviewDrafts();
+    return parse(C.ListStrategiesRes, { items: drafts.filter(s => !q.status || s.status === q.status), nextCursor: null });
   },
-  async strategy(id) { return previewDrafts().find((s) => s.id === id) ?? record(id); },
-  async compileImage() { throw new ApiErr("not_available", "Chart reading needs the AI service. Describe the rules in text for now.", 503); },
+  async strategy(id) {
+    const draft = (await listPreviewDrafts()).find(s => s.id === id);
+    if (draft) return draft;
+    throw new ApiErr("not_found", "Draft not found in this browser. Open it on the original device or import a backup.", 404);
+  },
+  compileImage: previewCompileImage,
   compile: previewCompile,
-  async runs(q = {}) { return parse(C.Page(C.Run), { items: [...runState.values()].filter((r) => !q.strategyId || r.strategyId === q.strategyId), nextCursor: null }); },
-  async run(id) { const r = runState.get(id); if (!r) throw new ApiErr("not_found", "Run not found", 404); return r; },
-  async createStrategy(strategy) { return savePreviewDraft(strategy); },
+  async runs() { return { items: [], nextCursor: null }; },
+  run: runOf,
+  async createStrategy(strategy) { return persistPreviewDraft(strategy); },
+  async updateStrategy(id, strategy, expectedVersion) {
+    const current = await mockApi.strategy(id);
+    if (current.activeRunId) throw new ApiErr("conflict", "Stop the active run before changing its saved limits.", 409);
+    return updatePreviewDraft(current, strategy, expectedVersion);
+  },
   backtest: previewBacktest,
-  async backtestStatus() { throw new ApiErr("not_found", "Preview tests complete immediately and are not saved on a server.", 404); },
-  async startRun(req) {
-    const r = parse(C.StartRunReq, req);
-    if (previewDrafts().some((s) => s.id === r.strategyId)) throw new ApiErr("mode_not_enabled", "Your draft is saved in this browser. Connect the paper engine before running custom strategies.", 403);
-    if (r.mode !== "paper") throw new ApiErr("mode_not_enabled", "Coming after paper beta", 403);
-    const existing = [...runState.values()].find((x) => x.strategyId === r.strategyId && x.status !== "stopped");
-    if (existing) return existing;
-    const base = runState.get(F.RUN_ID)!;
-    const id = `run_${r.strategyId.replace(/^stg_/, "").slice(0, 12).padEnd(12, "0")}MOCK` as Run["id"];
-    const fresh = parse(C.Run, { ...base, id, strategyId: r.strategyId, status: "running", startedAt: new Date().toISOString() });
-    runState.set(id, fresh); return fresh;
-  },
-  async control(id, action) {
-    const r = await this.run(id);
-    const status = action === "pause" ? "paused" : action === "resume" ? "running" : "stopped";
-    const next = parse(C.Run, { ...r, status });
-    runState.set(id, next); return next;
-  },
-  streamRun(id, onEvent) {
-    // Replays events.paper.ndjson with ts gaps compressed to 1–2 s, then loops jittered ticks.
-    const evs = F.EVENTS_RAW.filter((e) => !["heartbeat", "resync"].includes((e as { type: string }).type)).map((e) => parse(C.RunEvent, e)) as RunEvent[]; // frames are transport, not run events
-    let i = 0, alive = true, timer: ReturnType<typeof setTimeout>;
-    let seq = evs.at(-1)!.seq, cycle = 100;
-    const base: Record<string, number> = { fed_odds: 0.724, nvda_px: 181.42, nvda_sma20: 185.3, sol_funding: 0.000041 };
-    const step = () => {
-      if (!alive) return;
-      if (i < evs.length) { onEvent({ ...evs[i], runId: id as RunEvent["runId"] }); i++; timer = setTimeout(step, i === 1 ? 300 : 1000 + Math.random() * 1000); return; }
-      seq++; cycle++;
-      const j = (k: string, s: number, dp: number) => +(base[k] = base[k] * (1 + (Math.random() - 0.5) * s)).toFixed(dp);
-      const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-      onEvent(parse(C.RunEvent, {
-        v: 1, seq, runId: id, mode: "paper", ts: now, type: "tick", cycle,
-        signals: [
-          { signalId: "fed_odds", field: "value", value: j("fed_odds", 0.004, 3), observedAt: now, source: "mock_polymarket", stale: false },
-          { signalId: "nvda_px", field: "value", value: j("nvda_px", 0.002, 2), observedAt: now, source: "mock_chainlink", stale: false },
-          { signalId: "sol_funding", field: "value", value: j("sol_funding", 0.05, 6), observedAt: now, source: "mock_hyperliquid", stale: false },
-        ],
-        triggers: [{ triggerId: "t1", state: "done", conditionTrue: true, heldForSec: 900, cooldownUntil: null, fires: 1 }],
-      }) as RunEvent);
-      timer = setTimeout(step, 2500);
-    };
-    timer = setTimeout(step, 200);
-    return () => { alive = false; clearTimeout(timer); };
-  },
-  async portfolio(mode = "paper") { return parse(C.Portfolio, { ...F.PORTFOLIO, mode }); },
+  async backtestStatus() { throw new ApiErr("not_found", "Completed rule simulations are available in the builder.", 404); },
+  async startRun() { throw new ApiErr("mode_not_enabled", "Open your strategy and choose Run paper trade to start a session.", 403); },
+  async control() { throw unavailableRun(); },
+  streamRun() { return () => {}; },
+  async portfolio(mode = "paper") { return parse(C.Portfolio, { mode, equityUsd: "0", cashUsd: "0", realizedPnlUsd: "0", unrealizedPnlUsd: "0", positions: [], asOf: new Date().toISOString() }); },
   async sessionKeys() { return parse(C.Page(C.SessionKey), { items: [], nextCursor: null }); },
-  async sessionKeyDefaults() { return parse(C.SessionKeyDefaults, skDefaultsJson); }, // MOCK: backend fixture session-key.defaults.json
+  async sessionKeyDefaults() { return parse(C.SessionKeyDefaults, readKeyDefaults()); }, // MOCK: backend fixture session-key.defaults.json
   // MOCK: mirrors the backend before testnet routers are verified (fail closed).
-  async prepareSessionKey() { throw new ApiErr("mode_not_enabled", "No verified swap routers for this chain yet (mock).", 403); },
+  async prepareSessionKey() { throw new ApiErr("mode_not_enabled", "No verified swap routers for this chain yet.", 403); },
   // MOCK (M3.9–M4.2): Sage's fixtures; signing stays unavailable in mock mode, like a testnet server without ALCHEMY_API_KEY.
-  async submitSessionKey() { throw new ApiErr("signing_unavailable", "Wallet signing isn’t available in the mock build.", 503); },
-  async sessionKey() { throw new ApiErr("not_found", "No session keys in the mock build.", 404); },
-  async alertSettings() { return parse(C.AlertSettings, M4.alertSettings); },
-  async putAlertSettings(b) { return parse(C.PutAlertSettingsRes, { ...M4.alertSettings, webhookUrl: b.webhookUrl, signingSecretSet: !!b.webhookUrl, signingSecret: null }); },
-  async alertRules() { return [parse(C.AlertRule, M4.alertRule)]; },
-  async createAlertRule(b) { return parse(C.AlertRule, { ...M4.alertRule, runId: b.runId, events: b.events, enabled: b.enabled ?? true }); },
-  async deleteAlertRule() {},
-  async alertDeliveries() { return parse(C.AlertDeliveryList, M4.alertDeliveries); },
-  async testAlert() { return parse(C.AlertDeliveryList, M4.alertDeliveries).items[0]; },
+  async submitSessionKey() { throw new ApiErr("signing_unavailable", "Wallet signing isn’t available in this workspace.", 503); },
+  async sessionKey() { throw new ApiErr("not_found", "No session keys in this workspace.", 404); },
+  ...previewAlerts,
   // MOCK M5.3: positions without a mark are "stuck" (no_price); others are still closable.
   async writeOffPreview(runId, instrument) {
     const stuck = /USDC|DOGE/i.test(instrument) || instrument.endsWith("-stuck");
@@ -215,10 +200,10 @@ export const mockApi: QuiverApi = {
   async portfolioRuns() { return parse(C.PortfolioRuns, M4.portfolioRuns); }, // MOCK
   async portfolioAllocation(q = {}) { return { ...parse(C.PortfolioAllocation, M4.portfolioAllocation), by: q.by ?? "venue" }; }, // MOCK: one fixture for every grouping
   async portfolioHistory() { return parse(C.PortfolioHistory, M4.portfolioHistory); }, // MOCK
-  async positions() { return parse(C.PositionsRes, M4.positionsPaper); }, // MOCK
+  async positions() { return { mode: "paper", items: [], asOf: new Date().toISOString() }; }, // MOCK
   async runPositions(id: string) { const r = parse(C.PositionsRes, M4.positionsPaper); return { ...r, items: r.items.filter((p) => p.runId === id) }; }, // MOCK
-  async publicLeaderboard() { return parse(C.PublicLeaderboardRes, pubLeaderboard); }, // MOCK
-  async publicCard() { return parse(C.PublicCard, pubCard); }, // MOCK
+  async publicLeaderboard(q = {}) { return parse(C.PublicLeaderboardRes, { ...pubLeaderboard, period: q.period ?? "7d", items: [], notice: "", synthetic: false, asOf: new Date().toISOString() }); }, // MOCK
+  async publicCard() { throw new ApiErr("not_found", "This card is unavailable.", 404); }, // MOCK
   async shareCard() { return parse(C.CardShareRes, cardShare); }, // MOCK
   async revokeCard() { return { revoked: 1 }; }, // MOCK
   async instruct(_id, text) { // MOCK: "pause all" → 422 strategy_invalid; "quota" → 429 compile_quota_exceeded (Retry-After 90)
@@ -226,17 +211,17 @@ export const mockApi: QuiverApi = {
     if (/quota/i.test(text)) throw new ApiErr("compile_quota_exceeded", "Daily compile limit reached.", 429, undefined, 90);
     return parse(C.InstructProposal, instructProp); }, // MOCK
   async applyInstruct() { return parse(C.InstructApplyRes, instructApply); }, // MOCK
-  async replay() { return parse(C.Replay, M4.runReplay); }, // MOCK
-  async autopilot() { return parse(C.Autopilot, mockAp ?? M4.autopilotState); }, // MOCK
-  async putAutopilot(b) { const cur = parse(C.Autopilot, mockAp ?? M4.autopilotState); if (cur.killed && b.enabled && !b.acknowledgeKill) throw new ApiErr("conflict", "Autopilot was killed; send acknowledgeKill: true to re-enable.", 409); const r = C.PutAutopilotReq.parse(b); mockAp = { ...cur, configured: true, enabled: r.enabled, killed: r.enabled ? false : cur.killed, strategyIds: r.strategyIds, rotateEveryMin: r.rotateEveryMin, approvalMode: r.approvalMode, startingEquityUsd: r.startingEquityUsd, guardrails: r.guardrails }; return parse(C.Autopilot, mockAp); }, // MOCK
-  async killAutopilot() { const cur = parse(C.Autopilot, mockAp ?? M4.autopilotState); const run = cur.state.currentRunId;
+  async replay() { throw unavailableRun(); }, // MOCK
+  async autopilot() { return parse(C.Autopilot, mockAp ?? emptyAutopilot); }, // MOCK
+  async putAutopilot(b) { const cur = parse(C.Autopilot, mockAp ?? emptyAutopilot); if (cur.killed && b.enabled && !b.acknowledgeKill) throw new ApiErr("conflict", "Autopilot was killed; send acknowledgeKill: true to re-enable.", 409); const r = C.PutAutopilotReq.parse(b); mockAp = { ...cur, configured: true, enabled: r.enabled, killed: r.enabled ? false : cur.killed, strategyIds: r.strategyIds, rotateEveryMin: r.rotateEveryMin, approvalMode: r.approvalMode, startingEquityUsd: r.startingEquityUsd, guardrails: r.guardrails }; return parse(C.Autopilot, mockAp); }, // MOCK
+  async killAutopilot() { const cur = parse(C.Autopilot, mockAp ?? emptyAutopilot); const run = cur.state.currentRunId;
     // MOCK: ?mock=kill_partial → the first kill reports the current run as failed to stop (207); a retry succeeds.
     const fail = !mockKillTried && typeof location !== "undefined" && new URLSearchParams(location.search).get("mock") === "kill_partial"; mockKillTried = true;
     mockAp = { ...cur, enabled: false, killed: true, state: { ...cur.state, currentRunId: fail ? run : null, currentStrategyId: fail ? cur.state.currentStrategyId : null, nextRotationAt: null } };
     return parse(C.AutopilotKillRes, { ...(mockAp as object), kill: fail ? { stopped: 0, failed: [{ runId: run ?? "run_mock_stuck", reason: "Stop timed out after 5 s" }] } : { stopped: run ? 1 : 0, failed: [] } }); }, // MOCK
-  async autopilotLog() { return parse(C.AutopilotLog, M4.autopilotLog); }, // MOCK
-  async approvals(q = {}) { const l = parse(C.ApprovalList, M4.approvalsPending); return { ...l, items: l.items.filter((a) => (!q.status || a.status === q.status) && (!q.runId || a.runId === q.runId)) }; },
-  async decideApproval(id, d) { const a = parse(C.ApprovalList, M4.approvalsPending).items.find((x) => x.id === id); if (!a) throw new ApiErr("not_found", "Approval not found.", 404); return { ...a, status: d === "approve" ? "approved" : "rejected", resolvedAt: new Date().toISOString() }; },
+  async autopilotLog() { return { items: [], nextCursor: null }; }, // MOCK
+  async approvals() { return { items: [], nextCursor: null }; },
+  async decideApproval() { throw new ApiErr("not_found", "Approval not found.", 404); },
 };
 
 // Demo backtest (mock mode only; every field is from C.BacktestRes, values are illustrative).

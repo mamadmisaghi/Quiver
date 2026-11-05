@@ -36,6 +36,15 @@ Auth rate limits: `/auth/exchange` and `/auth/refresh` can return 429. The clien
 
 ## Server-side environment
 
+The hosted preview can suspend its daily AI quotas during development with
+`QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED=false` in its runtime environment.
+This disables the preview's total daily spend cap, shared anonymous spend cap
+and per-caller daily call count for drafting, refinement and chart AI. Existing
+usage does not need to be reset. Provider charges are still recorded; database
+availability, concurrency, token bounds and timeouts remain enforced. Set the
+value to `true` or remove it to restore daily limits using the retained usage.
+It defaults to enabled and does not change the separate Render backend's limits.
+
 | Variable | Used by | Default | Notes |
 |---|---|---|---|
 | `QUIVER_API_INTERNAL` | Server-side fetches: `/c/[token]` page, its OG image, `/leaderboard` first render | absolute `NEXT_PUBLIC_API_BASE`, else `http://127.0.0.1:8987/v1` | Must be absolute. Required in spirit when `NEXT_PUBLIC_API_BASE` is relative (`/v1`, VPS proxy). VPS `web-start.bat`: `set QUIVER_API_INTERNAL=http://127.0.0.1:8987/v1` |

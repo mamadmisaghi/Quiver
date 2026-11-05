@@ -19,15 +19,15 @@ export async function POST(request: Request) {
   if (!parsed.success || !parsed.data.strategy) return fail(422, "Send a valid strategy and starting balance.");
   const input = parsed.data, strategy = input.strategy!;
   const from = Date.parse(input.from), to = Date.parse(input.to), bars = (to - from) / RES_MS[input.resolution];
-  if (to > Date.now() || to <= from || to - from > 31 * 86_400_000 || bars > 800 || strategy.signals.length > 12 || strategy.actions.length > 8 || strategy.triggers.length > 8) return fail(422, "Preview tests support up to 31 days, 800 bars, 12 signals and 8 rules/actions. Use a shorter range or simpler strategy.");
+  if (to > Date.now() || to <= from || to - from > 31 * 86_400_000 || bars > 800 || strategy.signals.length > 12 || strategy.actions.length > 8 || strategy.triggers.length > 8) return fail(422, "Rule simulations support up to 31 days, 800 bars, 12 signals and 8 rules/actions. Use a shorter range or simpler strategy.");
   const registry = new Registry(MOCK_INSTRUMENTS);
   const { issues } = validateStrategy(strategy, { registry, stockTokensAllowed: true });
   if (hasErrors(issues)) return fail(422, "Fix the strategy's validation errors before testing.");
   const mkt = new MockMarket(registry);
   try {
     const output = await runBacktest({ strategy, from, to, resolution: input.resolution, startingEquity: Number(input.startingEquityUsd), feeModel: input.feeModel }, { registry, mkt, adapters: mockAdapters(mkt, registry), stockTokensAllowed: true }, { canceled: () => request.signal.aborted, yield: () => Promise.resolve() });
-    if (!output) return fail(408, "The test was canceled.");
+    if (!output) return fail(408, "The simulation was canceled.");
     const result = BacktestRes.parse({ id: "bkt_" + crypto.randomUUID().replaceAll("-", "").slice(0, 20), status: "done", progress: 1, dataSource: "fallback", dataCoverage: output.coverage, result: output.result, error: null });
     return Response.json(result, { headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } });
-  } catch (e) { return fail(e instanceof BacktestError ? 422 : 500, e instanceof BacktestError ? e.message : "The preview test could not finish. Try a simpler strategy."); }
+  } catch (e) { return fail(e instanceof BacktestError ? 422 : 500, e instanceof BacktestError ? e.message : "The simulation could not finish. Try a simpler strategy."); }
 }

@@ -20,10 +20,14 @@
     "fixtures:gen:check": "tsx scripts/gen-ext-fixtures.ts --check",
     "fixtures:check": "cd contracts && npm run fixtures:check && cd .. && tsx scripts/gen-ext-fixtures.ts --check",
     "build": "node scripts/build.mjs",
-    "start:source": "tsx src/main.ts"
+    "start:source": "tsx src/main.ts",
+    "test:execution": "node --import tsx scripts/checks/ledger.ts && node --import tsx scripts/checks/hyperliquid.ts && node --import tsx scripts/checks/solana.ts && node --import tsx scripts/checks/robinhood.ts && node --import tsx scripts/checks/history.ts && node --import tsx scripts/checks/hyperliquid-mainnet.ts && node --import tsx scripts/checks/hyperliquid-driver.ts && node --import tsx scripts/checks/solana-mainnet.ts && node --import tsx scripts/checks/privy-spot.ts && node --test scripts/ops/preflight.test.mjs && node --import tsx --test scripts/ops/probe-mainnet.test.ts",
+    "verify:mainnet": "node --import tsx scripts/ops/probe-mainnet.ts --strict"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
+    "@msgpack/msgpack": "3.1.2",
+    "@noble/curves": "1.9.1",
     "hono": "^4.13.14",
     "pg": "^8.23.1",
     "viem": "^2.57.12",

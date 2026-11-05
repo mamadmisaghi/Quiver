@@ -9,7 +9,7 @@ import type { MemStore } from "./store";
  * process, last write wins, debounced. Off in tests and outside mock mode. Never stores secrets beyond
  * the dev store contents (refresh tokens are dropped; users sign in again after a restart only if expired).
  */
-const MAPS = ["users", "usersByLabel", "strategies", "runs", "backtests", "sessionKeys", "autopilot", "cardShares", "instructs", "replayShares", "userSecrets"] as const;
+const MAPS = ["users", "usersByLabel", "strategies", "runs", "backtests", "sessionKeys", "autopilot", "cardShares", "instructs", "replayShares", "userSecrets", "workflowSessions", "executionAccounts", "testPoolReceipts", "liveAccess", "livePrograms", "liveAllowances", "privySpotGrants"] as const;
 const VERSION = 1;
 
 /** M3.7: savedAt is strictly increasing within a process (two saves in the same ms still order correctly on load). */

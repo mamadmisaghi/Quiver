@@ -1,0 +1,82 @@
+{
+  "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+  "metadata": {
+    "name": "raydium_cp_swap",
+    "version": "0.2.0",
+    "spec": "0.1.0",
+    "description": "Raydium constant product AMM, supports Token2022 and without Openbook"
+  },
+  "instructions": [
+    {
+      "name": "swap_base_input",
+      "discriminator": [
+        143,
+        190,
+        90,
+        218,
+        196,
+        30,
+        51,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "amm_config"
+        },
+        {
+          "name": "pool_state",
+          "writable": true
+        },
+        {
+          "name": "input_token_account",
+          "writable": true
+        },
+        {
+          "name": "output_token_account",
+          "writable": true
+        },
+        {
+          "name": "input_vault",
+          "writable": true
+        },
+        {
+          "name": "output_vault",
+          "writable": true
+        },
+        {
+          "name": "input_token_program"
+        },
+        {
+          "name": "output_token_program"
+        },
+        {
+          "name": "input_token_mint"
+        },
+        {
+          "name": "output_token_mint"
+        },
+        {
+          "name": "observation_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "minimum_amount_out",
+          "type": "u64"
+        }
+      ]
+    }
+  ]
+}

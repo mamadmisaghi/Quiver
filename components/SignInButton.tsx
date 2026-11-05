@@ -28,7 +28,7 @@ export default function SignInButton({ onDone }: { onDone?: () => void }) {
         className="btn rounded-full bg-accent px-5 py-2 text-[13.5px] font-medium text-bg hover:brightness-110 active:bg-accent-press disabled:opacity-60">
         {busy ? "Signing in…" : "Sign in"}
       </button>
-      {!dev && <span className="text-[12.5px] text-muted" data-testid="auth-calm">Sign-in isn’t switched on for this preview yet. You can still explore with example data.</span>}
+      {!dev && <span className="text-[12.5px] text-muted" data-testid="auth-calm">Sign-in is currently unavailable. You can still use the strategy builder.</span>}
       {err && <span role={err.calm ? "status" : "alert"} className={`max-w-[22rem] text-center text-[12.5px] ${err.calm ? "text-muted" : "text-short"}`} data-testid={err.calm ? "auth-calm" : undefined}>{err.msg}</span>}
     </span>
   );

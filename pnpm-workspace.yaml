@@ -4,14 +4,14 @@ minimumReleaseAgeIgnoreMissingTime: false
 trustLockfile: false
 strictDepBuilds: true
 allowBuilds:
-  '@reown/appkit': set this to true or false
-  bufferutil: set this to true or false
+  '@reown/appkit': false
+  bufferutil: false
   esbuild: true
   fsevents: true
-  keccak: set this to true or false
+  keccak: false
   sharp: true
   unrs-resolver: true
-  utf-8-validate: set this to true or false
+  utf-8-validate: false
   workerd: true
 storeDir: ${SITES_PNPM_SHARED_STORE:-.sites-runtime/pnpm-store}
 cacheDir: ${SITES_PNPM_SHARED_STORE:-.sites-runtime/pnpm-store}/policy-cache

@@ -1,10 +1,11 @@
 "use client";
 import PageHeader from "@/components/PageHeader";
 import VenueMark from "@/components/VenueMark";
+import Link from "@/components/Link";
 import Wrap from "@/components/Wrap";
 import { Card, Pill } from "@/components/ui";
 import Loading from "@/components/Loading";
-import { api, humanize } from "@/lib/api";
+import { api, API_MODE, humanize } from "@/lib/api";
 import { useQ } from "@/lib/api/useQ";
 import LinkedWallets from "@/components/auth/LinkedWallets";
 import ChainAccountCard from "@/components/auth/ChainAccountCard";
@@ -17,18 +18,18 @@ const SUB = "You're in paper mode. Connect a wallet only when you go to testnet 
 export default function WalletsView() {
   const q = useQ(() => Promise.all([api.me(), api.venues(), api.sessionKeys()]));
   // Signed out: show the linked-wallets section's own sign-in ("Sign in to link a wallet") instead of the generic gate.
-  if (!q.data && q.auth) return <Wrap><PageHeader title="Wallets" sub={SUB} /><h2 className="mt-8 text-[15px] font-medium" id="linked">Linked wallets</h2><Card className="mt-4 p-6"><LinkedWallets /></Card></Wrap>;
-  if (!q.data) return <Wrap><PageHeader title="Wallets" sub={SUB} /><Loading h={420} q={q} /></Wrap>;
+  if (!q.data && q.auth) return <Wrap><PageHeader title="Wallets" sub={SUB} /><Link href="/app/live" className="q-action mt-4 inline-flex">Trading Desk ↗</Link><h2 className="mt-8 text-[15px] font-medium" id="linked">Linked wallets</h2><Card className="mt-4 p-6"><LinkedWallets /></Card></Wrap>;
+  if (!q.data) return <Wrap><PageHeader title="Wallets" sub={SUB} /><Link href="/app/live" className="q-action mt-4 inline-flex">Trading Desk ↗</Link><Loading h={420} q={q} /></Wrap>;
   const [me, venues, keys] = q.data;
   return (
     <Wrap>
-      <PageHeader title="Wallets" sub={SUB} />
+      <PageHeader title="Wallets" sub={SUB} /><Link href="/app/live" className="q-action mt-4 inline-flex">Trading Desk ↗</Link>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         {venues.map((v) => { const w = me.wallets.find((x) => x.chain === v.id); const readOnly = !v.capabilities.some((c) => c !== "read"); return (
           <Card key={v.id} className="p-6">
-            <div className="flex items-center justify-between"><span className="flex items-center gap-3"><VenueMark venue={v.id} /><span className="font-medium">{v.name}</span></span><Pill tone={vTone[v.status]}>{vLabel[v.status]}</Pill></div>
+            <div className="flex items-center justify-between"><span className="flex items-center gap-3"><VenueMark venue={v.id} /><span className="font-medium">{v.name}</span></span>{API_MODE === "live" && <Pill tone={vTone[v.status]}>{vLabel[v.status]}</Pill>}</div>
             <p className="mt-4 text-[13px] text-muted">{v.capabilities.map((c) => CAP[c] ?? humanize(c)).join(" · ")}</p>
-            {v.note && <p className="mt-2 text-[14px] text-muted">{v.note}</p>}
+            {API_MODE === "live" && v.note && <p className="mt-2 text-[14px] text-muted">{v.note}</p>}
             <div className="mt-6 flex items-center justify-between">
               <span className="text-[13.5px] text-ink-2">{w ? <span className="font-mono">{w.address.slice(0, 6)}…{w.address.slice(-4)}</span> : readOnly ? "Watch-only — no wallet needed" : "Not needed for paper"}</span>
               {!readOnly && !w && <button disabled title="Available when testnet opens" className="btn rounded-full border border-line-2 px-4 py-2 text-[13px] text-muted opacity-60">Connect later</button>}
@@ -39,7 +40,7 @@ export default function WalletsView() {
       <Card className="mt-4 p-6"><LinkedWallets /></Card>
       <h2 className="mt-12 text-[15px] font-medium">Testnet account</h2>
       <Card className="mt-4 p-6"><ChainAccountCard initial={me.wallets.find((w) => /^0x[0-9a-fA-F]{40}$/.test(w.address))?.address} /></Card>
-      <TestnetPanel />
+      {API_MODE === "live" && <TestnetPanel />}
       <h2 className="mt-12 text-[15px] font-medium">Session keys</h2>
       <Card className="mt-4 p-6">
         {keys.items.length ? keys.items.map((k) => <div key={k.id} className="text-[13.5px]">{humanize(k.status)}</div>)

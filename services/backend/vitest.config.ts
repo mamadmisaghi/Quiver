@@ -1,2 +1,2 @@
 import { defineConfig } from "vitest/config";
-export default defineConfig({ test: { globalSetup: ["test/global-forge.ts"] } });
+export default defineConfig({ test: { include: ["test/**/*.test.ts"], globalSetup: ["test/global-forge.ts"] } });

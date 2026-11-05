@@ -15,7 +15,8 @@ export const nodeRpcPost = (opts: { insecureHttp?: boolean } = {}): RpcPost => (
   const u = new URL(p.url); const isHttps = u.protocol === "https:";
   if (!isHttps && !opts.insecureHttp) return rej(new Error("RPC must use https"));
   const lib = isHttps ? https : http;
-  const req = lib.request({ method: "POST", hostname: u.hostname, port: u.port || (isHttps ? 443 : 80), path: u.pathname + u.search, servername: isHttps ? u.hostname : undefined,
+  // Do not let a shared or environment-proxy agent bypass the validated DNS pin.
+  const req = lib.request({ agent: false, method: "POST", hostname: u.hostname, port: u.port || (isHttps ? 443 : 80), path: u.pathname + u.search, servername: isHttps ? u.hostname : undefined,
     headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body), "user-agent": "Quiver-RPC/1" }, timeout: timeoutMs,
     lookup: ((_h: string, o: { all?: boolean } | undefined, cb: (...a: unknown[]) => void) => o?.all ? cb(null, [{ address: p.address, family: p.family }]) : cb(null, p.address, p.family)) as never,
   }, (r) => {

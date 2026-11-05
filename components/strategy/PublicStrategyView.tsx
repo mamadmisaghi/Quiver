@@ -60,7 +60,6 @@ export default function PublicStrategyView({ id, initial }: { id: string; initia
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex gap-1">{d.venues.map((v) => <VenueMark key={v} venue={v} />)}</span>
             <Pill tone="paper">Paper</Pill>
-            {d.mock && <Pill tone="warn">Example data</Pill>}
           </div>
           <h1 className="mt-4 text-balance text-[28px] font-medium leading-[1.15] tracking-[-.02em] sm:text-[36px]">{d.name}</h1>
           <p className="mt-3 font-mono text-[12.5px] text-muted">

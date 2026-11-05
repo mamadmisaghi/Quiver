@@ -1,0 +1,49 @@
+import { createPreviewBudget } from "./budget";
+import type { CompileDeps } from "@/services/backend/src/compile";
+
+export const previewJson = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
+export function sameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return !origin || origin === new URL(request.url).origin;
+}
+export async function previewDatabase(): Promise<D1Database> {
+  // Keep the anonymous deterministic compiler usable in Node-based checks without Worker bindings.
+  return (await import("@/db")).getRawDb();
+}
+export async function readPreviewBody(request: Request, max: number): Promise<unknown> {
+  const reader = request.body?.getReader(); if (!reader) throw new Error("empty");
+  let size = 0, body = ""; const decoder = new TextDecoder();
+  while (true) {
+    const { value, done } = await reader.read(); if (done) break;
+    size += value.byteLength;
+    if (size > max) { await reader.cancel(); throw new RangeError("large"); }
+    body += decoder.decode(value, { stream: true });
+  }
+  return JSON.parse(body + decoder.decode());
+}
+export function previewAiEnabled() {
+  return process.env.QUIVER_PREVIEW_AI_ENABLED === "true" && !!process.env.OPENROUTER_API_KEY;
+}
+export const previewPublicAiEnabled = () => previewAiEnabled() && process.env.QUIVER_PREVIEW_PUBLIC_AI === "true";
+// Explicit test setting: disable daily spend/call quotas without dropping
+// accounting, concurrent-request bounds or per-call limits.
+export const previewDailyAiLimitsEnabled = () => process.env.QUIVER_PREVIEW_AI_DAILY_LIMITS_ENABLED !== "false";
+// Anonymous callers get only compiler access. This key never authorizes records or connected accounts.
+export async function anonymousBudgetKey(request: Request) {
+  const day = new Date().toISOString().slice(0, 10);
+  const input = `${day}:${request.headers.get("cf-connecting-ip") ?? "shared-preview"}`;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(process.env.OPENROUTER_API_KEY!), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const hash = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(input));
+  return "anon:" + Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+const number = (value: string | undefined, fallback: number, min: number, max: number) => {
+  const n = Number(value); return value && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+export async function previewAi(request: Request, vision = false): Promise<CompileDeps["openrouter"]> {
+  if (!previewPublicAiEnabled()) return undefined;
+  const owner = await anonymousBudgetKey(request);
+  const db = await previewDatabase();
+  const model = (vision ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL) || (vision ? "openai/gpt-4.1-mini" : "openai/gpt-5.6-sol");
+  return { apiKey: process.env.OPENROUTER_API_KEY!, totalBudgetMs: 120_000, callTimeoutMs: 60_000, model,
+    budget: createPreviewBudget(db, owner, { capUsd: number(process.env.LLM_DAILY_BUDGET_USD, 5, 0, 5), maxInflight: number(process.env.LLM_MAX_INFLIGHT, 3, 1, 3), maxOutputTokens: number(process.env.LLM_MAX_OUTPUT_TOKENS, 6000, 256, 6000), reservationUsd: model.startsWith("openai/gpt-5") ? .60 : .10, maxOwnerCalls: 30, publicCapUsd: 1, enforceDailyLimits: previewDailyAiLimitsEnabled() }) };
+}

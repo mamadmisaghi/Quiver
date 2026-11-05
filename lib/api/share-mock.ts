@@ -27,7 +27,7 @@ export const mockShare: QuiverShareApi = {
   async revokeReplay(t) { const x = shares.find((s) => s.token === t); if (!x) throw new ApiErr("not_found", "Replay not found.", 404); x.revokedAt ??= new Date().toISOString(); },
   async publicReplay(t) {
     const x = shares.find((s) => s.token === t);
-    if (x?.revokedAt || (!x && !/^rpl_/.test(t))) throw new ApiErr("not_found", "Replay not found.", 404);
+    if (!x || x.revokedAt) throw new ApiErr("not_found", "Replay not found.", 404);
     const rep = { ...(runReplay as Record<string, unknown>) }; delete rep.runId;
     return C.PublicReplay.parse({ ...rep, token: x?.token ?? t, title: x?.title ?? "Fed cut + NVDA dip replay", handle: "@demo_marco", strategyName: "Fed cut + NVDA dip", mode: "paper", createdAt: x?.createdAt ?? "2026-10-27T15:46:00.000Z", render: { status: x?.render.status ?? "none", videoUrl: null, posterUrl: null } });
   },

@@ -1,18 +1,20 @@
 "use client";
 import AccountMenu from "@/components/auth/AccountMenu";
 import Link from "@/components/Link";
-import { usePathname } from "next/navigation";
+import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import WorkspaceOutlet,{warmWorkspaceModule} from "./WorkspaceOutlet";
+import {quickPages,warmRoute} from "@/lib/workspace-navigation";
 import Logo from "./Logo";
 import dynamic from "next/dynamic";
 // ⌘K palette loads on first open: it isn't needed for first paint, so it stays out of every /app page's initial JS.
 const CommandPalette = dynamic(() => import("./CommandPalette"), { ssr: false });
-import { DEMO_LABEL } from "@/lib/api/format";
 import { onAuthRetry } from "@/lib/api/live";
 const NAV: [string, string, string][] = [
   ["Home", "/app", "M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1z"],
   ["Strategies", "/app/strategies", "M4 5h12M4 10h12M4 15h7"],
-  ["Paper trades", "/app/run/demo", "M3 14l4-4 3 3 7-7M13 6h4v4"],
+  ["Paper trades", "/app/run", "M3 14l4-4 3 3 7-7M13 6h4v4"],
+  ["Trading Desk", "/app/live", "M2 13l5-6 4 4 7-8M13 3h5v5"],
   ["Approvals", "/app/approvals", "M4 10.5l3.5 3.5L16 5.5"],
   ["Portfolio", "/app/portfolio", "M3 16V9M8 16V4M13 16v-5M18 16V7"],
   ["Autopilot", "/app/autopilot", "M10 3v4M10 13v4M3 10h4M13 10h4M10 10m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"],
@@ -34,15 +36,27 @@ const BOTTOM: [string, string, string][] = [["Home", ...nav("Home").slice(1)], [
 function Item({ n, href, d, path, tall }: { n: string; href: string; d: string; path: string; tall?: boolean }) {
   const on = isOn(href, path);
   return (
-    <Link prefetch={false} href={href} aria-current={on ? "page" : undefined}
-      className={`btn flex items-center gap-2.5 rounded-[8px] px-2.5 ${tall ? "min-h-11 py-2.5 text-[15px]" : "py-[7px] text-[13.5px]"} ${on ? "bg-white/[.06] text-ink" : "text-muted hover:bg-white/[.03] hover:text-ink"}`}>
+    <Link href={href} aria-current={on ? "page" : undefined}
+      className={`q-nav-item btn flex items-center gap-2.5 rounded-[8px] px-2.5 ${tall ? "min-h-11 py-2.5 text-[15px]" : "py-[7px] text-[13.5px]"} ${on ? "bg-white/[.06] text-ink" : "text-muted hover:bg-white/[.03] hover:text-ink"}`}>
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={on ? "text-accent" : ""}><path d={d} /></svg>
       {n}
     </Link>
   );
 }
 export default function AppShell({ children }: { active?: string; children: React.ReactNode }) {
+  const router=useRouter();
+  useEffect(()=>{
+    const connection=(navigator as Navigator & {connection?:{saveData?:boolean;effectiveType?:string}}).connection;
+    if(connection?.saveData||connection?.effectiveType?.includes("2g"))return;
+    const timer=window.setTimeout(()=>{
+      if(document.hidden)return;
+      for(const route of quickPages){warmWorkspaceModule(route);if(route!==location.pathname)warmRoute(router,route);}
+    },350);
+    return ()=>window.clearTimeout(timer);
+  },[router]);
   const path = usePathname() || "/app";
+  const paperTrades = path === "/app/run" || path.startsWith("/app/run/");
+  const wideLayout = path === "/app/live" || path === "/app" || path === "/app/portfolio" || paperTrades;
   const [open, setOpen] = useState(false);
   const [cmdk, setCmdk] = useState(false); // M4.9.2 ⌘K
   useEffect(() => {
@@ -61,14 +75,14 @@ export default function AppShell({ children }: { active?: string; children: Reac
     return () => { document.removeEventListener("keydown", k); document.body.style.overflow = ""; };
   }, [open]);
   return (
-    <div className="flex min-h-dvh">
+    <div className="q-app-shell flex min-h-dvh">
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center">
         {authRetry != null && <span className="rounded-full border border-line bg-bg-2/95 px-3 py-1.5 text-[12.5px] text-muted">Signing in is busy. Retrying in {authRetry}s…</span>}
       </div>
       {cmdk && <CommandPalette setOpen={setCmdk} pages={[...NAV, ...ACCOUNT].map(([n, h]) => [n, h] as [string, string])} />}
-      <aside className="sticky top-0 hidden h-screen self-start overflow-y-auto w-[240px] shrink-0 flex-col border-r border-line bg-bg-2 px-3 py-5 lg:flex">
-        <Link prefetch={false} href="/" className="px-2"><Logo /></Link>
-        <Link prefetch={false} href="/app/new" className="btn mt-6 flex items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press">
+      <aside className="q-sidebar sticky top-0 hidden h-screen self-start overflow-y-auto w-[240px] shrink-0 flex-col border-r border-line bg-bg-2 px-3 py-5 lg:flex">
+        <Link prefetch={false} href="/" className="q-sidebar-brand px-2"><Logo /></Link>
+        <Link href="/app/new" className="btn mt-6 flex items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-[13px] font-medium text-bg hover:brightness-110 active:bg-accent-press">
           <span aria-hidden className="text-[15px] leading-none">+</span> New strategy
         </Link>
         <button type="button" onClick={() => setCmdk(true)} aria-haspopup="dialog" data-testid="cmdk-open" className="btn mt-3 flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[13px] text-muted hover:border-line-2 hover:text-ink">
@@ -77,16 +91,15 @@ export default function AppShell({ children }: { active?: string; children: Reac
         <nav aria-label="App" className="mt-5 flex flex-col gap-0.5">{NAV.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} />)}</nav>
         <div className="mt-6 px-2.5 font-mono text-[12px] uppercase tracking-[.16em] text-muted">Account</div>
         <nav aria-label="Account" className="mt-2 flex flex-col gap-0.5">{ACCOUNT.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} />)}</nav>
-        <div className="mt-auto space-y-3 border-t border-line pt-4">
+        <div className="q-sidebar-foot mt-auto space-y-3 border-t border-line pt-4">
           <AccountMenu />
-          <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span data-motion="pulse-dot" className="relative h-1.5 w-1.5 rounded-full bg-long" /> {DEMO_LABEL}</div>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-bg/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:hidden" style={{ boxSizing: "content-box" }}>
           <Link prefetch={false} href="/" className="flex min-h-11 items-center" aria-label="Quiver home"><Logo /></Link>
           <div className="flex items-center gap-2">
-            <Link prefetch={false} href="/app/new" className="btn flex min-h-11 items-center rounded-full bg-accent px-4 text-[13px] font-medium text-bg">+ New</Link>
+            <Link href="/app/new" className="btn flex min-h-11 items-center rounded-full bg-accent px-4 text-[13px] font-medium text-bg">+ New</Link>
             <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open} aria-controls="app-drawer" className="btn flex h-11 w-11 items-center justify-center rounded-full border border-line-2">
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden><path d="M3 6h14M3 10h14M3 14h14" /></svg>
             </button>
@@ -100,17 +113,16 @@ export default function AppShell({ children }: { active?: string; children: Reac
               <nav aria-label="App" className="mt-4 flex flex-col gap-0.5" onClick={() => setOpen(false)}>{NAV.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} tall />)}</nav>
               <div className="mt-5 px-2.5 font-mono text-[12px] uppercase tracking-[.16em] text-muted">Account</div>
               <nav aria-label="Account" className="mt-2 flex flex-col gap-0.5" onClick={() => setOpen(false)}>{ACCOUNT.map(([n, h, d]) => <Item key={n} n={n} href={h} d={d} path={path} tall />)}</nav>
-              <div className="mt-auto space-y-3 border-t border-line pt-4">
+              <div className="q-sidebar-foot mt-auto space-y-3 border-t border-line pt-4">
                 <AccountMenu tall />
-                <div className="flex items-center gap-2 px-2 text-[12px] text-muted"><span className="relative h-1.5 w-1.5 rounded-full bg-long" /> {DEMO_LABEL}</div>
               </div>
             </div>
           </div>
         )}
-        <main id="main" className="pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">{children}</main>
-        <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/92 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
+        <main className="q-app-main pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0" data-layout={wideLayout ? "wide" : undefined} id="main"><WorkspaceOutlet>{children}</WorkspaceOutlet></main>
+        <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 q-app-bottom grid grid-cols-5 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden">
           {BOTTOM.map(([n, h, d]) => { const on = isOn(h, path); return (
-            <Link prefetch={false} key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>
+            <Link key={n} href={h} aria-current={on ? "page" : undefined} className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${on ? "text-ink" : "text-muted"}`}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={on ? "text-accent" : ""}><path d={d} /></svg>{n}
             </Link>); })}
           <button type="button" onClick={() => setOpen(true)} aria-label="More pages" className={`flex h-16 flex-col items-center justify-center gap-1 text-[12px] leading-none ${BOTTOM.some(([, h]) => isOn(h, path)) ? "text-muted" : "text-ink"}`}>

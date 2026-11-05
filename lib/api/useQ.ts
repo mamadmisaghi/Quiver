@@ -11,7 +11,7 @@ export function useQ<T>(load: () => Promise<T>, deps: unknown[] = []): Q<T> {
   const [auth, setAuth] = useState(false);
   const [n, setN] = useState(0);
   const [status, setStatus] = useState<number | null>(null);
-  useEffect(() => onSession(() => setN((x) => x + 1)), []);
+  useEffect(() => onSession(() => {setData(null);setError(null);setN((x) => x + 1);}), []);
   useEffect(() => {
     let on = true;
     load().then((d) => { if (on) { setData(d); setError(null); setAuth(false); setStatus(null); } }).catch((e) => { if (!on) return; setStatus(e instanceof ApiErr ? e.status : null); const a = e instanceof ApiErr && (e.code === "unauthorized" || e.status === 401); setAuth(a); setError(a ? "Sign in to load your data." : e instanceof ApiErr ? errCopy(e.code, e.message) : "Couldn't reach Quiver."); });

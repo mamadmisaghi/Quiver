@@ -4,7 +4,7 @@
 // when created/rotated: it lives in component state until dismissed, is never logged, stored or put in a URL.
 import { useState } from "react";
 import { Card } from "@/components/ui";
-import { api, ApiErr, errOf as apiErrOf, isValidation, type AlertDelivery, type AlertEventType, type AlertRule, type AlertSettings } from "@/lib/api";
+import { api, API_MODE, ApiErr, errOf as apiErrOf, isValidation, type AlertDelivery, type AlertEventType, type AlertRule, type AlertSettings } from "@/lib/api";
 import { useQ } from "@/lib/api/useQ";
 
 const EVENTS: [AlertEventType, string][] = [["fill", "Fills"], ["rejected", "Rejected orders"], ["risk_halt", "Risk halts"], ["error", "Errors"], ["warning", "Warnings"], ["trigger_fired", "Triggers"], ["status", "Status changes"]];
@@ -32,7 +32,7 @@ function Alerts({ init, reload }: { init: { s: AlertSettings; r: AlertRule[]; d:
   const [urlErr, setUrlErr] = useState<string | null>(null);
   const [ruleErr, setRuleErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [pick, setPick] = useState<AlertEventType[]>(["fill", "risk_halt", "error"]);
+  const [pick, setPick] = useState<AlertEventType[]>(["fill", "risk_halt", "status"]);
   const urlBad = url !== "" && !/^https:\/\/[^\s]+$/.test(url);
 
   const save = async (b: { webhookUrl: string | null; rotateSecret?: boolean }, tag: string) => {
@@ -66,11 +66,12 @@ function Alerts({ init, reload }: { init: { s: AlertSettings; r: AlertRule[]; d:
       </div>
       <div className="mt-4 grid gap-6 lg:grid-cols-2">
         <div>
+          {API_MODE === "mock" && <p className="mb-3 text-[12.5px] text-muted">{s.providerStatus === "not_configured" ? "Webhook delivery is available with a connected Quiver account." : "Connect a Zapier or Make webhook, or an approved receiver. Rules apply to paper sessions in this browser."}</p>}
           <label htmlFor="al-url" className="text-[13px] text-ink-2">Webhook URL</label>
           <div className="mt-1.5 flex flex-wrap gap-2">
-            <input id="al-url" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/quiver" value={url} onChange={(e) => { setUrl(e.target.value.trim()); setUrlErr(null); }}
+            <input id="al-url" type="url" disabled={API_MODE === "mock" && s.providerStatus === "not_configured"} inputMode="url" autoComplete="off" spellCheck={false} placeholder="https://example.com/quiver" value={url} onChange={(e) => { setUrl(e.target.value.trim()); setUrlErr(null); }}
               aria-invalid={urlBad || !!urlErr} aria-describedby={urlBad || urlErr ? "al-url-err" : "al-url-help"} className="min-h-10 min-w-0 flex-1 basis-56 rounded-[10px] border border-line-2 bg-transparent px-3 font-mono text-[13px] text-ink focus:border-accent/60 focus:outline-none aria-[invalid=true]:border-short/70" />
-            <button className={btn} disabled={!!busy || urlBad || !url || url === s.webhookUrl} onClick={() => save({ webhookUrl: url }, "save")}>{busy === "save" ? "Saving…" : "Save"}</button>
+            <button className={btn} disabled={!!busy || s.providerStatus === "not_configured" || urlBad || !url || url === s.webhookUrl} onClick={() => save({ webhookUrl: url }, "save")}>{busy === "save" ? "Saving…" : "Save"}</button>
           </div>
           {(urlBad || urlErr) ? <p id="al-url-err" role="alert" className="mt-1.5 text-[12.5px] text-short" data-testid="al-url-err">{urlErr ?? "Use a public https:// URL."}</p>
             : <p id="al-url-help" className="mt-1.5 text-[12.5px] text-muted">Quiver POSTs JSON signed with HMAC-SHA256 (X-Quiver-Signature). Private and local addresses are blocked.</p>}
@@ -78,7 +79,7 @@ function Alerts({ init, reload }: { init: { s: AlertSettings; r: AlertRule[]; d:
             <ul className="mt-1.5 list-disc space-y-1 pl-5">
               <li>Verify <code className="font-mono">X-Quiver-Signature</code>: <code className="font-mono">v1=</code> HMAC-SHA256 of <code className="font-mono">timestamp.rawBody</code> with your secret. Reject timestamps more than 5 minutes off.</li>
               <li><b className="font-medium text-ink-2">Dedupe on <code className="font-mono">X-Quiver-Delivery</code>.</b> It stays the same on every retry of one alert (it’s also <code className="font-mono">deliveryId</code> in the body). Retries are re-signed with a new timestamp, so the signature alone won’t spot a repeat.</li>
-              <li>Answer 2xx quickly. Slow or failing receivers are retried with backoff.</li>
+              <li>Answer 2xx quickly. Delivery history shows the receiver response.</li>
             </ul></details>
           {secret && (
             <div role="status" className="mt-3 rounded-[10px] border border-warn/40 p-3" data-testid="al-secret">
@@ -105,7 +106,7 @@ function Alerts({ init, reload }: { init: { s: AlertSettings; r: AlertRule[]; d:
               <button className="btn shrink-0 text-[12.5px] text-muted underline hover:text-short" disabled={busy === r.id} onClick={() => del(r.id)} aria-label={`Delete rule: ${r.events.join(", ")}`}>Delete</button></li>)}
           </ul>
           <fieldset className="mt-3"><legend className="text-[12.5px] text-muted">New rule · all runs</legend>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">{EVENTS.map(([e, l]) => { const on = pick.includes(e); return <button key={e} aria-pressed={on} onClick={() => setPick((p) => on ? p.filter((x) => x !== e) : [...p, e])} className={`btn rounded-full border px-3 py-1 text-[12.5px] ${on ? "border-accent/60 text-accent" : "border-line-2 text-ink-2 hover:bg-white/5"}`}>{l}</button>; })}</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">{EVENTS.filter(([e])=> API_MODE !== "mock" || ["fill","status","risk_halt","rejected"].includes(e)).map(([e, l]) => { const on = pick.includes(e); return <button key={e} aria-pressed={on} onClick={() => setPick((p) => on ? p.filter((x) => x !== e) : [...p, e])} className={`btn rounded-full border px-3 py-1 text-[12.5px] ${on ? "border-accent/60 text-accent" : "border-line-2 text-ink-2 hover:bg-white/5"}`}>{l}</button>; })}</div>
           </fieldset>
           <button className={`${btn} mt-2`} disabled={!!busy || pick.length === 0 || rules.length >= 20} onClick={addRule} data-testid="al-add">{busy === "rule" ? "Adding…" : "Add rule"}</button>
           {ruleErr && <p role="alert" className="mt-1.5 text-[12.5px] text-short">{ruleErr}</p>}

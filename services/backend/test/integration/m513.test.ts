@@ -1,6 +1,6 @@
 // M5.13: stored user RPC URLs are used at call time (SSRF re-check + pinned connection); stored AI keys used for compile + instruct.
 import http from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountReadRes } from "../../contracts/src/chain";
 import { createApp } from "../../src/api/app";
 import type { Resolver } from "../../src/alerts/ssrf";
@@ -56,13 +56,17 @@ describe("M5.13 per-user RPC at call time", () => {
     let host = ""; const srv = http.createServer((req, res) => { host = req.headers.host ?? ""; let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => {
       if (JSON.parse(b).method === "big") { res.end("x".repeat(1_100_000)); return; } res.end(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0xb626" })); }); });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r)); const port = (srv.address() as any).port;
+    const shared = vi.spyOn(http.globalAgent, "createConnection").mockImplementation(() => {
+      throw new Error("The shared agent must not reroute a pinned RPC");
+    });
     try {
       const p = { url: `http://rpc.provider.example:${port}/x`, address: "127.0.0.1", family: 4 };
       expect(await pinnedTransport(p, nodeRpcPost({ insecureHttp: true })).request({ method: "eth_chainId" })).toBe("0xb626");
       expect(host).toBe(`rpc.provider.example:${port}`);
       await expect(pinnedTransport(p, nodeRpcPost({ insecureHttp: true })).request({ method: "big" })).rejects.toThrow();
       await expect(pinnedTransport(p, nodeRpcPost()).request({ method: "eth_chainId" })).rejects.toThrow(/https/);
-    } finally { srv.close(); }
+      expect(shared).not.toHaveBeenCalled();
+    } finally { shared.mockRestore(); srv.close(); }
   });
 });
 

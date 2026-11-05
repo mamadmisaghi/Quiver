@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "@/components/Link";
 import { api, type DepositAsset, type DepositPrepareRes, type TestPoolQuote, type TestPoolSide, type TestPoolStatus, type TestPoolSwapPrepare } from "@/lib/api";
+import { raw } from "@/lib/api/live";
 import { hasWallet, sendTestnetTx, waitReceipt } from "@/lib/wallet";
 import { Pill } from "@/components/ui";
 import { tnErr, type TnErr } from "./tnErr";
@@ -136,12 +137,20 @@ function Swap({ wallets }: { wallets: string[] }) {
     try { const r = await api.testPoolSwapPrepare({ chainId: 46630, side, amount: amount.trim(), from }); setPrep(r); setQ(r.quote); setSteps(r.txs.map((t) => ({ label: t.description, state: "todo" }))); }
     catch (x) { fail(x); } finally { setBusy(false); }
   };
+  const [proof,setProof]=useState("");
+  useEffect(()=>setProof(""),[prep]);
+  async function checkProof(hash:string){
+    if(!prep?.receiptId)return;
+    try{const r=await raw("/testpool/swap/"+prep.receiptId+"/receipt",{method:"POST",body:JSON.stringify({txHash:hash})});const result=await r.json() as {state:string;amountOut?:string};
+      setProof(result.state==="settled"?"Finalized · "+result.amountOut+" output base units verified":"Server receipt · "+result.state);
+    }catch{setProof("Receipt verification is pending.");}
+  }
   const next = steps.findIndex((s) => s.state !== "done");
   const sendNext = async () => { // one tx per click, strictly in order (approve before swap)
     if (!prep || next < 0) return; const i = next;
     const set = (p: Partial<Step>) => setSteps((ss) => ss.map((s, j) => (j === i ? { ...s, ...p } : s)));
     setErr(null); set({ state: "signing" });
-    try { const h = await sendTestnetTx(prep.txs[i].tx); set({ state: "pending", hash: h }); const ok = await waitReceipt(h); set({ state: ok === false ? "failed" : ok ? "done" : "pending" }); }
+    try { const h = await sendTestnetTx(prep.txs[i].tx); set({ state: "pending", hash: h }); if(prep.txs[i].kind==="swap" && prep.receiptId)void checkProof(h); const ok = await waitReceipt(h); set({ state: ok === false ? "failed" : ok ? "done" : "pending" }); }
     catch (x) { set({ state: "todo" }); setErr(tnErr(x)); }
   };
   const inSym = side === "buy" ? "tUSDG" : "tNVDA", outSym = side === "buy" ? "tNVDA" : "tUSDG";
@@ -172,7 +181,9 @@ function Swap({ wallets }: { wallets: string[] }) {
             <Steps steps={steps} />
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {cur && <button type="button" onClick={sendNext} disabled={cur.state === "signing" || cur.state === "pending" || !hasWallet()} className={btnP} data-testid="tp-send">{prep.txs[next].kind === "approve" ? "Approve in wallet" : "Swap in wallet"}</button>}
-              {!cur && <span className="text-[13px] text-long" data-testid="tp-done">Swap confirmed on testnet.</span>}
+              {steps.at(-1)?.hash && prep.receiptId && <button type="button" className={btnP} onClick={()=>void checkProof(steps.at(-1)!.hash!)}>Check finalized receipt</button>}
+              {proof&&<p role="status" className="text-sm text-muted">{proof}</p>}
+              {!cur && <span className="text-[13px] text-long" data-testid="tp-done">Transaction included on testnet.</span>}
               {!hasWallet() && <span className="text-[12.5px] text-muted">No browser wallet found.</span>}
             </div>
             <p className="mt-3 text-[12px] text-muted">{prep.notice}</p>

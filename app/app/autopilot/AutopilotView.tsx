@@ -102,7 +102,7 @@ export default function AutopilotView() {
     <Wrap>
       <PageHeader title="Autopilot" sub="Rotates through your own strategies on a schedule, one paper run at a time, inside guardrails you set." />
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border border-paper/40 bg-paper/5 px-4 py-3 text-[13px] text-ink-2" data-testid="ap-paper-only">
-        <Pill tone="paper">Paper only</Pill> Simulated money. Autopilot never uses a wallet, session key or real funds, and there’s no live or testnet autopilot.
+        <Pill tone="paper">Paper only</Pill> This panel manages virtual funds. Set wallet permissions for automated orders in <a href="/app/live" className="text-accent">Trading Desk ↗</a>.
       </div>
       {!a || !f ? <Loading h={260} q={ap} /> : (<>
         <PlanPanel cur={a} names={Object.fromEntries((strats.data?.items ?? []).map((x) => [x.id, x.name]))} onApplied={(x) => { setA(x); setF(fromAp(x)); setMsg({ tone: "ok", text: "Plan applied. Autopilot is still off." }); }} />

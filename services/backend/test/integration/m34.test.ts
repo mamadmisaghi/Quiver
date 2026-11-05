@@ -7,10 +7,18 @@ import { MockMarket } from "../../src/venues/market";
 const registry = new Registry(MOCK_INSTRUMENTS);
 const a = createApp({ config: loadConfig({ QUIVR_MODE: "mock", DEV_LOGIN_ENABLED: "true", CORS_ORIGINS: "http://localhost:3000" }), registry, market: new MockMarket(registry), autoTimers: false, compileDelayMs: 0 });
 const req = (p: string, init: RequestInit = {}) => a.app.request("/v1" + p, init);
-const PUBLIC = new Set(["/public/landing", "/public/leaderboard", "/public/cards/:token", /* M4.8 intentionally public */ "/public/replays/:token", /* M5.7 */ "/public/replays/:token/video.mp4", "/public/replays/:token/poster.png", /* M5.15 rendered media */ "/public/profiles/:handle", /* M5.20 */ "/public/strategies/:id", /* M5.28 guest read-only */ "/health", "/ready", /* M5.21 */ "/testpool/status", /* M5.23 public, addresses only */ "/ops/shutdown", "/ops/runs", "/ops/runs/:id/stop", "/status", "/auth/exchange", "/auth/config", /* M5.2 public */ "/auth/refresh", "/auth/logout", "/compile", "/runs/:id/events", "/runs/:id/events/stream"]);
+const PUBLIC = new Set(["/live/status", "/public/landing", "/public/leaderboard", "/public/cards/:token", /* M4.8 intentionally public */ "/public/replays/:token", /* M5.7 */ "/public/replays/:token/video.mp4", "/public/replays/:token/poster.png", /* M5.15 rendered media */ "/public/profiles/:handle", /* M5.20 */ "/public/strategies/:id", /* M5.28 guest read-only */ "/health", "/ready", /* M5.21 */ "/testpool/status", /* M5.23 public, addresses only */ "/ops/shutdown", "/ops/runs", "/ops/runs/:id/stop", "/status", "/auth/exchange", "/auth/config", /* M5.2 public */ "/auth/refresh", "/auth/logout", "/compile", "/runs/:id/events", "/runs/:id/events/stream"]);
 
 describe("M3.4 security self-review", () => {
   afterAll(() => a.runs.shutdown());
+  it("the public live status exposes capabilities and no account or wallet data", async () => {
+    const response = await req("/live/status");
+    expect(response.status).toBe(200);
+    const status = await response.json();
+    expect(Object.keys(status).sort()).toEqual(["enabled","lastCycle","network","originVerified","quiverFeeBps","termsVersion","venues"].sort());
+    expect(status.originVerified).toBe(false);
+    expect(status.enabled).toBe(false);
+  });
   it("every non-public route requires auth", async () => {
     const routes = (a.app as any).routes.filter((r: any) => r.method !== "ALL").map((r: any) => ({ m: r.method, p: String(r.path).replace(/^\/v1/, "") }));
     expect(routes.length).toBeGreaterThan(40);

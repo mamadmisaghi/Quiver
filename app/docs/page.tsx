@@ -8,7 +8,7 @@ const sections: DocSection[] = [
   { id: "overview", title: "The short version", body: <>
     <p>You write what you think will happen. Quiver turns it into a strategy: what to watch, when to act, what to do, and when to get out. You read that back in plain English before anything runs.</p>
     <p>The AI only drafts. It can’t place orders, move money or start a run. A separate, deterministic engine checks your rules on a fixed loop, and a risk gate stands between every trigger and every trade.</p>
-    <p>Everything starts on paper. Testnet comes next, then mainnet behind a waitlist.</p>
+    <p>You can test with virtual funds or take a saved strategy into Live trading. The order review shows the funding wallet, market, size and permissions for each venue.</p>
   </> },
   { id: "compile", title: "From a sentence to rules", body: <>
     <Steps items={[
@@ -21,7 +21,7 @@ const sections: DocSection[] = [
     <p>Each compile is capped at three attempts. You get 30 drafts a day.</p>
   </> },
   { id: "engine", title: "How the engine checks", body: <>
-    <p>Every active run gets a cycle every 15 seconds. A fresh Chainlink update for something you watch can wake it sooner, at most once every 2 seconds.</p>
+    <p>The production observer checks running strategies on the server. When an observation is missing or stale, a condition waits for fresh data.</p>
     <Steps items={[
       "Take a snapshot of every signal. Anything older than its max age becomes unknown — and an unknown condition never fires.",
       <>Evaluate each trigger. A condition has to hold for its full <Code>forMinutes</Code> before it fires.</>,
@@ -35,32 +35,30 @@ const sections: DocSection[] = [
     <Kv rows={[["1 · Kill switch", "Stop everything, now"], ["2 · Eligibility", "Stock tokens only where they’re allowed"], ["3 · Market session", "Skip when an equity feed is stale"], ["4 · Orders per day", "Your cap"], ["5 · Position size", "Max % per position and in total"], ["6 · Daily loss", "Halt for the day past your limit"], ["7 · Session key caps", "Per trade and per day, checked again on-chain"], ["8 · Quote sanity", "Quote must sit near the oracle price"]]} />
   </> },
   { id: "paper", title: "Paper trading", body: <>
-    <p>Paper fills use the real venue quote for your exact size, requested but never sent. Slippage is the quote’s price impact plus a latency penalty of at least 2 bps.</p>
-    <p>Fees are included: the venue fee, estimated gas, and Quiver’s 0.30% — shown, never charged. If a quote would breach your max slippage, the fill is rejected rather than filled worse. Every paper run starts with $10,000.</p>
+    <p>A paper session starts with a virtual balance. The observer checks the selected markets and records virtual fills when the saved rules trigger. Its activity log shows the observations and decisions.</p>
+    <p>The session reports modeled fees and equity separately. Keep an eye on the observation status and timestamps when comparing paper results with the market.</p>
   </> },
   { id: "backtest", title: "Backtests", body: <>
     <p>The backtester replays the same engine over history. Signals only see bars that had closed; fills happen at the next bar’s open; fees are always on.</p>
     <p>Stock tokens have on-chain history only from July 2026. Anything earlier is modeled from end-of-day equity data and labeled <span className="text-warn">Modeled</span>. A backtest is a sanity check, not a forecast.</p>
   </> },
-  { id: "keys", title: "Session keys", body: <>
-    <p>To trade live on Robinhood Chain, you grant a session key to your own smart account. It can swap. It can’t send.</p>
-    <Kv rows={[["Can call", "Approved swap routers only"], ["Output goes to", "Your account — always"], ["Per trade", "$250 by default"], ["Per day", "$1,000 by default, at most 64 × per trade"], ["Min swap", "Per day ÷ 64 → $15.63 at the defaults"], ["Max slippage", "1% account cap, up to 10% if you raise it"], ["Expiry", "7 days by default, 30 at most"], ["Transfers", "Native and token transfers blocked"]]} />
-    <Steps items={["Quiver prepares the key and the exact policy.", "You sign it in your wallet. The terms are shown in plain English first.", "The key installs on-chain and turns active.", "Revoke it any time — every run on that key halts at once."]} />
-    <p>The key is held by a managed signer and is never stored in plain text. Withdrawals are yours alone; Quiver never builds them. See <Link href="/#safety" className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-current">Safety</Link> for the full policy sheet.</p>
+  { id: "keys", title: "Signing a live strategy", body: <>
+    <Steps items={["Open a saved strategy in Live trading and review its frozen version.", "Select a funding wallet for each venue and set trading and network fee limits.", "Review and sign each order, or grant a supported venue authority before enabling automation.", "Follow confirmations in the run. A dependent stage waits for the receipt required by its rule."]} />
+    <p>Pause new entries or revoke a grant from the live desk. Existing orders and positions remain visible for reconciliation or closing. Revoke a token allowance separately when it is no longer needed.</p>
   </> },
   { id: "venues", title: "Venues", body: <>
-    <Kv rows={[["Robinhood Chain", "Stock tokens and crypto · session key, enforced on-chain"], ["Hyperliquid", "Perps · agent wallet that can trade, not withdraw"], ["Solana", "Swaps via Jupiter · delegated signer, provider-enforced"], ["Polymarket", "Odds as a signal · read-only, no key"]]} />
-    <p>Solana’s limits are enforced by the signing provider, not by a program. That’s weaker than Robinhood Chain, and we’ll always say so where it matters.</p>
+    <Kv rows={[["Hyperliquid", "Perpetuals with individual order signatures or a trade-only venue agent"], ["Solana", "Wallet-signed Jupiter swaps. Scoped automation for eligible direct USDC pools on Raydium."], ["Robinhood Chain", "Eligible stock tokens through Uniswap. The owner signs approvals and swaps separately."], ["Polymarket", "Selected prediction-market outcomes supply signals."]]} />
+    <p>Funding stays on its own venue. A Solana leg and a perpetual leg each need funds in the corresponding account. Each receipt is matched to its network and order.</p>
   </> },
   { id: "eligibility", title: "Eligibility", body: <>
-    <p>Stock tokens aren’t available to US persons and are restricted in Canada, the UK, Switzerland and the UAE. Live stock-token trading needs a self-declaration and an IP check; VPN and hosting traffic counts as unknown and is blocked.</p>
+    <p>Stock-token trading requires a supported location and a matching eligibility declaration. Each venue also applies its own restrictions.</p>
     <p>Paper trading, backtests and drafts work everywhere. Restricted tokens stay visible, marked as not tradable.</p>
   </> },
   { id: "fees", title: "Fees", body: <>
-    <p>Quiver takes 0.30% of executed notional on live fills, inside the same transaction. Paper and backtests show the fee and charge nothing. You pay network gas from your account.</p>
+    <p>Quiver charges no platform fee on these live routes. Your venue may charge trading fees, and network transactions can use gas even when they fail. Your wallet shows the order and applicable limits before signing.</p>
   </> },
 ];
 
 export default function DocsPage() {
-  return <DocPage eyebrow="Docs" title="How Quiver works" lead="Ten short sections: what happens between the sentence you type and the trade that does — or doesn’t — go out." meta="Beta · paper trading only · testnet next" sections={sections} />;
+  return <DocPage eyebrow="Docs" title="How Quiver works" lead="Follow your strategy from the rules you write through the receipt for a trade." meta="Paper trading · wallet-authorized live execution" sections={sections} />;
 }

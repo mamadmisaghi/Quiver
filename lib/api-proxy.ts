@@ -1,9 +1,10 @@
+import { attestEdge } from "./edge-attestation";
 /** Same-origin bridge to the fixed Render API. Keeps the refresh cookie on the website origin. */
 export async function proxyApi(request: Request, path: string[], base: string | undefined, fetcher: typeof fetch = fetch): Promise<Response> {
   const fail = (status: number, message: string) => Response.json({ error: { code: "service_unavailable", message, requestId: "proxy" } }, { status, headers: { "cache-control": "no-store" } });
-  if (!base) return fail(503, "The paper service is not connected yet.");
-  let api: URL; try { api = new URL(base.endsWith("/") ? base : base + "/"); } catch { return fail(503, "The paper service configuration is incomplete."); }
-  if (api.protocol !== "https:" || api.username || api.password || api.search || api.hash) return fail(503, "The paper service needs a secure API address.");
+  if (!base) return fail(503, "The Quiver API is not connected yet.");
+  let api: URL; try { api = new URL(base.endsWith("/") ? base : base + "/"); } catch { return fail(503, "The Quiver API configuration is incomplete."); }
+  if (api.protocol !== "https:" || api.username || api.password || api.search || api.hash) return fail(503, "The Quiver API needs a secure API address.");
   if (!path.length || path.some((p) => !/^[A-Za-z0-9_.:@-]+$/.test(p) || p === "." || p === "..")) return fail(400, "Invalid API path.");
   // Operator routes are server-only and are never part of the visitor proxy.
   if (path[0] === "ops") return fail(404, "Route not found.");
@@ -18,11 +19,12 @@ export async function proxyApi(request: Request, path: string[], base: string | 
   if (refresh && path[0] === "auth") headers.set("cookie", refresh);
   headers.set("origin", input.origin);
   try {
+    await attestEdge(headers,url,request.method,input.origin);
     const streaming = path.includes("stream");
     const timeout = path[0] === "compile" || path.includes("instruct") ? 60_000 : 25_000;
     const signal = streaming ? request.signal : AbortSignal.any([request.signal, AbortSignal.timeout(timeout)]);
     const upstream = await fetcher(url, { method: request.method, headers, body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body, signal, redirect: "manual", duplex: "half" } as RequestInit);
-    if (upstream.status >= 300 && upstream.status < 400) return fail(502, "The paper service returned an unexpected redirect.");
+    if (upstream.status >= 300 && upstream.status < 400) return fail(502, "The Quiver API returned an unexpected redirect.");
     const responseHeaders = new Headers({ "cache-control": "no-store", "x-content-type-options": "nosniff" });
     for (const name of ["content-type", "retry-after", "x-request-id", "x-quiver-rpc"]) { const v = upstream.headers.get(name); if (v) responseHeaders.set(name, v); }
     if (path[0] === "auth") {
@@ -30,5 +32,5 @@ export async function proxyApi(request: Request, path: string[], base: string | 
       for (const cookie of cookies) if (cookie.startsWith("quiver_rt=")) responseHeaders.append("set-cookie", cookie);
     }
     return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
-  } catch { return fail(503, "The paper service did not respond. Please try again shortly."); }
+  } catch { return fail(503, "The Quiver API did not respond. Please try again shortly."); }
 }
